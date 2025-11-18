@@ -1,8 +1,11 @@
 <script lang="ts">
 import { parseGDSII } from "../../lib/gds/GDSParser";
+// biome-ignore lint/correctness/noUnusedImports: Used in template
 import { gdsStore } from "../../stores/gdsStore";
 
+// biome-ignore lint/correctness/noUnusedVariables: Used in template
 let isDragging = false;
+// biome-ignore lint/correctness/noUnusedVariables: Used in template
 let fileInputElement: HTMLInputElement;
 
 /**
@@ -48,6 +51,7 @@ async function handleFile(file: File) {
 /**
  * Handle file input change
  */
+// biome-ignore lint/correctness/noUnusedVariables: Used in template
 function handleFileInput(event: Event) {
 	const target = event.target as HTMLInputElement;
 	const file = target.files?.[0];
@@ -59,6 +63,7 @@ function handleFileInput(event: Event) {
 /**
  * Handle drag over
  */
+// biome-ignore lint/correctness/noUnusedVariables: Used in template
 function handleDragOver(event: DragEvent) {
 	event.preventDefault();
 	isDragging = true;
@@ -67,6 +72,7 @@ function handleDragOver(event: DragEvent) {
 /**
  * Handle drag leave
  */
+// biome-ignore lint/correctness/noUnusedVariables: Used in template
 function handleDragLeave() {
 	isDragging = false;
 }
@@ -74,6 +80,7 @@ function handleDragLeave() {
 /**
  * Handle drop
  */
+// biome-ignore lint/correctness/noUnusedVariables: Used in template
 function handleDrop(event: DragEvent) {
 	event.preventDefault();
 	isDragging = false;
@@ -87,6 +94,7 @@ function handleDrop(event: DragEvent) {
 /**
  * Trigger file input click
  */
+// biome-ignore lint/correctness/noUnusedVariables: Used in template
 function triggerFileInput() {
 	fileInputElement.click();
 }
