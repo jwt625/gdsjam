@@ -4,6 +4,7 @@
  */
 
 import { Application, Container, Graphics, Text } from "pixi.js";
+import type { Cell, GDSDocument, Polygon } from "../../types/gds";
 import { SpatialIndex } from "../spatial/RTree";
 
 export interface ViewportState {
@@ -170,6 +171,139 @@ export class PixiRenderer {
 	 */
 	private updateViewport(): void {
 		// TODO: Implement viewport culling using spatial index
+	}
+
+	/**
+	 * Render GDS document
+	 */
+	renderGDSDocument(document: GDSDocument): void {
+		console.log("[PixiRenderer] renderGDSDocument called");
+		console.log("[PixiRenderer] Document:", document);
+		console.log("[PixiRenderer] Top cells:", document.topCells);
+
+		this.clear();
+		console.log("[PixiRenderer] Cleared previous content");
+
+		// Render top cells (cells not referenced by others)
+		let renderedCells = 0;
+		for (const topCellName of document.topCells) {
+			console.log("[PixiRenderer] Rendering top cell:", topCellName);
+			const cell = document.cells.get(topCellName);
+			if (cell) {
+				console.log(
+					"[PixiRenderer] Cell has",
+					cell.polygons.length,
+					"polygons and",
+					cell.instances.length,
+					"instances",
+				);
+				this.renderCell(cell, document, 0, 0, 0, false, 1);
+				renderedCells++;
+			} else {
+				console.warn("[PixiRenderer] Top cell not found:", topCellName);
+			}
+		}
+
+		console.log("[PixiRenderer] Rendered", renderedCells, "top cells");
+		console.log("[PixiRenderer] Main container children:", this.mainContainer.children.length);
+
+		this.fitToView();
+		console.log("[PixiRenderer] Fit to view complete");
+	}
+
+	/**
+	 * Render a cell with transformations
+	 */
+	private renderCell(
+		cell: Cell,
+		document: GDSDocument,
+		x: number,
+		y: number,
+		rotation: number,
+		mirror: boolean,
+		magnification: number,
+	): void {
+		console.log(
+			"[PixiRenderer] renderCell:",
+			cell.name,
+			"at",
+			x,
+			y,
+			"polygons:",
+			cell.polygons.length,
+		);
+
+		// Create container for this cell
+		const cellContainer = new Container();
+		cellContainer.x = x;
+		cellContainer.y = y;
+		cellContainer.rotation = (rotation * Math.PI) / 180; // Convert to radians
+		cellContainer.scale.x = magnification * (mirror ? -1 : 1);
+		cellContainer.scale.y = magnification;
+
+		// Render polygons
+		let renderedPolygons = 0;
+		for (const polygon of cell.polygons) {
+			const layer = document.layers.get(`${polygon.layer}:${polygon.datatype}`);
+			if (!layer || !layer.visible) continue;
+
+			const graphics = this.renderPolygon(polygon, layer.color);
+			cellContainer.addChild(graphics);
+			renderedPolygons++;
+
+			// Add to spatial index (with transformations applied)
+			this.spatialIndex.insert({
+				minX: polygon.boundingBox.minX + x,
+				minY: polygon.boundingBox.minY + y,
+				maxX: polygon.boundingBox.maxX + x,
+				maxY: polygon.boundingBox.maxY + y,
+				id: polygon.id,
+				type: "polygon",
+				data: graphics,
+			});
+		}
+		console.log("[PixiRenderer] Rendered", renderedPolygons, "polygons for cell", cell.name);
+
+		// Render instances (recursive)
+		for (const instance of cell.instances) {
+			const refCell = document.cells.get(instance.cellRef);
+			if (refCell) {
+				this.renderCell(
+					refCell,
+					document,
+					instance.x,
+					instance.y,
+					instance.rotation,
+					instance.mirror,
+					instance.magnification,
+				);
+			}
+		}
+
+		this.mainContainer.addChild(cellContainer);
+	}
+
+	/**
+	 * Render a single polygon
+	 */
+	private renderPolygon(polygon: Polygon, colorHex: string): Graphics {
+		const graphics = new Graphics();
+
+		// Convert hex color to number
+		const color = Number.parseInt(colorHex.replace("#", ""), 16);
+
+		// Draw polygon
+		if (polygon.points.length > 0) {
+			graphics.moveTo(polygon.points[0].x, polygon.points[0].y);
+			for (let i = 1; i < polygon.points.length; i++) {
+				graphics.lineTo(polygon.points[i].x, polygon.points[i].y);
+			}
+			graphics.closePath();
+			graphics.fill({ color, alpha: 0.7 });
+			graphics.stroke({ color, width: 0.5, alpha: 0.9 });
+		}
+
+		return graphics;
 	}
 
 	/**

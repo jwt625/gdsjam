@@ -34,6 +34,7 @@
     "vitest": "^4.0.10"
   },
   "dependencies": {
+    "gdsii": "^0.1.0",
     "nanoid": "^5.1.6",
     "pixi.js": "^8.14.1",
     "pyodide": "^0.29.0",

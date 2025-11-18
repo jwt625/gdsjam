@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      gdsii:
+        specifier: ^0.1.0
+        version: 0.1.0
       nanoid:
         specifier: ^5.1.6
         version: 5.1.6
@@ -764,6 +767,9 @@ packages:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
     os: [darwin]
+
+  gdsii@0.1.0:
+    resolution: {integrity: sha512-DYld22Ta3xYDRYP4fb68wS+LgCZxJRfg5S8YdWkm6E+lcr/iyi4/firLYcog9sA5MDH5N24qRgbEb4teMXLADA==}
 
   get-browser-rtc@1.1.0:
     resolution: {integrity: sha512-MghbMJ61EJrRsDe7w1Bvqt3ZsBuqhce5nrn/XAwgwOXhcsz53/ltdxOse1h/8eKXj5slzxdsz56g5rzOFSGwfQ==}
@@ -1769,6 +1775,8 @@ snapshots:
 
   fsevents@2.3.3:
     optional: true
+
+  gdsii@0.1.0: {}
 
   get-browser-rtc@1.1.0: {}
 
