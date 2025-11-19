@@ -53,7 +53,7 @@ import { gdsStore } from "./stores/gdsStore";
 
 	<div class="controls-info">
 		<p class="text-sm text-gray-400">
-			Controls: Mouse wheel to zoom | Middle mouse or Space+Drag to pan | Arrow keys to move | Enter to zoom in | Shift+Enter to zoom out | F to fit view
+			Controls: Mouse wheel to zoom | Middle mouse or Space+Drag to pan | Arrow keys to move | Enter to zoom in | Shift+Enter to zoom out | F to fit view | Touch: One finger to pan, two fingers to zoom
 		</p>
 	</div>
 </main>
