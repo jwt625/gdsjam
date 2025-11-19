@@ -10,7 +10,7 @@ import { gdsStore } from "./stores/gdsStore";
 <main class="app-main">
 	<div class="header">
 		<h1 class="title">GDSJam</h1>
-		<p class="subtitle">Collaborative GDSII Viewer - Week 2 Prototype</p>
+		<p class="subtitle">Collaborative GDSII Viewer</p>
 		{#if $gdsStore.fileName}
 			<p class="file-name">Loaded: {$gdsStore.fileName}</p>
 		{/if}
@@ -53,7 +53,7 @@ import { gdsStore } from "./stores/gdsStore";
 
 	<div class="controls-info">
 		<p class="text-sm text-gray-400">
-			Controls: Mouse wheel to zoom | Middle mouse or Space+Drag to pan
+			Controls: Mouse wheel to zoom | Middle mouse or Space+Drag to pan | Arrow keys to move | Enter to zoom in | Shift+Enter to zoom out | F to fit view
 		</p>
 	</div>
 </main>
@@ -158,7 +158,7 @@ import { gdsStore } from "./stores/gdsStore";
 	.progress-fill {
 		height: 100%;
 		background-color: #4a9eff;
-		transition: width 0.3s ease;
+		transition: width 0.1s linear;
 	}
 
 	.progress-text {

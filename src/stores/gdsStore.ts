@@ -55,6 +55,9 @@ function createGDSStore() {
 		 * Set rendering state
 		 */
 		setRendering: (isRendering: boolean, message = "", progress = 0) => {
+			if (DEBUG) {
+				console.log(`[gdsStore] setRendering: ${progress}% - ${message}`);
+			}
 			update((state) => ({
 				...state,
 				isRendering,

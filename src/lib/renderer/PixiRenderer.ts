@@ -34,6 +34,8 @@ export class PixiRenderer {
 	private gridVisible = true;
 	private documentUnits = { database: 1e-9, user: 1e-6 };
 	private viewportUpdateTimeout: number | null = null;
+	private gridUpdateTimeout: number | null = null;
+	private scaleBarUpdateTimeout: number | null = null;
 
 	constructor() {
 		this.app = new Application();
@@ -107,8 +109,8 @@ export class PixiRenderer {
 
 		this.isInitialized = true;
 		this.setupControls();
-		this.updateGrid();
-		this.updateScaleBar();
+		this.performGridUpdate();
+		this.performScaleBarUpdate();
 	}
 
 	/**
@@ -229,6 +231,12 @@ export class PixiRenderer {
 				this.updateViewport();
 				this.updateGrid();
 				this.updateScaleBar();
+				e.preventDefault();
+			}
+
+			// F key for fit to view
+			if (e.code === "KeyF") {
+				this.fitToView();
 				e.preventDefault();
 			}
 		});
@@ -363,9 +371,25 @@ export class PixiRenderer {
 	}
 
 	/**
-	 * Update grid overlay
+	 * Update grid overlay (debounced)
 	 */
 	private updateGrid(): void {
+		// Clear any pending grid update
+		if (this.gridUpdateTimeout !== null) {
+			clearTimeout(this.gridUpdateTimeout);
+		}
+
+		// Debounce grid updates - only update after 50ms of no movement
+		this.gridUpdateTimeout = window.setTimeout(() => {
+			this.performGridUpdate();
+			this.gridUpdateTimeout = null;
+		}, 50);
+	}
+
+	/**
+	 * Perform the actual grid update
+	 */
+	private performGridUpdate(): void {
 		this.gridContainer.removeChildren();
 		if (!this.gridVisible) return;
 
@@ -403,9 +427,25 @@ export class PixiRenderer {
 	}
 
 	/**
-	 * Update scale bar
+	 * Update scale bar (debounced)
 	 */
 	private updateScaleBar(): void {
+		// Clear any pending scale bar update
+		if (this.scaleBarUpdateTimeout !== null) {
+			clearTimeout(this.scaleBarUpdateTimeout);
+		}
+
+		// Debounce scale bar updates - only update after 50ms of no movement
+		this.scaleBarUpdateTimeout = window.setTimeout(() => {
+			this.performScaleBarUpdate();
+			this.scaleBarUpdateTimeout = null;
+		}, 50);
+	}
+
+	/**
+	 * Perform the actual scale bar update
+	 */
+	private performScaleBarUpdate(): void {
 		this.scaleBarContainer.removeChildren();
 
 		const bounds = this.getViewportBounds();
@@ -472,7 +512,7 @@ export class PixiRenderer {
 	 */
 	toggleGrid(): void {
 		this.gridVisible = !this.gridVisible;
-		this.updateGrid();
+		this.performGridUpdate();
 	}
 
 	/**
@@ -490,6 +530,7 @@ export class PixiRenderer {
 		this.documentUnits = document.units;
 
 		onProgress?.(0, "Preparing to render...");
+		console.log("[PixiRenderer] Progress: 0% - Preparing to render...");
 		await new Promise((resolve) => setTimeout(resolve, 0));
 		this.clear();
 
@@ -498,15 +539,29 @@ export class PixiRenderer {
 		let totalPolygons = 0;
 		let polygonBudget = this.maxPolygonsPerRender;
 
+		// Calculate total polygons for progress tracking
+		let totalPolygonCount = 0;
+		for (const topCellName of document.topCells) {
+			const cell = document.cells.get(topCellName);
+			if (cell) {
+				totalPolygonCount += cell.polygons.length;
+			}
+		}
+
 		const topCellCount = document.topCells.length;
+		let processedPolygons = 0;
+
 		for (let i = 0; i < topCellCount; i++) {
 			const topCellName = document.topCells[i];
 			if (!topCellName) continue;
 			const cell = document.cells.get(topCellName);
 
 			if (cell) {
-				const progress = Math.floor((i / topCellCount) * 80);
-				onProgress?.(progress, `Rendering cell ${i + 1}/${topCellCount}...`);
+				// More granular progress based on polygon count
+				const baseProgress = Math.floor((processedPolygons / totalPolygonCount) * 80);
+				const message = `Rendering ${topCellName} (${cell.polygons.length} polygons)...`;
+				console.log(`[PixiRenderer] Progress: ${baseProgress}% - ${message}`);
+				onProgress?.(baseProgress, message);
 				await new Promise((resolve) => setTimeout(resolve, 0));
 
 				if (DEBUG) {
@@ -515,7 +570,7 @@ export class PixiRenderer {
 					);
 				}
 
-				const rendered = this.renderCellGeometry(
+				const rendered = await this.renderCellGeometry(
 					cell,
 					document,
 					0,
@@ -525,9 +580,24 @@ export class PixiRenderer {
 					1,
 					this.currentRenderDepth,
 					polygonBudget,
+					(cellProgress, cellMessage) => {
+						// Calculate overall progress: base progress + cell progress contribution
+						const cellContribution = (cell.polygons.length / totalPolygonCount) * 80;
+						const overallProgress =
+							baseProgress + Math.floor((cellProgress / 100) * cellContribution);
+						onProgress?.(overallProgress, cellMessage);
+					},
 				);
 				totalPolygons += rendered;
 				polygonBudget -= rendered;
+				processedPolygons += cell.polygons.length;
+
+				// Update progress after rendering this cell
+				const afterProgress = Math.floor((processedPolygons / totalPolygonCount) * 80);
+				const afterMessage = `Rendered ${topCellName}`;
+				console.log(`[PixiRenderer] Progress: ${afterProgress}% - ${afterMessage}`);
+				onProgress?.(afterProgress, afterMessage);
+				await new Promise((resolve) => setTimeout(resolve, 0));
 
 				if (polygonBudget <= 0) {
 					console.warn(
@@ -543,11 +613,13 @@ export class PixiRenderer {
 			`[PixiRenderer] Rendered ${totalPolygons} polygons in ${renderTime.toFixed(0)}ms (${this.allGraphicsItems.length} Graphics objects, depth=${this.currentRenderDepth})`,
 		);
 
+		console.log("[PixiRenderer] Progress: 90% - Fitting to view...");
 		onProgress?.(90, "Fitting to view...");
 		await new Promise((resolve) => setTimeout(resolve, 0));
 		this.fitToView();
 		this.updateViewport();
 
+		console.log("[PixiRenderer] Progress: 100% - Render complete!");
 		onProgress?.(100, "Render complete!");
 		console.log("[PixiRenderer] Initial render complete");
 	}
@@ -558,8 +630,9 @@ export class PixiRenderer {
 	 *
 	 * @param maxDepth - Maximum hierarchy depth to render (0 = only this cell's polygons)
 	 * @param polygonBudget - Maximum polygons to render (stops early if exceeded)
+	 * @param onProgress - Optional progress callback for large cells
 	 */
-	private renderCellGeometry(
+	private async renderCellGeometry(
 		cell: Cell,
 		document: GDSDocument,
 		x: number,
@@ -569,7 +642,8 @@ export class PixiRenderer {
 		magnification: number,
 		maxDepth: number,
 		polygonBudget: number,
-	): number {
+		onProgress?: (progress: number, message: string) => void,
+	): Promise<number> {
 		if (DEBUG) {
 			console.log(
 				`[PixiRenderer] renderCellGeometry: ${cell.name} at (${x}, ${y}) depth=${maxDepth} budget=${polygonBudget}`,
@@ -594,7 +668,12 @@ export class PixiRenderer {
 		const layerBounds = new Map<string, BoundingBox>();
 
 		let renderedPolygons = 0;
-		for (const polygon of cell.polygons) {
+		const totalPolygonsInCell = cell.polygons.length;
+		const yieldInterval = 10000; // Yield every 10k polygons for UI updates
+
+		for (let i = 0; i < totalPolygonsInCell; i++) {
+			const polygon = cell.polygons[i];
+			if (!polygon) continue;
 			const layerKey = `${polygon.layer}:${polygon.datatype}`;
 			const layer = document.layers.get(layerKey);
 			if (!layer || !layer.visible) continue;
@@ -626,6 +705,13 @@ export class PixiRenderer {
 			bounds.minY = Math.min(bounds.minY, polygon.boundingBox.minY);
 			bounds.maxX = Math.max(bounds.maxX, polygon.boundingBox.maxX);
 			bounds.maxY = Math.max(bounds.maxY, polygon.boundingBox.maxY);
+
+			// Yield to browser every N polygons for progress updates
+			if (onProgress && i > 0 && i % yieldInterval === 0) {
+				const progress = Math.floor((i / totalPolygonsInCell) * 100);
+				onProgress(progress, `Processing ${cell.name}: ${i}/${totalPolygonsInCell} polygons`);
+				await new Promise((resolve) => setTimeout(resolve, 0));
+			}
 		}
 
 		// Add Graphics objects to spatial index (one per layer)
@@ -662,7 +748,7 @@ export class PixiRenderer {
 
 				const refCell = document.cells.get(instance.cellRef);
 				if (refCell) {
-					const rendered = this.renderCellGeometry(
+					const rendered = await this.renderCellGeometry(
 						refCell,
 						document,
 						x + instance.x,
@@ -672,6 +758,7 @@ export class PixiRenderer {
 						magnification * instance.magnification,
 						maxDepth - 1, // Decrease depth for child instances
 						remainingBudget,
+						onProgress, // Pass through progress callback
 					);
 					totalPolygons += rendered;
 					remainingBudget -= rendered;
@@ -748,12 +835,13 @@ export class PixiRenderer {
 	 * Fit viewport to show all geometry
 	 */
 	fitToView(): void {
-		if (!this.isInitialized || !this.app.screen) {
+		if (!this.isInitialized || !this.app || !this.app.screen) {
 			console.warn("[PixiRenderer] Cannot fit to view - renderer not initialized");
 			return;
 		}
 
-		const bounds = this.mainContainer.getBounds();
+		// Get local bounds (unscaled) to calculate proper fit
+		const bounds = this.mainContainer.getLocalBounds();
 
 		if (bounds.width === 0 || bounds.height === 0) {
 			return;
@@ -765,12 +853,20 @@ export class PixiRenderer {
 
 		// Preserve Y-axis flip
 		this.mainContainer.scale.set(scale, -scale);
-		this.mainContainer.x = (this.app.screen.width - bounds.width * scale) / 2 - bounds.x * scale;
-		this.mainContainer.y = (this.app.screen.height - bounds.height * scale) / 2 - bounds.y * scale;
 
-		this.updateViewport();
-		this.updateGrid();
-		this.updateScaleBar();
+		// Center horizontally
+		this.mainContainer.x = (this.app.screen.width - bounds.width * scale) / 2 - bounds.x * scale;
+
+		// Center vertically (accounting for Y-axis flip)
+		// With Y-flip, bounds.y maps to screen Y via: containerY + bounds.y * (-scale)
+		// We want: containerY + bounds.y * (-scale) = (screen.height - bounds.height * scale) / 2
+		// So: containerY = (screen.height - bounds.height * scale) / 2 - bounds.y * (-scale)
+		//                = (screen.height - bounds.height * scale) / 2 + bounds.y * scale
+		this.mainContainer.y = (this.app.screen.height + bounds.height * scale) / 2 + bounds.y * scale;
+
+		this.performViewportUpdate();
+		this.performGridUpdate();
+		this.performScaleBarUpdate();
 	}
 
 	/**
