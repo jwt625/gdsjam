@@ -12,7 +12,8 @@ interface Props {
 // biome-ignore lint/correctness/noUnusedVariables: statistics is used in template
 const { renderer, visible, statistics }: Props = $props();
 
-let _metrics = $state({
+// biome-ignore lint/correctness/noUnusedVariables: metrics is used in template
+let metrics = $state({
 	fps: 0,
 	visiblePolygons: 0,
 	totalPolygons: 0,
@@ -38,7 +39,7 @@ let updateInterval: number | null = null;
 onMount(() => {
 	updateInterval = window.setInterval(() => {
 		if (renderer && visible) {
-			_metrics = renderer.getPerformanceMetrics();
+			metrics = renderer.getPerformanceMetrics();
 		}
 	}, 500);
 });
@@ -50,17 +51,20 @@ onDestroy(() => {
 });
 
 // Format numbers with commas
-function _formatNumber(num: number): string {
+// biome-ignore lint/correctness/noUnusedVariables: formatNumber is used in template
+function formatNumber(num: number): string {
 	return num.toLocaleString();
 }
 
 // Format percentage
-function _formatPercent(value: number): string {
+// biome-ignore lint/correctness/noUnusedVariables: formatPercent is used in template
+function formatPercent(value: number): string {
 	return `${(value * 100).toFixed(1)}%`;
 }
 
 // Format zoom level with adaptive decimal places
-function _formatZoom(zoom: number): string {
+// biome-ignore lint/correctness/noUnusedVariables: formatZoom is used in template
+function formatZoom(zoom: number): string {
 	// Use more decimal places for very small zoom values
 	if (zoom < 0.01) {
 		return `${zoom.toFixed(4)}x`;
@@ -72,7 +76,8 @@ function _formatZoom(zoom: number): string {
 }
 
 // Format file size
-function _formatFileSize(bytes: number): string {
+// biome-ignore lint/correctness/noUnusedVariables: formatFileSize is used in template
+function formatFileSize(bytes: number): string {
 	if (bytes < 1024) return `${bytes} B`;
 	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
 	if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -80,13 +85,15 @@ function _formatFileSize(bytes: number): string {
 }
 
 // Format time
-function _formatTime(ms: number): string {
+// biome-ignore lint/correctness/noUnusedVariables: formatTime is used in template
+function formatTime(ms: number): string {
 	if (ms < 1000) return `${ms.toFixed(0)} ms`;
 	return `${(ms / 1000).toFixed(2)} s`;
 }
 
 // Format dimensions
-function _formatDimension(um: number): string {
+// biome-ignore lint/correctness/noUnusedVariables: formatDimension is used in template
+function formatDimension(um: number): string {
 	if (um < 1000) return `${um.toFixed(1)} µm`;
 	if (um < 1000000) return `${(um / 1000).toFixed(2)} mm`;
 	return `${(um / 1000000).toFixed(2)} m`;

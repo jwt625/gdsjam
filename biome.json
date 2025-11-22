@@ -18,8 +18,8 @@
 		"rules": {
 			"recommended": true,
 			"correctness": {
-				"noUnusedVariables": "error",
-				"noUnusedImports": "error"
+				"noUnusedVariables": "warn",
+				"noUnusedImports": "warn"
 			},
 			"style": {
 				"noNonNullAssertion": "warn",
@@ -37,12 +37,17 @@
 			"semicolons": "always"
 		}
 	},
-	"assist": {
-		"enabled": true,
-		"actions": {
-			"source": {
-				"organizeImports": "on"
+	"overrides": [
+		{
+			"includes": ["*.svelte"],
+			"linter": {
+				"rules": {
+					"correctness": {
+						"noUnusedVariables": "off",
+						"noUnusedImports": "off"
+					}
+				}
 			}
 		}
-	}
+	]
 }

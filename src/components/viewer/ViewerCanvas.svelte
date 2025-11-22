@@ -4,6 +4,8 @@ import { DEBUG } from "../../lib/config";
 import { PixiRenderer } from "../../lib/renderer/PixiRenderer";
 import { gdsStore } from "../../stores/gdsStore";
 import type { GDSDocument } from "../../types/gds";
+// biome-ignore lint/correctness/noUnusedImports: Used in Svelte template
+import PerformancePanel from "../ui/PerformancePanel.svelte";
 
 let canvas: HTMLCanvasElement;
 let renderer = $state<PixiRenderer | null>(null);

@@ -1,6 +1,6 @@
 {
 	"*.{ts,js,svelte}": [
-		"biome check --write --unsafe --no-errors-on-unmatched",
+		"biome check --write --no-errors-on-unmatched",
 		"biome format --write --no-errors-on-unmatched"
 	]
 }
