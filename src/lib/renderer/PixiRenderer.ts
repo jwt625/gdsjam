@@ -136,6 +136,12 @@ export class PixiRenderer {
 		this.setupControls();
 		this.performGridUpdate();
 		this.performScaleBarUpdate();
+
+		// Listen for layer visibility changes
+		window.addEventListener(
+			"layer-visibility-changed",
+			this.handleLayerVisibilityChange.bind(this),
+		);
 	}
 
 	/**
@@ -536,6 +542,39 @@ export class PixiRenderer {
 				`[LOD] Zoom threshold crossed: ${currentZoom.toFixed(4)}x (thresholds: ${this.zoomThresholdLow.toFixed(4)}x - ${this.zoomThresholdHigh.toFixed(4)}x)`,
 			);
 			this.triggerLODRerender();
+		}
+	}
+
+	/**
+	 * Handle layer visibility change events from LayerPanel
+	 */
+	private handleLayerVisibilityChange(e: Event): void {
+		const customEvent = e as CustomEvent;
+		this.updateLayerVisibility(customEvent.detail.visibility);
+	}
+
+	/**
+	 * Update layer visibility and trigger re-render to respect polygon budget
+	 */
+	private updateLayerVisibility(visibility: { [key: string]: boolean }): void {
+		console.log("[PixiRenderer] Updating layer visibility");
+
+		// Update internal visibility map
+		this.layerVisibility.clear();
+		for (const [key, visible] of Object.entries(visibility)) {
+			this.layerVisibility.set(key, visible);
+		}
+
+		// Update graphics visibility (combines layer visibility + viewport culling)
+		this.performViewportUpdate();
+
+		// Trigger incremental re-render to fill budget with newly visible layers
+		// This ensures that when layers are shown, we render more detail if budget allows
+		if (this.currentDocument) {
+			console.log(
+				"[PixiRenderer] Triggering re-render to respect polygon budget after layer visibility change",
+			);
+			this.performIncrementalRerender();
 		}
 	}
 
@@ -1412,6 +1451,11 @@ export class PixiRenderer {
 	 * Destroy the renderer
 	 */
 	destroy(): void {
+		// Remove event listener
+		window.removeEventListener(
+			"layer-visibility-changed",
+			this.handleLayerVisibilityChange.bind(this),
+		);
 		this.app.destroy(true, { children: true, texture: true });
 	}
 
