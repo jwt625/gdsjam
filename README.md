@@ -87,4 +87,4 @@ MIT
 
 ## Author
 
-Created by [Wentao Jiang](https://outside5sigma.com/) and Claude.
+Created by [Wentao](https://outside5sigma.com/) and Claude.
