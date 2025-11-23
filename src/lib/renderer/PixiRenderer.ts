@@ -554,7 +554,7 @@ export class PixiRenderer {
 	}
 
 	/**
-	 * Update layer visibility and trigger re-render to respect polygon budget
+	 * Update layer visibility and update viewport to show/hide layers
 	 */
 	private updateLayerVisibility(visibility: { [key: string]: boolean }): void {
 		console.log("[PixiRenderer] Updating layer visibility");
@@ -566,16 +566,8 @@ export class PixiRenderer {
 		}
 
 		// Update graphics visibility (combines layer visibility + viewport culling)
+		// This will immediately show/hide the already-rendered graphics without re-rendering
 		this.performViewportUpdate();
-
-		// Trigger incremental re-render to fill budget with newly visible layers
-		// This ensures that when layers are shown, we render more detail if budget allows
-		if (this.currentDocument) {
-			console.log(
-				"[PixiRenderer] Triggering re-render to respect polygon budget after layer visibility change",
-			);
-			this.performIncrementalRerender();
-		}
 	}
 
 	/**

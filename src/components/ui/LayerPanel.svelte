@@ -1,4 +1,5 @@
 <script lang="ts">
+import { gdsStore } from "../../stores/gdsStore";
 import { layerStore } from "../../stores/layerStore";
 import type { FileStatistics } from "../../types/gds";
 
@@ -14,7 +15,9 @@ const layerVisibility = $derived(storeState.visibility);
 const syncEnabled = $derived(storeState.syncEnabled);
 
 function toggleLayer(key: string) {
+	// Update both layerStore (UI state) and gdsStore (document state)
 	layerStore.toggleLayer(key);
+	gdsStore.toggleLayerVisibility(key);
 	onLayerVisibilityChange();
 }
 
@@ -38,10 +41,33 @@ function toggleSyncMode() {
 	console.log(`[LayerPanel] Layer sync ${!syncEnabled ? "enabled" : "disabled"}`);
 }
 
-function getLayerColor(layer: number): string {
-	// Simple color mapping using golden angle for good distribution
-	const hue = (layer * 137.5) % 360;
-	return `hsl(${hue}, 70%, 50%)`;
+function getLayerColor(layer: number, datatype: number): string {
+	// Use same color mapping as GDSParser for consistency
+	const hue = (layer * 137 + datatype * 53) % 360;
+	const saturation = 70;
+	const lightness = 60;
+
+	// Convert HSL to hex (same as GDSParser)
+	const h = hue / 360;
+	const s = saturation / 100;
+	const l = lightness / 100;
+
+	const hue2rgb = (p: number, q: number, t: number) => {
+		if (t < 0) t += 1;
+		if (t > 1) t -= 1;
+		if (t < 1 / 6) return p + (q - p) * 6 * t;
+		if (t < 1 / 2) return q;
+		if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+		return p;
+	};
+
+	const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+	const p = 2 * l - q;
+	const r = Math.round(hue2rgb(p, q, h + 1 / 3) * 255);
+	const g = Math.round(hue2rgb(p, q, h) * 255);
+	const b = Math.round(hue2rgb(p, q, h - 1 / 3) * 255);
+
+	return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
 }
 </script>
 
@@ -61,6 +87,7 @@ function getLayerColor(layer: number): string {
 				<button
 					onclick={() => {
 						layerStore.showAll();
+						gdsStore.setAllLayersVisibility(true);
 						onLayerVisibilityChange();
 					}}
 				>
@@ -69,6 +96,7 @@ function getLayerColor(layer: number): string {
 				<button
 					onclick={() => {
 						layerStore.hideAll();
+						gdsStore.setAllLayersVisibility(false);
 						onLayerVisibilityChange();
 					}}
 				>
@@ -81,7 +109,7 @@ function getLayerColor(layer: number): string {
 			{#each Array.from(statistics.layerStats.entries()).sort((a, b) => a[1].layer - b[1].layer) as [key, layerStat]}
 				<div class="layer-item">
 					<input type="checkbox" checked={layerVisibility[key] ?? true} onchange={() => toggleLayer(key)} />
-					<div class="layer-color" style="background-color: {getLayerColor(layerStat.layer)}"></div>
+					<div class="layer-color" style="background-color: {getLayerColor(layerStat.layer, layerStat.datatype)}"></div>
 					<span class="layer-name">{layerStat.layer}:{layerStat.datatype}</span>
 					<span class="layer-count">{layerStat.polygonCount.toLocaleString()}</span>
 				</div>
@@ -93,10 +121,10 @@ function getLayerColor(layer: number): string {
 <style>
 	.layer-panel {
 		position: fixed;
-		bottom: 10px;
-		left: 10px;
+		top: 10px;
+		right: 10px;
 		width: 280px;
-		max-height: 500px;
+		max-height: 80vh;
 		background: rgba(0, 0, 0, 0.9);
 		color: #ccc;
 		border-radius: 4px;
