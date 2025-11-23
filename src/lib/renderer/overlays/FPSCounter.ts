@@ -1,6 +1,15 @@
 /**
- * FPS Counter Overlay
- * Tracks and displays frames per second
+ * FPSCounter - Tracks and displays frames per second
+ *
+ * Responsibilities:
+ * - Count frames rendered per second
+ * - Update FPS display at configurable interval
+ * - Provide current FPS value for performance metrics
+ *
+ * Implementation:
+ * - Called on every render tick via onTick()
+ * - Updates display text only when update interval elapses
+ * - Calculates FPS as: (frame count * 1000) / elapsed time
  */
 
 import type { Text } from "pixi.js";

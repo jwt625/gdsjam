@@ -1,6 +1,17 @@
 /**
- * Viewport Manager
- * Handles viewport culling and layer visibility filtering
+ * ViewportManager - Handles viewport culling and layer visibility filtering
+ *
+ * Responsibilities:
+ * - Calculate viewport bounds in world coordinates (accounting for Y-axis flip)
+ * - Query spatial index to find graphics items within viewport
+ * - Apply layer visibility filtering to hide/show items
+ * - Track visibility statistics for performance metrics
+ * - Detect newly visible layers for on-demand rendering
+ *
+ * Performance:
+ * - Uses R-tree spatial index for efficient viewport queries
+ * - Only updates visibility when viewport changes (debounced)
+ * - Minimizes Graphics object visibility toggles
  */
 
 import type { Graphics } from "pixi.js";

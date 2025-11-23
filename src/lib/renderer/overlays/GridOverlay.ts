@@ -1,6 +1,16 @@
 /**
- * Grid Overlay
- * Renders a dynamic grid based on viewport bounds
+ * GridOverlay - Renders a dynamic grid based on viewport bounds
+ *
+ * Responsibilities:
+ * - Calculate grid spacing based on viewport width (powers of 10)
+ * - Render vertical and horizontal grid lines
+ * - Update grid when viewport changes (zoom/pan)
+ * - Toggle grid visibility (G key)
+ *
+ * Implementation:
+ * - Grid spacing: 10^floor(log10(viewWidth / targetLines))
+ * - Line width scales with zoom to maintain constant screen width
+ * - Grid container transforms match main container for alignment
  */
 
 import type { Application, Container } from "pixi.js";

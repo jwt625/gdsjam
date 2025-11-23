@@ -1,9 +1,25 @@
 /**
- * Pixi.js WebGL Renderer for GDSII layouts
- * Implements viewport culling, zoom/pan controls, and FPS monitoring
+ * PixiRenderer - Main orchestrator for GDSII layout rendering
+ *
+ * This class serves as a thin orchestrator that coordinates specialized modules:
+ * - InputController: Handles mouse, keyboard, and touch input
+ * - ViewportManager: Manages viewport culling and visibility
+ * - LODManager: Controls Level of Detail rendering optimization
+ * - GDSRenderer: Renders GDS documents with polygon batching
+ * - UI Overlays: FPS counter, coordinates, grid, and scale bar
+ *
+ * Architecture:
+ * - Delegates responsibilities to focused, single-purpose modules
+ * - Maintains shared state (containers, spatial index, document)
+ * - Provides public API for external components (ViewerCanvas)
+ *
+ * @example
+ * const renderer = new PixiRenderer();
+ * await renderer.init(canvas);
+ * await renderer.renderGDSDocument(document);
  */
 
-import { Application, Container, Graphics, Text } from "pixi.js";
+import { Application, Container, type Graphics, Text } from "pixi.js";
 import type { BoundingBox, GDSDocument } from "../../types/gds";
 import { DEBUG, FPS_UPDATE_INTERVAL, MAX_POLYGONS_PER_RENDER, POLYGON_FILL_MODE } from "../config";
 import { type RTreeItem, SpatialIndex } from "../spatial/RTree";
@@ -624,45 +640,6 @@ export class PixiRenderer {
 		this.updateViewport();
 
 		onProgress?.(100, "Render complete!");
-	}
-
-	/**
-	 * Render test geometry (for prototyping)
-	 */
-	renderTestGeometry(count: number): void {
-		this.clear();
-
-		const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff, 0x00ffff];
-
-		for (let i = 0; i < count; i++) {
-			const graphics = new Graphics();
-			const color = colors[i % colors.length];
-
-			// Random rectangle
-			const x = Math.random() * 1000 - 500;
-			const y = Math.random() * 1000 - 500;
-			const width = Math.random() * 50 + 10;
-			const height = Math.random() * 50 + 10;
-
-			graphics.rect(x, y, width, height);
-			graphics.fill(color);
-			graphics.alpha = 0.7;
-
-			this.mainContainer.addChild(graphics);
-
-			// Add to spatial index
-			this.spatialIndex.insert({
-				minX: x,
-				minY: y,
-				maxX: x + width,
-				maxY: y + height,
-				id: `rect-${i}`,
-				type: "polygon",
-				data: graphics,
-			});
-		}
-
-		this.fitToView();
 	}
 
 	/**

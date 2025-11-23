@@ -1,6 +1,16 @@
 /**
- * Scale Bar Overlay
- * Renders a scale bar showing the current zoom level
+ * ScaleBarOverlay - Renders a scale bar showing the current zoom level
+ *
+ * Responsibilities:
+ * - Calculate scale bar width based on viewport width
+ * - Convert database units to micrometers for display
+ * - Format label with appropriate units (nm, µm, mm)
+ * - Render bar with ticks and label
+ *
+ * Implementation:
+ * - Bar width: 10^floor(log10(viewWidth / 4)) in micrometers
+ * - Automatically selects unit based on magnitude (nm < 1µm < 1mm)
+ * - Updates when viewport changes (zoom/pan)
  */
 
 import type { Application, Container } from "pixi.js";

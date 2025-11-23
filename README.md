@@ -63,10 +63,34 @@ pnpm test
 
 ## Architecture
 
-- **Coordinate System**: Micrometers (µm)
-- **Rendering Strategy**: Level-of-Detail (LOD) rendering with viewport culling
-- **Spatial Indexing**: R-tree for efficient visibility queries
-- **Performance**: Optimized for large files with polygon budgeting and incremental rendering
+### Renderer Architecture
+
+The renderer is built with a modular architecture where `PixiRenderer` serves as a thin orchestrator coordinating specialized modules:
+
+```
+PixiRenderer (orchestrator)
+├── InputController
+│   ├── MouseController - Wheel zoom, pan, coordinates
+│   ├── KeyboardController - Arrow keys, shortcuts
+│   └── TouchController - Touch pan, pinch zoom
+├── ViewportManager - Viewport culling, visibility
+├── LODManager - Level of Detail optimization
+├── ZoomLimits - Zoom constraints (1nm to 1m scale bar)
+├── GDSRenderer - Document rendering, polygon batching
+└── UI Overlays
+    ├── FPSCounter
+    ├── CoordinatesDisplay
+    ├── GridOverlay
+    └── ScaleBarOverlay
+```
+
+### Key Design Principles
+
+- **Coordinate System**: Micrometers (µm) with Y-up Cartesian convention (GDSII standard)
+- **Rendering Strategy**: Level-of-Detail (LOD) rendering with polygon budgeting
+- **Spatial Indexing**: R-tree for efficient viewport culling
+- **Performance**: Viewport culling, spatial tiling, incremental re-rendering
+- **Modularity**: Single-responsibility modules with clear interfaces
 
 ## Acknowledgments
 

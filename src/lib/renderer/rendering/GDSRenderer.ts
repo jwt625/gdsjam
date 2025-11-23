@@ -1,5 +1,18 @@
 /**
  * GDSRenderer - Handles rendering of GDS documents with LOD support
+ *
+ * Responsibilities:
+ * - Render GDS cells recursively with transformations (position, rotation, mirror, magnification)
+ * - Batch polygons by layer and spatial tile for efficient rendering
+ * - Respect polygon budget limits to prevent out-of-memory errors
+ * - Track rendering progress for UI feedback
+ * - Apply layer visibility filtering during render
+ *
+ * Architecture:
+ * - Uses spatial tiling (SPATIAL_TILE_SIZE) to batch polygons for viewport culling
+ * - Supports both fill and outline rendering modes
+ * - Calculates stroke width dynamically based on zoom level for outline mode
+ * - Inserts rendered tiles into spatial index for efficient viewport queries
  */
 
 import { Container, Graphics } from "pixi.js";

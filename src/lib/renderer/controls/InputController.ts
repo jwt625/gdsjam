@@ -1,6 +1,15 @@
 /**
- * Input Controller
- * Coordinates mouse, keyboard, and touch input controllers
+ * InputController - Coordinates mouse, keyboard, and touch input controllers
+ *
+ * Responsibilities:
+ * - Instantiate and manage MouseController, KeyboardController, and TouchController
+ * - Provide unified callback interface for all input types
+ * - Ensure proper cleanup of event listeners on destroy
+ *
+ * Supported Input:
+ * - Mouse: Wheel zoom, middle-button pan, Space+drag pan, coordinate tracking
+ * - Keyboard: Arrow keys pan, Enter/Shift+Enter zoom, F fit-to-view, G grid toggle
+ * - Touch: One-finger pan, two-finger pinch zoom
  */
 
 import { KeyboardController } from "./KeyboardController";

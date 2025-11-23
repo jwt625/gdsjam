@@ -1,6 +1,16 @@
 /**
- * Coordinates Display Overlay
- * Shows mouse cursor position in world coordinates
+ * CoordinatesDisplay - Shows mouse cursor position in world coordinates
+ *
+ * Responsibilities:
+ * - Convert screen coordinates to world coordinates
+ * - Account for Y-axis flip (GDSII uses Y-up Cartesian convention)
+ * - Convert database units to micrometers for display
+ * - Update display text with formatted coordinates
+ *
+ * Coordinate System:
+ * - Screen: Origin at top-left, Y-down
+ * - World: Origin at center, Y-up (flipped via mainContainer.scale.y = -1)
+ * - Display: Micrometers with 3 decimal places (nm precision)
  */
 
 import type { Text } from "pixi.js";
