@@ -1,12 +1,33 @@
 # DevLog 001-02: PixiRenderer Refactoring Plan
 
 **Date**: 2025-11-23
-**Status**: Phase 4 Complete
+**Status**: Phase 5 Partially Complete
 **Goal**: Refactor the 1,688-line PixiRenderer class into modular, maintainable components
 
 ---
 
 ## Implementation Progress
+
+### Phase 5: Extract Rendering Pipeline - PARTIALLY COMPLETE
+
+**Date Started**: 2025-11-23
+**Status**: Initial extraction done, needs decomposition into 3 components
+
+**Files Created**:
+- `src/lib/renderer/rendering/GDSRenderer.ts` (365 lines) - Monolithic renderer
+
+**PixiRenderer Changes**:
+- **Before**: 1,147 lines
+- **After**: 804 lines
+- **Reduction**: 343 lines
+
+**Bugs Fixed**:
+- Layer visibility: Used passed `layerVisibility` map instead of `layer.visible` from document
+- Container reference: Added `updateMainContainer()` method for re-renders
+
+**Remaining Work**: Decompose GDSRenderer into PolygonBatcher, CellRenderer, and GDSRenderer orchestrator
+
+---
 
 ### Phase 4: Extract Viewport Manager - COMPLETE
 
@@ -591,120 +612,46 @@ export class ViewportManager {
 
 ---
 
-### Phase 5: Extract Rendering Pipeline (Highest Risk)
-**Effort**: 1-2 days
-**Risk**: High (core rendering logic, many dependencies)
+### Phase 5: Extract Rendering Pipeline (Partially Complete)
+**Status**: Initial extraction done, needs further decomposition
 
-**What to Extract**:
-- GDS document rendering
-- Cell geometry rendering
-- Polygon batching and tiling
+**Files Created**:
+- `src/lib/renderer/rendering/GDSRenderer.ts` (365 lines) - Monolithic renderer
 
-**New Files**:
-```
-src/lib/renderer/rendering/
-├── GDSRenderer.ts       (~200 lines)
-├── CellRenderer.ts      (~250 lines)
-└── PolygonBatcher.ts    (~100 lines)
-```
+**PixiRenderer Changes**:
+- Before: 1,147 lines
+- After: 804 lines
+- Reduction: 343 lines
+- Modified `renderGDSDocument()` - Reduced from 148 to 49 lines, delegates to GDSRenderer
+- Removed `renderCellGeometry()` (224 lines)
+- Removed `addPolygonToGraphics()` (37 lines)
+- Removed unused imports and `cellRenderCounts` field
 
-**Interface Design**:
-```typescript
-// PolygonBatcher.ts
-export class PolygonBatcher {
-  batchPolygonsByTile(
-    polygons: Polygon[],
-    tileSize: number
-  ): Map<string, Polygon[]> {
-    // Group polygons by tile key "layer:datatype:tileX:tileY"
-  }
+**Current State**:
+- Created single monolithic `GDSRenderer` class (365 lines) containing all rendering logic
+- **Not yet decomposed** into planned architecture:
+  - PolygonBatcher (~100 lines) - Not created
+  - CellRenderer (~250 lines) - Not created
+  - GDSRenderer (~200 lines) - Created but contains all logic
 
-  addPolygonToGraphics(
-    graphics: Graphics,
-    polygon: Polygon,
-    color: number,
-    strokeWidthDB: number,
-    fillMode: boolean
-  ): void {
-    // Draw polygon to graphics object
-  }
-}
+**GDSRenderer Methods** (current monolithic implementation):
+- `render()` - Main entry point with progress tracking
+- `renderCell()` - Recursive cell/instance rendering with transformations and polygon batching
+- `addPolygonToGraphics()` - Polygon drawing with fill/outline modes
+- `updateMainContainer()` - Update container reference during re-renders
 
-// CellRenderer.ts
-export class CellRenderer {
-  constructor(
-    private polygonBatcher: PolygonBatcher,
-    private spatialIndex: SpatialIndex
-  ) {}
+**Bugs Fixed**:
+1. Layer visibility check: Used passed `layerVisibility` map instead of `layer.visible` from document
+2. Container reference stale after re-render: Added `updateMainContainer()` method called when creating new container
 
-  async renderCell(
-    cell: Cell,
-    document: GDSDocument,
-    transform: {
-      x: number;
-      y: number;
-      rotation: number;
-      mirror: boolean;
-      magnification: number;
-    },
-    options: {
-      maxDepth: number;
-      polygonBudget: number;
-      fillMode: boolean;
-      strokeWidthDB: number;
-      layerVisibility: Map<string, boolean>;
-    },
-    onProgress?: (progress: number, message: string) => void
-  ): Promise<{ renderedPolygons: number; graphicsItems: RTreeItem[] }> {
-    // Render cell geometry recursively
-  }
-}
+**Testing Results**: All functionality working (initial render, zoom/LOD, outline mode, layer visibility, viewport culling, performance metrics)
 
-// GDSRenderer.ts
-export class GDSRenderer {
-  constructor(
-    private cellRenderer: CellRenderer,
-    private mainContainer: Container
-  ) {}
+**Remaining Work**:
+- Extract polygon batching logic into `PolygonBatcher.ts`
+- Extract cell rendering logic into `CellRenderer.ts`
+- Reduce `GDSRenderer.ts` to orchestration only
 
-  async render(
-    document: GDSDocument,
-    options: {
-      depth: number;
-      maxPolygonsPerRender: number;
-      fillMode: boolean;
-      overrideScale?: number;
-      layerVisibility: Map<string, boolean>;
-    },
-    onProgress?: RenderProgressCallback
-  ): Promise<{ totalPolygons: number; graphicsItems: RTreeItem[] }> {
-    // Render all top cells
-  }
-}
-```
-
-**Changes to PixiRenderer**:
-- Remove `renderCellGeometry()` → move to `CellRenderer.renderCell()`
-- Remove `addPolygonToGraphics()` → move to `PolygonBatcher.addPolygonToGraphics()`
-- Simplify `renderGDSDocument()` → delegate to `GDSRenderer.render()`
-- Add `gdsRenderer: GDSRenderer` field
-
-**Testing Steps**:
-1. Verify document renders correctly
-2. Verify cell hierarchy renders correctly
-3. Verify instances render with correct transformations
-4. Verify polygon batching by tile works
-5. Verify fill/outline mode works
-6. Verify layer visibility works
-7. Verify budget limits are respected
-8. Verify progress callbacks work
-9. Load multiple test files (simple and complex)
-
-**Acceptance Criteria**:
-- All rendering works identically to before
-- No visual regressions
-- No performance regression
-- PixiRenderer reduced by ~404 lines
+**Lessons Learned**: When extracting rendering logic with container references, ensure references are updated during container recreation. Test both initial render and incremental re-render paths separately.
 
 ---
 

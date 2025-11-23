@@ -4,14 +4,8 @@
  */
 
 import { Application, Container, Graphics, Text } from "pixi.js";
-import type { BoundingBox, Cell, GDSDocument, Polygon } from "../../types/gds";
-import {
-	DEBUG,
-	FPS_UPDATE_INTERVAL,
-	MAX_POLYGONS_PER_RENDER,
-	POLYGON_FILL_MODE,
-	SPATIAL_TILE_SIZE,
-} from "../config";
+import type { BoundingBox, GDSDocument } from "../../types/gds";
+import { DEBUG, FPS_UPDATE_INTERVAL, MAX_POLYGONS_PER_RENDER, POLYGON_FILL_MODE } from "../config";
 import { type RTreeItem, SpatialIndex } from "../spatial/RTree";
 import { InputController } from "./controls/InputController";
 import { LODManager } from "./lod/LODManager";
@@ -20,6 +14,7 @@ import { CoordinatesDisplay } from "./overlays/CoordinatesDisplay";
 import { FPSCounter } from "./overlays/FPSCounter";
 import { GridOverlay } from "./overlays/GridOverlay";
 import { ScaleBarOverlay } from "./overlays/ScaleBarOverlay";
+import { GDSRenderer, type RenderProgressCallback } from "./rendering/GDSRenderer";
 import { ViewportManager } from "./viewport/ViewportManager";
 
 export interface ViewportState {
@@ -27,8 +22,6 @@ export interface ViewportState {
 	y: number;
 	scale: number;
 }
-
-export type RenderProgressCallback = (progress: number, message: string) => void;
 
 export class PixiRenderer {
 	private app: Application;
@@ -54,7 +47,6 @@ export class PixiRenderer {
 	private totalRenderedPolygons = 0;
 	private layerVisibility: Map<string, boolean> = new Map();
 	private isRerendering = false;
-	private cellRenderCounts: Map<string, number> = new Map();
 
 	// LOD Manager
 	private lodManager!: LODManager;
@@ -62,6 +54,9 @@ export class PixiRenderer {
 
 	// Viewport Manager
 	private viewportManager!: ViewportManager;
+
+	// GDS Renderer
+	private gdsRenderer!: GDSRenderer;
 
 	// UI Overlays
 	private fpsCounter!: FPSCounter;
@@ -170,6 +165,9 @@ export class PixiRenderer {
 
 		// Initialize viewport manager
 		this.viewportManager = new ViewportManager(this.spatialIndex, () => this.layerVisibility);
+
+		// Initialize GDS renderer
+		this.gdsRenderer = new GDSRenderer(this.spatialIndex, this.mainContainer);
 
 		// Initialize input controllers
 		this.inputController = new InputController(this.app.canvas, {
@@ -425,6 +423,9 @@ export class PixiRenderer {
 		this.allGraphicsItems = [];
 		this.spatialIndex.clear();
 
+		// Update GDSRenderer's container reference
+		this.gdsRenderer.updateMainContainer(this.mainContainer);
+
 		// Re-render with new depth (skip fitToView to preserve zoom)
 		// Pass the saved scale so stroke widths are calculated correctly
 		await this.renderGDSDocument(this.currentDocument, undefined, true, savedScale);
@@ -589,105 +590,28 @@ export class PixiRenderer {
 			);
 		}
 
-		// Reset cell render tracking
-		this.cellRenderCounts.clear();
+		// Render using GDSRenderer
+		const result = await this.gdsRenderer.render(
+			document,
+			{
+				maxDepth: this.currentRenderDepth,
+				maxPolygonsPerRender: scaledBudget,
+				fillMode: this.fillPolygons,
+				overrideScale,
+				layerVisibility: this.layerVisibility,
+			},
+			onProgress,
+		);
 
-		// Log top cell structure for debugging
-		if (DEBUG) {
-			for (const topCellName of document.topCells) {
-				const cell = document.cells.get(topCellName);
-				if (cell) {
-					console.log(
-						`[Render] Top cell "${topCellName}": ${cell.polygons.length.toLocaleString()} polygons, ${cell.instances.length.toLocaleString()} instances`,
-					);
-				}
-			}
-		}
-
-		let totalPolygons = 0;
-		let polygonBudget = scaledBudget;
-
-		// Calculate total polygons for progress tracking
-		let totalPolygonCount = 0;
-		for (const topCellName of document.topCells) {
-			const cell = document.cells.get(topCellName);
-			if (cell) {
-				totalPolygonCount += cell.polygons.length;
-			}
-		}
-
-		const topCellCount = document.topCells.length;
-		let processedPolygons = 0;
-
-		for (let i = 0; i < topCellCount; i++) {
-			const topCellName = document.topCells[i];
-			if (!topCellName) continue;
-			const cell = document.cells.get(topCellName);
-
-			if (cell) {
-				// More granular progress based on polygon count
-				const baseProgress = Math.floor((processedPolygons / totalPolygonCount) * 80);
-				const message = `Rendering ${topCellName} (${cell.polygons.length} polygons)...`;
-				onProgress?.(baseProgress, message);
-				await new Promise((resolve) => setTimeout(resolve, 0));
-
-				const rendered = await this.renderCellGeometry(
-					cell,
-					document,
-					0,
-					0,
-					0,
-					false,
-					1,
-					this.currentRenderDepth,
-					polygonBudget,
-					(cellProgress, cellMessage) => {
-						// Calculate overall progress: base progress + cell progress contribution
-						const cellContribution = (cell.polygons.length / totalPolygonCount) * 80;
-						const overallProgress =
-							baseProgress + Math.floor((cellProgress / 100) * cellContribution);
-						onProgress?.(overallProgress, cellMessage);
-					},
-					overrideScale,
-				);
-				totalPolygons += rendered;
-				polygonBudget -= rendered;
-				processedPolygons += cell.polygons.length;
-
-				// Update progress after rendering this cell
-				const afterProgress = Math.floor((processedPolygons / totalPolygonCount) * 80);
-				const afterMessage = `Rendered ${topCellName}`;
-				onProgress?.(afterProgress, afterMessage);
-				await new Promise((resolve) => setTimeout(resolve, 0));
-
-				if (polygonBudget <= 0) {
-					console.warn(
-						`[Render] Budget exhausted (${this.maxPolygonsPerRender.toLocaleString()}), stopping render`,
-					);
-					break;
-				}
-			}
-		}
-
-		// Store total rendered polygons for metrics
-		this.totalRenderedPolygons = totalPolygons;
+		// Store results
+		this.allGraphicsItems = result.graphicsItems;
+		this.totalRenderedPolygons = result.totalPolygons;
 
 		const renderTime = performance.now() - startTime;
 		if (DEBUG) {
 			console.log(
-				`[Render] Complete: ${totalPolygons.toLocaleString()} polygons in ${renderTime.toFixed(0)}ms (${this.allGraphicsItems.length} tiles, depth=${this.currentRenderDepth})`,
+				`[Render] Complete: ${result.totalPolygons.toLocaleString()} polygons in ${renderTime.toFixed(0)}ms (${this.allGraphicsItems.length} tiles, depth=${this.currentRenderDepth})`,
 			);
-
-			// Log cell render statistics to detect instance explosion
-			const topCells = Array.from(this.cellRenderCounts.entries())
-				.sort((a, b) => b[1] - a[1])
-				.slice(0, 10);
-			if (topCells.length > 0) {
-				console.log("[Render] Top 10 most rendered cells:");
-				for (const [cellName, count] of topCells) {
-					console.log(`  ${cellName}: ${count} times`);
-				}
-			}
 		}
 
 		if (!skipFitToView) {
@@ -700,273 +624,6 @@ export class PixiRenderer {
 		this.updateViewport();
 
 		onProgress?.(100, "Render complete!");
-	}
-
-	/**
-	 * Render cell geometry with transformations (batched by layer)
-	 * Returns number of polygons rendered (including instances)
-	 *
-	 * @param maxDepth - Maximum hierarchy depth to render (0 = only this cell's polygons)
-	 * @param polygonBudget - Maximum polygons to render (stops early if exceeded)
-	 * @param onProgress - Optional progress callback for large cells
-	 * @param overrideScale - Optional scale to use for stroke width calculation (used during re-renders)
-	 */
-	private async renderCellGeometry(
-		cell: Cell,
-		document: GDSDocument,
-		x: number,
-		y: number,
-		rotation: number,
-		mirror: boolean,
-		magnification: number,
-		maxDepth: number,
-		polygonBudget: number,
-		onProgress?: (progress: number, message: string) => void,
-		overrideScale?: number,
-	): Promise<number> {
-		// Track how many times each cell is rendered (for debugging instance explosion)
-		const currentCount = this.cellRenderCounts.get(cell.name) || 0;
-		this.cellRenderCounts.set(cell.name, currentCount + 1);
-
-		// Stop if budget exhausted
-		if (polygonBudget <= 0) {
-			return 0;
-		}
-
-		// Create container for this cell
-		const cellContainer = new Container();
-		cellContainer.x = x;
-		cellContainer.y = y;
-		cellContainer.rotation = (rotation * Math.PI) / 180;
-		cellContainer.scale.x = magnification * (mirror ? -1 : 1);
-		cellContainer.scale.y = magnification;
-
-		// Calculate stroke width in world coordinates that will appear constant on screen
-		// The polygon graphics are children of mainContainer, so they inherit its scale
-		// To get N screen pixels: strokeWidthDB * mainContainer.scale.x = N
-		// Therefore: strokeWidthDB = N / mainContainer.scale.x
-		// Use overrideScale if provided (during re-renders), otherwise use current scale
-		const currentScale = overrideScale ?? this.mainContainer.scale.x;
-		const desiredScreenPixels = 2.0;
-		let strokeWidthDB = desiredScreenPixels / currentScale;
-
-		// Clamp stroke width to prevent it from becoming too small at high zoom levels
-		// Pixi.js has trouble rendering strokes smaller than ~0.1 units
-		// At very high zoom (e.g., 100nm scale bar), strokeWidthDB might be < 0.01
-		const minStrokeWidthDB = 0.1;
-		if (strokeWidthDB < minStrokeWidthDB) {
-			strokeWidthDB = minStrokeWidthDB;
-		}
-
-		if (DEBUG) {
-			console.log(
-				`[Render] Cell ${cell.name}: strokeWidthDB=${strokeWidthDB.toExponential(2)} DB units, scale=${currentScale.toExponential(3)}, expected screen pixels=${desiredScreenPixels}`,
-			);
-		}
-
-		// Batch polygons by layer AND spatial tile for efficient rendering and culling
-		// Tile key format: "layer:datatype:tileX:tileY"
-		const tileGraphics = new Map<string, Graphics>();
-		const tileBounds = new Map<string, BoundingBox>();
-		const tilePolygonCounts = new Map<string, number>();
-
-		// Reserve budget for instances when maxDepth > 0
-		// At depth 0: Use 100% budget for direct polygons (no instances rendered)
-		// At depth 1+: Use 70% budget for direct polygons, reserve 30% for instances
-		// More conservative to prevent OOM from deep hierarchies
-		let directPolygonBudget = polygonBudget;
-		if (maxDepth > 0) {
-			directPolygonBudget = Math.floor(polygonBudget * 0.7);
-			if (DEBUG) {
-				console.log(
-					`[Render] Cell ${cell.name}: Reserving budget for instances (${directPolygonBudget.toLocaleString()} for direct polygons, ${(polygonBudget - directPolygonBudget).toLocaleString()} for instances)`,
-				);
-			}
-		}
-
-		let renderedPolygons = 0;
-		const totalPolygonsInCell = cell.polygons.length;
-		const yieldInterval = 10000; // Yield every 10k polygons for UI updates
-
-		for (let i = 0; i < totalPolygonsInCell; i++) {
-			// Check budget before rendering each polygon
-			if (renderedPolygons >= directPolygonBudget) {
-				if (DEBUG) {
-					console.log(
-						`[Render] Cell ${cell.name}: Direct polygon budget exhausted (${renderedPolygons.toLocaleString()}/${totalPolygonsInCell.toLocaleString()} rendered)`,
-					);
-				}
-				break;
-			}
-
-			const polygon = cell.polygons[i];
-			if (!polygon) continue;
-			const layerKey = `${polygon.layer}:${polygon.datatype}`;
-			const layer = document.layers.get(layerKey);
-			if (!layer || !layer.visible) continue;
-
-			// Calculate which tile this polygon belongs to (based on its center)
-			const centerX = (polygon.boundingBox.minX + polygon.boundingBox.maxX) / 2;
-			const centerY = (polygon.boundingBox.minY + polygon.boundingBox.maxY) / 2;
-			const tileX = Math.floor(centerX / SPATIAL_TILE_SIZE);
-			const tileY = Math.floor(centerY / SPATIAL_TILE_SIZE);
-			const tileKey = `${layerKey}:${tileX}:${tileY}`;
-
-			// Get or create Graphics object for this tile
-			let graphics = tileGraphics.get(tileKey);
-			if (!graphics) {
-				graphics = new Graphics();
-				tileGraphics.set(tileKey, graphics);
-				cellContainer.addChild(graphics);
-
-				// Initialize bounds for this tile
-				tileBounds.set(tileKey, {
-					minX: Number.POSITIVE_INFINITY,
-					minY: Number.POSITIVE_INFINITY,
-					maxX: Number.NEGATIVE_INFINITY,
-					maxY: Number.NEGATIVE_INFINITY,
-				});
-
-				// Initialize polygon count for this tile
-				tilePolygonCounts.set(tileKey, 0);
-			}
-
-			// Add polygon to batched graphics
-			this.addPolygonToGraphics(graphics, polygon, layer.color, strokeWidthDB);
-			renderedPolygons++;
-
-			// Increment polygon count for this tile
-			const currentCount = tilePolygonCounts.get(tileKey) || 0;
-			tilePolygonCounts.set(tileKey, currentCount + 1);
-
-			// Update tile bounds (avoid calling getBounds() which is expensive)
-			// biome-ignore lint/style/noNonNullAssertion: Bounds initialized earlier in loop
-			const bounds = tileBounds.get(tileKey)!;
-			bounds.minX = Math.min(bounds.minX, polygon.boundingBox.minX);
-			bounds.minY = Math.min(bounds.minY, polygon.boundingBox.minY);
-			bounds.maxX = Math.max(bounds.maxX, polygon.boundingBox.maxX);
-			bounds.maxY = Math.max(bounds.maxY, polygon.boundingBox.maxY);
-
-			// Yield to browser every N polygons for progress updates
-			if (onProgress && i > 0 && i % yieldInterval === 0) {
-				const progress = Math.floor((i / totalPolygonsInCell) * 100);
-				onProgress(progress, `Processing ${cell.name}: ${i}/${totalPolygonsInCell} polygons`);
-				await new Promise((resolve) => setTimeout(resolve, 0));
-			}
-		}
-
-		// Add Graphics objects to spatial index (one per tile)
-		// DON'T call graphics.getBounds() - it's too expensive for large files
-		for (const [tileKey, graphics] of tileGraphics) {
-			// biome-ignore lint/style/noNonNullAssertion: Bounds exist for all tiles in map
-			const bounds = tileBounds.get(tileKey)!;
-			// Parse layer and datatype from tileKey (format: "layer:datatype:tileX:tileY")
-			const [layerStr, datatypeStr] = tileKey.split(":");
-			const layer = Number.parseInt(layerStr || "0", 10);
-			const datatype = Number.parseInt(datatypeStr || "0", 10);
-			const polygonCount = tilePolygonCounts.get(tileKey) || 0;
-
-			const item: RTreeItem = {
-				minX: bounds.minX + x,
-				minY: bounds.minY + y,
-				maxX: bounds.maxX + x,
-				maxY: bounds.maxY + y,
-				id: `${cell.name}_${tileKey}_${x}_${y}`,
-				type: "tile",
-				data: graphics,
-				layer,
-				datatype,
-				polygonCount,
-			};
-			this.spatialIndex.insert(item);
-			this.allGraphicsItems.push(item);
-		}
-
-		// Render instances (recursive) only if we have depth budget
-		let totalPolygons = renderedPolygons;
-		let remainingBudget = polygonBudget - renderedPolygons;
-
-		if (maxDepth > 0 && remainingBudget > 0) {
-			if (DEBUG) {
-				console.log(
-					`[Render] Cell ${cell.name}: Rendering ${cell.instances.length} instances at depth ${maxDepth}`,
-				);
-			}
-
-			for (const instance of cell.instances) {
-				if (remainingBudget <= 0) break;
-
-				const refCell = document.cells.get(instance.cellRef);
-				if (refCell) {
-					const rendered = await this.renderCellGeometry(
-						refCell,
-						document,
-						x + instance.x,
-						y + instance.y,
-						rotation + instance.rotation,
-						mirror !== instance.mirror,
-						magnification * instance.magnification,
-						maxDepth - 1, // Decrease depth for child instances
-						remainingBudget,
-						onProgress, // Pass through progress callback
-						overrideScale, // Pass through override scale
-					);
-					totalPolygons += rendered;
-					remainingBudget -= rendered;
-				}
-			}
-
-			if (DEBUG) {
-				console.log(
-					`[Render] Cell ${cell.name}: Rendered ${totalPolygons - renderedPolygons} polygons from instances`,
-				);
-			}
-		}
-
-		this.mainContainer.addChild(cellContainer);
-		return totalPolygons;
-	}
-
-	/**
-	 * Add a polygon to an existing Graphics object (for batched rendering)
-	 * @param strokeWidthDB - Stroke width in database units for outline mode (calculated once per render pass)
-	 */
-	private addPolygonToGraphics(
-		graphics: Graphics,
-		polygon: Polygon,
-		colorHex: string,
-		strokeWidthDB: number,
-	): void {
-		// Convert hex color to number
-		let color = Number.parseInt(colorHex.replace("#", ""), 16);
-
-		// Validate color and use default if invalid
-		if (Number.isNaN(color)) {
-			console.warn(`[PixiRenderer] Invalid color: "${colorHex}", using default blue`);
-			color = 0x4a9eff; // Default blue
-		}
-
-		// Draw polygon
-		if (polygon.points.length > 0 && polygon.points[0]) {
-			// Build the polygon path
-			graphics.moveTo(polygon.points[0].x, polygon.points[0].y);
-			for (let i = 1; i < polygon.points.length; i++) {
-				const point = polygon.points[i];
-				if (point) {
-					graphics.lineTo(point.x, point.y);
-				}
-			}
-			graphics.closePath();
-
-			// Apply fill and/or stroke based on mode
-			if (this.fillPolygons) {
-				// Filled mode: fill only, no stroke
-				graphics.fill({ color, alpha: 0.7 });
-			} else {
-				// Outline only mode: no fill, thicker stroke
-				graphics.stroke({ color, width: strokeWidthDB, alpha: 1.0 });
-			}
-		}
 	}
 
 	/**
