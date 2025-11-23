@@ -1,8 +1,55 @@
 # DevLog 001-02: PixiRenderer Refactoring Plan
 
-**Date**: 2025-11-23  
-**Status**: Planning  
+**Date**: 2025-11-23
+**Status**: Phase 1 Complete
 **Goal**: Refactor the 1,688-line PixiRenderer class into modular, maintainable components
+
+---
+
+## Implementation Progress
+
+### Phase 1: Extract UI Overlays - COMPLETE
+
+**Date Completed**: 2025-11-23
+**Actual Effort**: ~2 hours
+**Status**: All tests passed, Y-coordinate bug fixed
+
+**Files Created**:
+- `src/lib/renderer/overlays/FPSCounter.ts` (53 lines)
+- `src/lib/renderer/overlays/CoordinatesDisplay.ts` (48 lines)
+- `src/lib/renderer/overlays/GridOverlay.ts` (81 lines)
+- `src/lib/renderer/overlays/ScaleBarOverlay.ts` (84 lines)
+
+**PixiRenderer Changes**:
+- **Before**: 1,688 lines
+- **After**: 1,612 lines
+- **Reduction**: 76 lines (128 removed, 52 added for delegation)
+
+**What Was Extracted**:
+1. **FPSCounter** - Tracks and displays frames per second
+2. **CoordinatesDisplay** - Shows mouse cursor position in world coordinates
+3. **GridOverlay** - Renders dynamic grid based on viewport
+4. **ScaleBarOverlay** - Renders scale bar showing zoom level
+
+**Bug Fixes During Refactoring**:
+- Fixed Y-coordinate sign in CoordinatesDisplay (pre-existing bug)
+  - Added Y-axis flip correction: `worldY = -((mouseY - containerY) / scale)`
+  - Coordinates now correctly match GDSII Cartesian convention (Y-up)
+
+**Testing Results**:
+- FPS counter displays and updates correctly
+- Coordinates display updates on mouse move (Y-axis sign now correct)
+- Grid toggle (G key) works
+- Scale bar updates correctly under various zoom levels
+- File loading works fine
+- No console errors
+- TypeScript compilation passes
+
+**Lessons Learned**:
+- Refactoring revealed pre-existing Y-coordinate bug that was caught during testing
+- Overlay extraction was cleaner than expected due to minimal coupling
+- Total line count increased (+188 net) but this is expected for proper modularization
+- Each overlay is now independently testable and maintainable
 
 ---
 

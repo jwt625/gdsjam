@@ -20,6 +20,10 @@ import {
 	SPATIAL_TILE_SIZE,
 } from "../config";
 import { type RTreeItem, SpatialIndex } from "../spatial/RTree";
+import { CoordinatesDisplay } from "./overlays/CoordinatesDisplay";
+import { FPSCounter } from "./overlays/FPSCounter";
+import { GridOverlay } from "./overlays/GridOverlay";
+import { ScaleBarOverlay } from "./overlays/ScaleBarOverlay";
 
 export interface ViewportState {
 	x: number;
@@ -37,14 +41,10 @@ export class PixiRenderer {
 	private fpsText: Text;
 	private scaleBarContainer: Container;
 	private coordsText: Text;
-	private lastFrameTime: number;
-	private frameCount: number;
-	private fpsUpdateInterval: number;
 	private allGraphicsItems: RTreeItem[] = [];
 	private isInitialized = false;
 	private maxPolygonsPerRender = MAX_POLYGONS_PER_RENDER;
 	private currentRenderDepth = 0;
-	private gridVisible = true;
 	private fillPolygons = POLYGON_FILL_MODE;
 	private documentUnits = { database: 1e-9, user: 1e-6 };
 	private viewportUpdateTimeout: number | null = null;
@@ -58,10 +58,15 @@ export class PixiRenderer {
 	private lastLODChangeTime = 0;
 	private visiblePolygonCount = 0;
 	private totalRenderedPolygons = 0;
-	private currentFPS = 0;
 	private layerVisibility: Map<string, boolean> = new Map();
 	private isRerendering = false;
 	private cellRenderCounts: Map<string, number> = new Map();
+
+	// UI Overlays
+	private fpsCounter!: FPSCounter;
+	private coordinatesDisplay!: CoordinatesDisplay;
+	private gridOverlay!: GridOverlay;
+	private scaleBarOverlay!: ScaleBarOverlay;
 
 	constructor() {
 		this.app = new Application();
@@ -69,9 +74,6 @@ export class PixiRenderer {
 		this.gridContainer = new Container();
 		this.scaleBarContainer = new Container();
 		this.spatialIndex = new SpatialIndex();
-		this.lastFrameTime = performance.now();
-		this.frameCount = 0;
-		this.fpsUpdateInterval = FPS_UPDATE_INTERVAL;
 
 		this.fpsText = new Text({
 			text: "FPS: 0",
@@ -130,6 +132,12 @@ export class PixiRenderer {
 		this.coordsText.y = this.app.screen.height - 30;
 		this.app.stage.addChild(this.coordsText);
 
+		// Initialize overlay modules
+		this.fpsCounter = new FPSCounter(this.fpsText, FPS_UPDATE_INTERVAL);
+		this.coordinatesDisplay = new CoordinatesDisplay(this.coordsText);
+		this.gridOverlay = new GridOverlay(this.gridContainer, this.app);
+		this.scaleBarOverlay = new ScaleBarOverlay(this.scaleBarContainer, this.app);
+
 		this.app.ticker.add(this.onTick.bind(this));
 		this.mainContainer.eventMode = "static";
 
@@ -149,24 +157,12 @@ export class PixiRenderer {
 	 * Render loop tick
 	 */
 	private onTick(): void {
-		this.frameCount++;
-		const now = performance.now();
-		const elapsed = now - this.lastFrameTime;
+		// Update FPS counter
+		this.fpsCounter.onTick();
 
-		if (elapsed >= this.fpsUpdateInterval) {
-			const fps = Math.round((this.frameCount * 1000) / elapsed);
-			this.currentFPS = fps;
-			this.fpsText.text = `FPS: ${fps}`;
-			this.frameCount = 0;
-			this.lastFrameTime = now;
-		}
-
-		// Update FPS text position if window resized
-		this.fpsText.x = this.app.screen.width - 80;
-
-		// Update coords text position if window resized
-		this.coordsText.x = this.app.screen.width - 200;
-		this.coordsText.y = this.app.screen.height - 30;
+		// Update overlay positions if window resized
+		this.fpsCounter.updatePosition(this.app.screen.width);
+		this.coordinatesDisplay.updatePosition(this.app.screen.width, this.app.screen.height);
 	}
 
 	/**
@@ -332,16 +328,14 @@ export class PixiRenderer {
 			const mouseX = e.offsetX;
 			const mouseY = e.offsetY;
 
-			// Convert screen coordinates to world coordinates (in database units)
-			const worldX = (mouseX - this.mainContainer.x) / this.mainContainer.scale.x;
-			const worldY = (mouseY - this.mainContainer.y) / this.mainContainer.scale.y;
-
-			// Convert to micrometers with nm precision (3 decimal places)
-			// Coordinates are in database units, so: db_units * (database meters) / 1e-6 = micrometers
-			const worldXMicrometers = (worldX * this.documentUnits.database) / 1e-6;
-			const worldYMicrometers = (worldY * this.documentUnits.database) / 1e-6;
-
-			this.coordsText.text = `X: ${worldXMicrometers.toFixed(3)} µm, Y: ${worldYMicrometers.toFixed(3)} µm`;
+			this.coordinatesDisplay.update(
+				mouseX,
+				mouseY,
+				this.mainContainer.x,
+				this.mainContainer.y,
+				this.mainContainer.scale.x,
+				this.documentUnits,
+			);
 		});
 
 		// Touch controls for mobile devices
@@ -403,12 +397,15 @@ export class PixiRenderer {
 				const rect = this.app.canvas.getBoundingClientRect();
 				const canvasX = touch.clientX - rect.left;
 				const canvasY = touch.clientY - rect.top;
-				const worldX = (canvasX - this.mainContainer.x) / this.mainContainer.scale.x;
-				const worldY = (canvasY - this.mainContainer.y) / this.mainContainer.scale.y;
-				const dbToUserUnits = this.documentUnits.database / this.documentUnits.user;
-				const worldXMicrometers = worldX * dbToUserUnits;
-				const worldYMicrometers = worldY * dbToUserUnits;
-				this.coordsText.text = `X: ${worldXMicrometers.toFixed(3)} µm, Y: ${worldYMicrometers.toFixed(3)} µm`;
+
+				this.coordinatesDisplay.update(
+					canvasX,
+					canvasY,
+					this.mainContainer.x,
+					this.mainContainer.y,
+					this.mainContainer.scale.x,
+					this.documentUnits,
+				);
 			} else if (e.touches.length === 2) {
 				// Two-finger pinch zoom
 				const touch1 = e.touches.item(0);
@@ -961,40 +958,16 @@ export class PixiRenderer {
 	 * Perform the actual grid update
 	 */
 	private performGridUpdate(): void {
-		this.gridContainer.removeChildren();
-		if (!this.gridVisible) return;
-
 		const bounds = this.getViewportBounds();
 		const scale = this.mainContainer.scale.x;
 
-		// Calculate grid spacing (powers of 10)
-		const viewWidth = bounds.maxX - bounds.minX;
-		const targetLines = 10;
-		const rawSpacing = viewWidth / targetLines;
-		const gridSpacing = 10 ** Math.floor(Math.log10(rawSpacing));
-
-		const graphics = new Graphics();
-		graphics.setStrokeStyle({ width: 1 / scale, color: 0x333333, alpha: 0.3 });
-
-		// Vertical lines
-		const startX = Math.floor(bounds.minX / gridSpacing) * gridSpacing;
-		for (let x = startX; x <= bounds.maxX; x += gridSpacing) {
-			graphics.moveTo(x, bounds.minY);
-			graphics.lineTo(x, bounds.maxY);
-		}
-		graphics.stroke();
-
-		// Horizontal lines
-		const startY = Math.floor(bounds.minY / gridSpacing) * gridSpacing;
-		for (let y = startY; y <= bounds.maxY; y += gridSpacing) {
-			graphics.moveTo(bounds.minX, y);
-			graphics.lineTo(bounds.maxX, y);
-		}
-		graphics.stroke();
-
-		this.gridContainer.addChild(graphics);
-		this.gridContainer.position.copyFrom(this.mainContainer.position);
-		this.gridContainer.scale.copyFrom(this.mainContainer.scale);
+		this.gridOverlay.update(bounds, scale, this.gridOverlay.isVisible());
+		this.gridOverlay.updateTransform(
+			this.mainContainer.x,
+			this.mainContainer.y,
+			this.mainContainer.scale.x,
+			this.mainContainer.scale.y,
+		);
 	}
 
 	/**
@@ -1017,68 +990,17 @@ export class PixiRenderer {
 	 * Perform the actual scale bar update
 	 */
 	private performScaleBarUpdate(): void {
-		this.scaleBarContainer.removeChildren();
-
 		const bounds = this.getViewportBounds();
-		const viewWidthDB = bounds.maxX - bounds.minX;
+		const scale = this.mainContainer.scale.x;
 
-		// Convert database units to micrometers
-		// Coordinates are ALWAYS in database units (for both GDS and DXF files)
-		// database unit = size in meters, so: db_units * (database meters) / 1e-6 = micrometers
-		const viewWidthMicrometers = (viewWidthDB * this.documentUnits.database) / 1e-6;
-
-		// Calculate nice round number for bar width in micrometers
-		const barWidthMicrometers = 10 ** Math.floor(Math.log10(viewWidthMicrometers / 4));
-
-		// Convert back to database units for pixel calculation
-		// micrometers * 1e-6 / (database meters) = database units
-		const barWidthDB = (barWidthMicrometers * 1e-6) / this.documentUnits.database;
-		const barWidthPixels = barWidthDB * this.mainContainer.scale.x;
-
-		const graphics = new Graphics();
-		const x = 20;
-		const y = this.app.screen.height - 40;
-
-		// Draw bar
-		graphics.rect(x, y, barWidthPixels, 4);
-		graphics.fill({ color: 0xffffff, alpha: 0.7 });
-
-		// Draw ticks
-		graphics.rect(x, y - 4, 2, 12);
-		graphics.fill({ color: 0xffffff, alpha: 0.7 });
-		graphics.rect(x + barWidthPixels - 2, y - 4, 2, 12);
-		graphics.fill({ color: 0xffffff, alpha: 0.7 });
-
-		this.scaleBarContainer.addChild(graphics);
-
-		// Add label with proper formatting
-		let labelText: string;
-		if (barWidthMicrometers >= 1000) {
-			labelText = `${(barWidthMicrometers / 1000).toFixed(0)} mm`;
-		} else if (barWidthMicrometers >= 1) {
-			labelText = `${barWidthMicrometers.toFixed(0)} µm`;
-		} else {
-			labelText = `${(barWidthMicrometers * 1000).toFixed(0)} nm`;
-		}
-
-		const label = new Text({
-			text: labelText,
-			style: {
-				fontFamily: "monospace",
-				fontSize: 12,
-				fill: 0xffffff,
-			},
-		});
-		label.x = x;
-		label.y = y + 8;
-		this.scaleBarContainer.addChild(label);
+		this.scaleBarOverlay.update(bounds, scale, this.documentUnits);
 	}
 
 	/**
 	 * Toggle grid visibility
 	 */
 	toggleGrid(): void {
-		this.gridVisible = !this.gridVisible;
+		this.gridOverlay.toggleVisibility();
 		this.performGridUpdate();
 	}
 
@@ -1645,7 +1567,7 @@ export class PixiRenderer {
 		const zoomLevel = Math.abs(this.mainContainer.scale.x);
 
 		return {
-			fps: this.currentFPS,
+			fps: this.fpsCounter.getCurrentFPS(),
 			visiblePolygons: this.visiblePolygonCount,
 			totalPolygons: this.totalRenderedPolygons,
 			polygonBudget: scaledBudget,
