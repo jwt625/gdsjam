@@ -19,25 +19,28 @@ let panelsVisible = $state(false);
 let layerPanelVisible = $state(false);
 let layerStoreInitialized = false;
 
-onMount(async () => {
+onMount(() => {
 	if (DEBUG) console.log("[ViewerCanvas] Initializing...");
-	if (canvas) {
-		renderer = new PixiRenderer();
-		await renderer.init(canvas);
 
-		if ($gdsStore.document) {
-			lastRenderedDocument = $gdsStore.document;
-			gdsStore.setRendering(true, "Rendering...", 0);
-			await renderer.renderGDSDocument($gdsStore.document, (progress, message) => {
-				gdsStore.setRendering(true, message, progress);
-				if (progress >= 100) {
-					setTimeout(() => gdsStore.setRendering(false), 500);
-				}
-			});
-		} else {
-			if (DEBUG) console.log("[ViewerCanvas] Rendering test geometry");
-			renderer.renderTestGeometry(1000);
-		}
+	// Initialize renderer asynchronously
+	if (canvas) {
+		(async () => {
+			renderer = new PixiRenderer();
+			await renderer.init(canvas);
+
+			if ($gdsStore.document) {
+				lastRenderedDocument = $gdsStore.document;
+				gdsStore.setRendering(true, "Rendering...", 0);
+				await renderer.renderGDSDocument($gdsStore.document, (progress, message) => {
+					gdsStore.setRendering(true, message, progress);
+					if (progress >= 100) {
+						setTimeout(() => gdsStore.setRendering(false), 500);
+					}
+				});
+			} else {
+				if (DEBUG) console.log("[ViewerCanvas] No document to render");
+			}
+		})();
 	}
 
 	// Add keyboard event listeners
