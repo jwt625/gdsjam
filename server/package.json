@@ -1,0 +1,18 @@
+{
+  "name": "gdsjam-signaling-server",
+  "version": "1.0.0",
+  "description": "WebRTC signaling server for GDSJam",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "start:bg": "./start.sh",
+    "stop": "./stop.sh",
+    "dev": "node server.js"
+  },
+  "keywords": ["webrtc", "signaling", "websocket"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "ws": "^8.17.1"
+  }
+}
