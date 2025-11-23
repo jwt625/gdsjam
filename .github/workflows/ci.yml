@@ -36,7 +36,7 @@ jobs:
         run: pnpm svelte-check --tsconfig ./tsconfig.json
 
       - name: Run tests
-        run: pnpm test --run
+        run: pnpm test -- --run
 
       - name: Build verification
         run: pnpm build
