@@ -8,19 +8,14 @@ import type { BoundingBox, Cell, GDSDocument, Polygon } from "../../types/gds";
 import {
 	DEBUG,
 	FPS_UPDATE_INTERVAL,
-	LOD_CHANGE_COOLDOWN,
-	LOD_DECREASE_THRESHOLD,
-	LOD_INCREASE_THRESHOLD,
-	LOD_MAX_DEPTH,
-	LOD_MIN_DEPTH,
-	LOD_ZOOM_IN_THRESHOLD,
-	LOD_ZOOM_OUT_THRESHOLD,
 	MAX_POLYGONS_PER_RENDER,
 	POLYGON_FILL_MODE,
 	SPATIAL_TILE_SIZE,
 } from "../config";
 import { type RTreeItem, SpatialIndex } from "../spatial/RTree";
 import { InputController } from "./controls/InputController";
+import { LODManager } from "./lod/LODManager";
+import { ZoomLimits } from "./lod/ZoomLimits";
 import { CoordinatesDisplay } from "./overlays/CoordinatesDisplay";
 import { FPSCounter } from "./overlays/FPSCounter";
 import { GridOverlay } from "./overlays/GridOverlay";
@@ -54,14 +49,15 @@ export class PixiRenderer {
 	private currentDocument: GDSDocument | null = null;
 
 	// LOD metrics tracking
-	private zoomThresholdLow = 0;
-	private zoomThresholdHigh = 0;
-	private lastLODChangeTime = 0;
 	private visiblePolygonCount = 0;
 	private totalRenderedPolygons = 0;
 	private layerVisibility: Map<string, boolean> = new Map();
 	private isRerendering = false;
 	private cellRenderCounts: Map<string, number> = new Map();
+
+	// LOD Manager
+	private lodManager!: LODManager;
+	private zoomLimits!: ZoomLimits;
 
 	// UI Overlays
 	private fpsCounter!: FPSCounter;
@@ -147,6 +143,22 @@ export class PixiRenderer {
 
 		this.isInitialized = true;
 
+		// Initialize LOD managers
+		this.zoomLimits = new ZoomLimits();
+		this.lodManager = new LODManager(this.maxPolygonsPerRender, {
+			onDepthChange: (newDepth: number) => {
+				this.currentRenderDepth = newDepth;
+				this.lodManager.updateZoomThresholds(Math.abs(this.mainContainer.scale.x));
+				if (this.currentDocument) {
+					this.performIncrementalRerender();
+				}
+			},
+			getBudgetUtilization: () => {
+				const scaledBudget = this.lodManager.getScaledBudget();
+				return this.visiblePolygonCount / scaledBudget;
+			},
+		});
+
 		// Initialize input controllers
 		this.inputController = new InputController(this.app.canvas, {
 			onZoom: this.handleZoom.bind(this),
@@ -201,7 +213,13 @@ export class PixiRenderer {
 		// Calculate new scale and clamp to limits
 		const currentYSign = Math.sign(this.mainContainer.scale.y);
 		const newScaleX = this.mainContainer.scale.x * zoomFactor;
-		const clampedScaleX = this.clampZoomScale(newScaleX);
+		const viewportBounds = this.getViewportBounds();
+		const clampedScaleX = this.zoomLimits.clampZoomScale(
+			newScaleX,
+			viewportBounds,
+			this.mainContainer.scale.x,
+			this.documentUnits,
+		);
 
 		// Apply clamped scale
 		this.mainContainer.scale.x = clampedScaleX;
@@ -331,14 +349,7 @@ export class PixiRenderer {
 		this.visiblePolygonCount = visiblePolygonCount;
 
 		// Check if zoom has changed significantly and trigger LOD update
-		if (this.hasZoomChangedSignificantly(currentZoom)) {
-			if (DEBUG) {
-				console.log(
-					`[LOD] Zoom threshold crossed: ${currentZoom.toFixed(4)}x (thresholds: ${this.zoomThresholdLow.toFixed(4)}x - ${this.zoomThresholdHigh.toFixed(4)}x)`,
-				);
-			}
-			this.triggerLODRerender();
-		}
+		this.lodManager.checkAndTriggerRerender(currentZoom, this.isRerendering);
 	}
 
 	/**
@@ -431,163 +442,6 @@ export class PixiRenderer {
 	}
 
 	/**
-	 * Check if zoom level has changed significantly (0.2x or 2.0x)
-	 */
-	private hasZoomChangedSignificantly(currentZoom: number): boolean {
-		// Check if we've crossed the low threshold (zoomed out significantly)
-		if (currentZoom <= this.zoomThresholdLow) {
-			return true;
-		}
-
-		// Check if we've crossed the high threshold (zoomed in significantly)
-		if (currentZoom >= this.zoomThresholdHigh) {
-			return true;
-		}
-
-		return false;
-	}
-
-	/**
-	 * Update zoom thresholds based on current zoom level
-	 */
-	private updateZoomThresholds(currentZoom: number): void {
-		this.zoomThresholdLow = currentZoom * LOD_ZOOM_OUT_THRESHOLD;
-		this.zoomThresholdHigh = currentZoom * LOD_ZOOM_IN_THRESHOLD;
-	}
-
-	/**
-	 * Calculate minimum allowed zoom scale based on scale bar constraint
-	 * Min zoom (zoomed out): scale bar shows 1 m
-	 */
-	private getMinZoomScale(): number {
-		const bounds = this.getViewportBounds();
-		const viewWidthDB = bounds.maxX - bounds.minX;
-
-		// If no valid bounds, return a very small scale
-		if (viewWidthDB <= 0) {
-			return 0.00001;
-		}
-
-		// Convert database units to micrometers
-		// Coordinates are in database units, so: db_units * (database meters) / 1e-6 = micrometers
-		const viewWidthMicrometers = (viewWidthDB * this.documentUnits.database) / 1e-6;
-
-		// Calculate the scale bar width that would be shown at current viewport width
-		// Scale bar width is calculated as: 10^floor(log10(viewWidth / 4))
-		// We want the scale bar to be at most MIN_ZOOM_SCALE_BAR_MICROMETERS (1 m = 1,000,000 µm)
-		// So: 10^floor(log10(viewWidth / 4)) <= 1,000,000
-		// This means: viewWidth / 4 <= 1,000,000 * 10
-		// So: viewWidth <= 1,000,000 * 40 = 40,000,000 µm
-		// But we want 1 m max, so: viewWidth <= 1,000,000 * 4 = 4,000,000 µm
-		const maxViewWidthMicrometers = 1_000_000 * 4; // 4 m viewport width gives 1 m scale bar
-
-		// Calculate minimum scale: current_scale * (current_view_width / max_view_width)
-		const currentScale = Math.abs(this.mainContainer.scale.x);
-		const minScale = currentScale * (viewWidthMicrometers / maxViewWidthMicrometers);
-
-		return minScale;
-	}
-
-	/**
-	 * Calculate maximum allowed zoom scale based on scale bar constraint
-	 * Max zoom (zoomed in): scale bar shows 1 nm
-	 */
-	private getMaxZoomScale(): number {
-		const bounds = this.getViewportBounds();
-		const viewWidthDB = bounds.maxX - bounds.minX;
-
-		// If no valid bounds, return a very large scale
-		if (viewWidthDB <= 0) {
-			return 100000;
-		}
-
-		// Convert database units to micrometers
-		// Coordinates are in database units, so: db_units * (database meters) / 1e-6 = micrometers
-		const viewWidthMicrometers = (viewWidthDB * this.documentUnits.database) / 1e-6;
-
-		// We want the scale bar to be at least 1 nm (0.001 µm)
-		// So: 10^floor(log10(viewWidth / 4)) >= 0.001
-		// This means: viewWidth / 4 >= 0.001
-		// So: viewWidth >= 0.001 * 4 = 0.004 µm
-		const minViewWidthMicrometers = 0.001 * 4; // 0.004 µm viewport width gives 1 nm scale bar
-
-		// Calculate maximum scale: current_scale * (current_view_width / min_view_width)
-		const currentScale = Math.abs(this.mainContainer.scale.x);
-		const maxScale = currentScale * (viewWidthMicrometers / minViewWidthMicrometers);
-
-		return maxScale;
-	}
-
-	/**
-	 * Clamp zoom scale to respect min/max limits
-	 */
-	private clampZoomScale(newScale: number): number {
-		const minScale = this.getMinZoomScale();
-		const maxScale = this.getMaxZoomScale();
-
-		return Math.max(minScale, Math.min(maxScale, newScale));
-	}
-
-	/**
-	 * Trigger LOD re-render (incremental - only re-render geometry, not parse)
-	 */
-	private triggerLODRerender(): void {
-		// Prevent re-render loops
-		if (this.isRerendering) {
-			return;
-		}
-
-		// Check cooldown to prevent thrashing
-		const now = performance.now();
-		if (now - this.lastLODChangeTime < LOD_CHANGE_COOLDOWN) {
-			return;
-		}
-
-		// Calculate new LOD depth based on visible polygon count
-		const metrics = this.getPerformanceMetrics();
-		const utilization = metrics.budgetUtilization;
-
-		let newDepth = this.currentRenderDepth;
-
-		// Increase depth if we have budget headroom
-		if (utilization < LOD_INCREASE_THRESHOLD && this.currentRenderDepth < LOD_MAX_DEPTH) {
-			newDepth = this.currentRenderDepth + 1;
-		}
-		// Decrease depth if we're over budget
-		else if (utilization > LOD_DECREASE_THRESHOLD && this.currentRenderDepth > LOD_MIN_DEPTH) {
-			newDepth = this.currentRenderDepth - 1;
-		}
-
-		// Re-render if depth changed OR if in outline mode (to update stroke widths)
-		const shouldRerender = newDepth !== this.currentRenderDepth || !this.fillPolygons;
-
-		if (shouldRerender) {
-			if (DEBUG) {
-				if (newDepth !== this.currentRenderDepth) {
-					console.log(
-						`[LOD] Depth change: ${this.currentRenderDepth} → ${newDepth} (utilization: ${(utilization * 100).toFixed(1)}%, visible: ${metrics.visiblePolygons.toLocaleString()}/${metrics.polygonBudget.toLocaleString()})`,
-					);
-				} else {
-					console.log(
-						`[LOD] Zoom threshold crossed in outline mode - re-rendering to update stroke widths`,
-					);
-				}
-			}
-
-			this.currentRenderDepth = newDepth;
-			this.lastLODChangeTime = now;
-
-			// Update zoom thresholds
-			this.updateZoomThresholds(this.mainContainer.scale.x);
-
-			// Trigger incremental re-render
-			if (this.currentDocument) {
-				this.performIncrementalRerender();
-			}
-		}
-	}
-
-	/**
 	 * Perform incremental re-render (clear geometry and re-render with new LOD depth)
 	 */
 	private async performIncrementalRerender(): Promise<void> {
@@ -626,7 +480,7 @@ export class PixiRenderer {
 		this.setViewportState(viewportState);
 
 		// Update zoom thresholds based on current zoom
-		this.updateZoomThresholds(Math.abs(this.mainContainer.scale.x));
+		this.lodManager.updateZoomThresholds(Math.abs(this.mainContainer.scale.x));
 
 		// Swap containers: remove old, add new at correct z-index
 		// Z-order: gridContainer (0), mainContainer (1), UI overlays (2+)
@@ -788,19 +642,12 @@ export class PixiRenderer {
 			this.currentRenderDepth = 0;
 		}
 
-		// Scale budget based on depth to handle hierarchical designs
-		// At depth 0: 100K budget (safe baseline)
-		// At depth 1: 150K budget (1.5x for one level of hierarchy)
-		// At depth 2: 200K budget (2x for two levels)
-		// At depth 3+: 250K budget (2.5x for three+ levels)
-		// Cap at 250K to prevent OOM crashes
-		const budgetMultipliers = [1, 1.5, 2, 2.5];
-		const budgetMultiplier = budgetMultipliers[Math.min(this.currentRenderDepth, 3)] ?? 1;
-		const scaledBudget = Math.floor(this.maxPolygonsPerRender * budgetMultiplier);
+		// Get scaled budget from LOD manager
+		const scaledBudget = this.lodManager.getScaledBudget();
 
 		if (DEBUG) {
 			console.log(
-				`[Render] Starting render: depth=${this.currentRenderDepth}, budget=${scaledBudget.toLocaleString()} (${budgetMultiplier}x base)`,
+				`[Render] Starting render: depth=${this.currentRenderDepth}, budget=${scaledBudget.toLocaleString()}`,
 			);
 		}
 
@@ -910,7 +757,7 @@ export class PixiRenderer {
 			await new Promise((resolve) => setTimeout(resolve, 0));
 			this.fitToView();
 			// Initialize zoom thresholds after fitToView
-			this.updateZoomThresholds(this.mainContainer.scale.x);
+			this.lodManager.updateZoomThresholds(this.mainContainer.scale.x);
 		}
 		this.updateViewport();
 
@@ -1302,13 +1149,11 @@ export class PixiRenderer {
 	 * Get performance metrics for display (returns cached values)
 	 */
 	getPerformanceMetrics() {
-		// Calculate scaled budget based on current depth (must match renderGDSDocument)
-		const budgetMultipliers = [1, 1.5, 2, 2.5];
-		const budgetMultiplier = budgetMultipliers[Math.min(this.currentRenderDepth, 3)] ?? 1;
-		const scaledBudget = Math.floor(this.maxPolygonsPerRender * budgetMultiplier);
+		const scaledBudget = this.lodManager.getScaledBudget();
 		const budgetUtilization = this.visiblePolygonCount / scaledBudget;
 		const viewportBounds = this.getViewportBounds();
 		const zoomLevel = Math.abs(this.mainContainer.scale.x);
+		const zoomThresholds = this.lodManager.getZoomThresholds();
 
 		return {
 			fps: this.fpsCounter.getCurrentFPS(),
@@ -1316,10 +1161,10 @@ export class PixiRenderer {
 			totalPolygons: this.totalRenderedPolygons,
 			polygonBudget: scaledBudget,
 			budgetUtilization,
-			currentDepth: this.currentRenderDepth,
+			currentDepth: this.lodManager.getCurrentDepth(),
 			zoomLevel,
-			zoomThresholdLow: this.zoomThresholdLow,
-			zoomThresholdHigh: this.zoomThresholdHigh,
+			zoomThresholdLow: zoomThresholds.low,
+			zoomThresholdHigh: zoomThresholds.high,
 			viewportBounds: {
 				minX: viewportBounds.minX,
 				minY: viewportBounds.minY,
