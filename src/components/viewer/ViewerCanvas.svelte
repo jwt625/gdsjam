@@ -15,6 +15,7 @@ let renderer = $state<PixiRenderer | null>(null);
 let lastRenderedDocument: GDSDocument | null = null;
 let panelsVisible = $state(false);
 let layerPanelVisible = $state(false);
+let layerStoreInitialized = false;
 
 onMount(async () => {
 	if (DEBUG) console.log("[ViewerCanvas] Initializing...");
@@ -77,6 +78,8 @@ $effect(() => {
 	if (renderer?.isReady() && gdsDocument && gdsDocument !== lastRenderedDocument) {
 		console.log("[ViewerCanvas] Rendering document:", gdsDocument.name);
 		lastRenderedDocument = gdsDocument;
+		// Reset layer store initialization flag when new document is loaded
+		layerStoreInitialized = false;
 		gdsStore.setRendering(true, "Rendering...", 0);
 		(async () => {
 			await renderer.renderGDSDocument(gdsDocument, (progress, message) => {
@@ -89,11 +92,12 @@ $effect(() => {
 	}
 });
 
-// Initialize layer store when document is loaded
+// Initialize layer store when document is FIRST loaded (not on every update)
 $effect(() => {
 	const gdsDocument = $gdsStore.document;
-	if (gdsDocument) {
+	if (gdsDocument && !layerStoreInitialized) {
 		layerStore.setLayers(gdsDocument.layers);
+		layerStoreInitialized = true;
 		if (DEBUG)
 			console.log("[ViewerCanvas] Initialized layer store with", gdsDocument.layers.size, "layers");
 	}

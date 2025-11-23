@@ -507,6 +507,7 @@ export class PixiRenderer {
 	 */
 	private performViewportUpdate(): void {
 		if (this.allGraphicsItems.length === 0) {
+			console.log("[PixiRenderer] performViewportUpdate: No graphics items");
 			return;
 		}
 
@@ -518,6 +519,10 @@ export class PixiRenderer {
 
 		// Update visibility of all graphics items (combine viewport + layer visibility)
 		let visiblePolygonCount = 0;
+		let hiddenByLayerCount = 0;
+		let visibleByLayerCount = 0;
+		const layerCounts = new Map<string, { total: number; visible: number }>();
+
 		for (const item of this.allGraphicsItems) {
 			const graphics = item.data as Graphics;
 			const inViewport = visibleIds.has(item.id);
@@ -528,10 +533,37 @@ export class PixiRenderer {
 
 			const isVisible = inViewport && layerVisible;
 			graphics.visible = isVisible;
+
+			// Track per-layer counts
+			if (!layerCounts.has(layerKey)) {
+				layerCounts.set(layerKey, { total: 0, visible: 0 });
+			}
+			const counts = layerCounts.get(layerKey)!;
+			counts.total++;
+			if (isVisible) counts.visible++;
+
+			if (inViewport) {
+				if (layerVisible) {
+					visibleByLayerCount++;
+				} else {
+					hiddenByLayerCount++;
+				}
+			}
+
 			if (isVisible) {
 				visiblePolygonCount += item.polygonCount || 0;
 			}
 		}
+
+		console.log(
+			`[PixiRenderer] performViewportUpdate: ${this.allGraphicsItems.length} total items, ${visibleIds.size} in viewport, ${visibleByLayerCount} visible by layer, ${hiddenByLayerCount} hidden by layer`,
+		);
+		console.log(
+			`[PixiRenderer] Layer breakdown:`,
+			Array.from(layerCounts.entries())
+				.map(([key, counts]) => `${key}: ${counts.visible}/${counts.total}`)
+				.join(", "),
+		);
 
 		// Update cached visible polygon count for performance metrics
 		this.visiblePolygonCount = visiblePolygonCount;
@@ -557,7 +589,22 @@ export class PixiRenderer {
 	 * Update layer visibility and update viewport to show/hide layers
 	 */
 	private updateLayerVisibility(visibility: { [key: string]: boolean }): void {
-		console.log("[PixiRenderer] Updating layer visibility");
+		console.log("[PixiRenderer] Updating layer visibility", visibility);
+
+		// Detect newly visible layers that need to be rendered
+		const newlyVisibleLayers: string[] = [];
+		for (const [key, visible] of Object.entries(visibility)) {
+			const wasVisible = this.layerVisibility.get(key) ?? true;
+			if (visible && !wasVisible) {
+				// Check if this layer has any rendered graphics
+				const hasGraphics = this.allGraphicsItems.some(
+					(item) => `${item.layer}:${item.datatype}` === key,
+				);
+				if (!hasGraphics) {
+					newlyVisibleLayers.push(key);
+				}
+			}
+		}
 
 		// Update internal visibility map
 		this.layerVisibility.clear();
@@ -565,9 +612,50 @@ export class PixiRenderer {
 			this.layerVisibility.set(key, visible);
 		}
 
-		// Update graphics visibility (combines layer visibility + viewport culling)
-		// This will immediately show/hide the already-rendered graphics without re-rendering
-		this.performViewportUpdate();
+		console.log("[PixiRenderer] Internal layerVisibility map updated:", this.layerVisibility);
+
+		// If there are newly visible layers that haven't been rendered, render them
+		if (newlyVisibleLayers.length > 0) {
+			console.log("[PixiRenderer] Rendering newly visible layers:", newlyVisibleLayers);
+			this.renderLayers(newlyVisibleLayers);
+		} else {
+			// Update graphics visibility (combines layer visibility + viewport culling)
+			// This will immediately show/hide the already-rendered graphics without re-rendering
+			this.performViewportUpdate();
+		}
+	}
+
+	/**
+	 * Render specific layers on-demand (when they're toggled visible)
+	 */
+	private async renderLayers(layerKeys: string[]): Promise<void> {
+		if (!this.currentDocument) {
+			console.warn("[PixiRenderer] No document to render layers from");
+			return;
+		}
+
+		console.log(`[PixiRenderer] Rendering ${layerKeys.length} layers on-demand`);
+
+		// Temporarily enable these layers in the document
+		const originalVisibility = new Map<string, boolean>();
+		for (const key of layerKeys) {
+			const layer = this.currentDocument.layers.get(key);
+			if (layer) {
+				originalVisibility.set(key, layer.visible);
+				layer.visible = true;
+			}
+		}
+
+		// Trigger incremental re-render to include the newly visible layers
+		await this.performIncrementalRerender();
+
+		// Restore original visibility (the layerVisibility map will control actual visibility)
+		for (const [key, visible] of originalVisibility) {
+			const layer = this.currentDocument.layers.get(key);
+			if (layer) {
+				layer.visible = visible;
+			}
+		}
 	}
 
 	/**
@@ -705,6 +793,9 @@ export class PixiRenderer {
 		console.log(
 			`[LOD] Re-render complete: ${this.totalRenderedPolygons.toLocaleString()} polygons in ${this.allGraphicsItems.length} tiles`,
 		);
+
+		// Apply layer visibility to newly created graphics
+		this.performViewportUpdate();
 
 		// Clear flag
 		this.isRerendering = false;

@@ -15,17 +15,34 @@ const layerVisibility = $derived(storeState.visibility);
 const syncEnabled = $derived(storeState.syncEnabled);
 
 function toggleLayer(key: string) {
-	// Update both layerStore (UI state) and gdsStore (document state)
-	layerStore.toggleLayer(key);
+	// Update gdsStore first (source of truth for document state)
 	gdsStore.toggleLayerVisibility(key);
-	onLayerVisibilityChange();
+
+	// Then update layerStore (UI state) to match
+	layerStore.toggleLayer(key);
+
+	// Get the updated visibility from gdsStore (source of truth)
+	const updatedVisibility = getVisibilityFromGdsStore();
+	console.log("[LayerPanel] Toggled layer", key, "visibility:", updatedVisibility);
+	onLayerVisibilityChange(updatedVisibility);
 }
 
-function onLayerVisibilityChange() {
+function getVisibilityFromGdsStore(): { [key: string]: boolean } {
+	const visibility: { [key: string]: boolean } = {};
+	const doc = $gdsStore.document;
+	if (doc) {
+		for (const [key, layer] of doc.layers) {
+			visibility[key] = layer.visible;
+		}
+	}
+	return visibility;
+}
+
+function onLayerVisibilityChange(visibility: { [key: string]: boolean }) {
 	// Notify renderer to update visibility
 	window.dispatchEvent(
 		new CustomEvent("layer-visibility-changed", {
-			detail: { visibility: layerVisibility, syncEnabled },
+			detail: { visibility, syncEnabled },
 		}),
 	);
 
@@ -86,18 +103,20 @@ function getLayerColor(layer: number, datatype: number): string {
 			<div class="bulk-actions">
 				<button
 					onclick={() => {
-						layerStore.showAll();
 						gdsStore.setAllLayersVisibility(true);
-						onLayerVisibilityChange();
+						layerStore.showAll();
+						const updatedVisibility = getVisibilityFromGdsStore();
+						onLayerVisibilityChange(updatedVisibility);
 					}}
 				>
 					Show All
 				</button>
 				<button
 					onclick={() => {
-						layerStore.hideAll();
 						gdsStore.setAllLayersVisibility(false);
-						onLayerVisibilityChange();
+						layerStore.hideAll();
+						const updatedVisibility = getVisibilityFromGdsStore();
+						onLayerVisibilityChange(updatedVisibility);
 					}}
 				>
 					Hide All
