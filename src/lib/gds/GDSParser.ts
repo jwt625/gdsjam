@@ -17,6 +17,23 @@ import type {
 import { DEBUG } from "../config";
 
 /**
+ * Generate UUID v4 compatible with Safari on iOS
+ * Fallback for crypto.randomUUID() which is not supported in older Safari versions
+ */
+function generateUUID(): string {
+	if (typeof crypto !== "undefined" && crypto.randomUUID) {
+		return crypto.randomUUID();
+	}
+
+	// Fallback implementation for Safari iOS
+	return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+		const r = (Math.random() * 16) | 0;
+		const v = c === "x" ? r : (r & 0x3) | 0x8;
+		return v.toString(16);
+	});
+}
+
+/**
  * Generate a random color for a layer
  */
 function generateLayerColor(layer: number, datatype: number): string {
@@ -289,7 +306,7 @@ async function buildGDSDocument(
 
 			case RecordType.BOUNDARY: // Begin polygon
 				currentPolygon = {
-					id: crypto.randomUUID(),
+					id: generateUUID(),
 					points: [],
 				};
 				break;
@@ -364,7 +381,7 @@ async function buildGDSDocument(
 
 			case RecordType.SREF: // Structure reference (instance)
 				currentInstance = {
-					id: crypto.randomUUID(),
+					id: generateUUID(),
 					cellRef: "",
 					x: 0,
 					y: 0,

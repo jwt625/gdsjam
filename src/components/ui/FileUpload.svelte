@@ -12,7 +12,9 @@ let fileInputElement: HTMLInputElement;
  */
 async function handleFile(file: File) {
 	const fileSizeMB = (file.size / 1024 / 1024).toFixed(1);
-	console.log(`[FileUpload] Loading ${file.name} (${fileSizeMB} MB)`);
+	if (DEBUG) {
+		console.log(`[FileUpload] Loading ${file.name} (${fileSizeMB} MB)`);
+	}
 
 	if (!file.name.toLowerCase().endsWith(".gds") && !file.name.toLowerCase().endsWith(".gdsii")) {
 		gdsStore.setError("Please select a valid GDSII file (.gds or .gdsii)");
@@ -37,7 +39,9 @@ async function handleFile(file: File) {
 		);
 
 		gdsStore.setDocument(document, file.name, statistics);
-		console.log("[FileUpload] File loaded successfully");
+		if (DEBUG) {
+			console.log("[FileUpload] File loaded successfully");
+		}
 	} catch (error) {
 		console.error("[FileUpload] Failed to load GDSII file:", error);
 		gdsStore.setError(

@@ -1,4 +1,5 @@
 <script lang="ts">
+import { DEBUG } from "../../lib/config";
 import { gdsStore } from "../../stores/gdsStore";
 import { layerStore } from "../../stores/layerStore";
 import type { FileStatistics } from "../../types/gds";
@@ -23,7 +24,9 @@ function toggleLayer(key: string) {
 
 	// Get the updated visibility from gdsStore (source of truth)
 	const updatedVisibility = getVisibilityFromGdsStore();
-	console.log("[LayerPanel] Toggled layer", key, "visibility:", updatedVisibility);
+	if (DEBUG) {
+		console.log("[LayerPanel] Toggled layer", key, "visibility:", updatedVisibility);
+	}
 	onLayerVisibilityChange(updatedVisibility);
 }
 
@@ -49,13 +52,17 @@ function onLayerVisibilityChange(visibility: { [key: string]: boolean }) {
 	// If sync enabled, broadcast to Y.js (Week 2 - collaboration)
 	if (syncEnabled) {
 		// TODO: Sync with Y.js shared state
-		console.log("[LayerPanel] Sync enabled - would broadcast to Y.js");
+		if (DEBUG) {
+			console.log("[LayerPanel] Sync enabled - would broadcast to Y.js");
+		}
 	}
 }
 
 function toggleSyncMode() {
 	layerStore.toggleSync();
-	console.log(`[LayerPanel] Layer sync ${!syncEnabled ? "enabled" : "disabled"}`);
+	if (DEBUG) {
+		console.log(`[LayerPanel] Layer sync ${!syncEnabled ? "enabled" : "disabled"}`);
+	}
 }
 
 function getLayerColor(layer: number, datatype: number): string {

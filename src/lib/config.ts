@@ -3,21 +3,22 @@
  * Loaded from environment variables (.env files)
  */
 
-// Log environment variables for debugging
-console.log("[config.ts] Environment variables:", {
-	VITE_DEBUG: import.meta.env.VITE_DEBUG,
-	DEV: import.meta.env.DEV,
-	MODE: import.meta.env.MODE,
-});
-
 /**
  * Debug mode - enables verbose console logging
  * Controlled by VITE_DEBUG environment variable
- * Default: true in development, false in production
+ * Default: false (must be explicitly enabled via VITE_DEBUG=true)
  */
-export const DEBUG = import.meta.env.VITE_DEBUG === "true" || import.meta.env.DEV;
+export const DEBUG = import.meta.env.VITE_DEBUG === "true";
 
-console.log("[config.ts] DEBUG mode:", DEBUG);
+// Log environment variables for debugging (only in dev mode)
+if (DEBUG) {
+	console.log("[config.ts] Environment variables:", {
+		VITE_DEBUG: import.meta.env.VITE_DEBUG,
+		DEV: import.meta.env.DEV,
+		MODE: import.meta.env.MODE,
+	});
+	console.log("[config.ts] DEBUG mode:", DEBUG);
+}
 
 /**
  * Maximum number of polygons to render per frame (prevents OOM)

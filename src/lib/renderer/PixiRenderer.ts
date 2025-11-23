@@ -6,6 +6,7 @@
 import { Application, Container, Graphics, Text } from "pixi.js";
 import type { BoundingBox, Cell, GDSDocument, Polygon } from "../../types/gds";
 import {
+	DEBUG,
 	FPS_UPDATE_INTERVAL,
 	LOD_CHANGE_COOLDOWN,
 	LOD_DECREASE_THRESHOLD,
@@ -523,7 +524,9 @@ export class PixiRenderer {
 	 */
 	private performViewportUpdate(): void {
 		if (this.allGraphicsItems.length === 0) {
-			console.log("[PixiRenderer] performViewportUpdate: No graphics items");
+			if (DEBUG) {
+				console.log("[PixiRenderer] performViewportUpdate: No graphics items");
+			}
 			return;
 		}
 
@@ -571,24 +574,28 @@ export class PixiRenderer {
 			}
 		}
 
-		console.log(
-			`[PixiRenderer] performViewportUpdate: ${this.allGraphicsItems.length} total items, ${visibleIds.size} in viewport, ${visibleByLayerCount} visible by layer, ${hiddenByLayerCount} hidden by layer`,
-		);
-		console.log(
-			`[PixiRenderer] Layer breakdown:`,
-			Array.from(layerCounts.entries())
-				.map(([key, counts]) => `${key}: ${counts.visible}/${counts.total}`)
-				.join(", "),
-		);
+		if (DEBUG) {
+			console.log(
+				`[PixiRenderer] performViewportUpdate: ${this.allGraphicsItems.length} total items, ${visibleIds.size} in viewport, ${visibleByLayerCount} visible by layer, ${hiddenByLayerCount} hidden by layer`,
+			);
+			console.log(
+				`[PixiRenderer] Layer breakdown:`,
+				Array.from(layerCounts.entries())
+					.map(([key, counts]) => `${key}: ${counts.visible}/${counts.total}`)
+					.join(", "),
+			);
+		}
 
 		// Update cached visible polygon count for performance metrics
 		this.visiblePolygonCount = visiblePolygonCount;
 
 		// Check if zoom has changed significantly and trigger LOD update
 		if (this.hasZoomChangedSignificantly(currentZoom)) {
-			console.log(
-				`[LOD] Zoom threshold crossed: ${currentZoom.toFixed(4)}x (thresholds: ${this.zoomThresholdLow.toFixed(4)}x - ${this.zoomThresholdHigh.toFixed(4)}x)`,
-			);
+			if (DEBUG) {
+				console.log(
+					`[LOD] Zoom threshold crossed: ${currentZoom.toFixed(4)}x (thresholds: ${this.zoomThresholdLow.toFixed(4)}x - ${this.zoomThresholdHigh.toFixed(4)}x)`,
+				);
+			}
 			this.triggerLODRerender();
 		}
 	}
@@ -605,7 +612,9 @@ export class PixiRenderer {
 	 * Update layer visibility and update viewport to show/hide layers
 	 */
 	private updateLayerVisibility(visibility: { [key: string]: boolean }): void {
-		console.log("[PixiRenderer] Updating layer visibility", visibility);
+		if (DEBUG) {
+			console.log("[PixiRenderer] Updating layer visibility", visibility);
+		}
 
 		// Detect newly visible layers that need to be rendered
 		const newlyVisibleLayers: string[] = [];
@@ -628,11 +637,15 @@ export class PixiRenderer {
 			this.layerVisibility.set(key, visible);
 		}
 
-		console.log("[PixiRenderer] Internal layerVisibility map updated:", this.layerVisibility);
+		if (DEBUG) {
+			console.log("[PixiRenderer] Internal layerVisibility map updated:", this.layerVisibility);
+		}
 
 		// If there are newly visible layers that haven't been rendered, render them
 		if (newlyVisibleLayers.length > 0) {
-			console.log("[PixiRenderer] Rendering newly visible layers:", newlyVisibleLayers);
+			if (DEBUG) {
+				console.log("[PixiRenderer] Rendering newly visible layers:", newlyVisibleLayers);
+			}
 			this.renderLayers(newlyVisibleLayers);
 		} else {
 			// Update graphics visibility (combines layer visibility + viewport culling)
@@ -650,7 +663,9 @@ export class PixiRenderer {
 			return;
 		}
 
-		console.log(`[PixiRenderer] Rendering ${layerKeys.length} layers on-demand`);
+		if (DEBUG) {
+			console.log(`[PixiRenderer] Rendering ${layerKeys.length} layers on-demand`);
+		}
 
 		// Temporarily enable these layers in the document
 		const originalVisibility = new Map<string, boolean>();
@@ -806,14 +821,16 @@ export class PixiRenderer {
 		const shouldRerender = newDepth !== this.currentRenderDepth || !this.fillPolygons;
 
 		if (shouldRerender) {
-			if (newDepth !== this.currentRenderDepth) {
-				console.log(
-					`[LOD] Depth change: ${this.currentRenderDepth} → ${newDepth} (utilization: ${(utilization * 100).toFixed(1)}%, visible: ${metrics.visiblePolygons.toLocaleString()}/${metrics.polygonBudget.toLocaleString()})`,
-				);
-			} else {
-				console.log(
-					`[LOD] Zoom threshold crossed in outline mode - re-rendering to update stroke widths`,
-				);
+			if (DEBUG) {
+				if (newDepth !== this.currentRenderDepth) {
+					console.log(
+						`[LOD] Depth change: ${this.currentRenderDepth} → ${newDepth} (utilization: ${(utilization * 100).toFixed(1)}%, visible: ${metrics.visiblePolygons.toLocaleString()}/${metrics.polygonBudget.toLocaleString()})`,
+					);
+				} else {
+					console.log(
+						`[LOD] Zoom threshold crossed in outline mode - re-rendering to update stroke widths`,
+					);
+				}
 			}
 
 			this.currentRenderDepth = newDepth;
@@ -841,7 +858,9 @@ export class PixiRenderer {
 		// Set flag to prevent re-render loops
 		this.isRerendering = true;
 
-		console.log(`[LOD] Starting re-render at depth ${this.currentRenderDepth}`);
+		if (DEBUG) {
+			console.log(`[LOD] Starting re-render at depth ${this.currentRenderDepth}`);
+		}
 
 		// Save viewport state and current scale for stroke width calculation
 		const viewportState = this.getViewportState();
@@ -880,9 +899,11 @@ export class PixiRenderer {
 		}
 		oldMainContainer.destroy();
 
-		console.log(
-			`[LOD] Re-render complete: ${this.totalRenderedPolygons.toLocaleString()} polygons in ${this.allGraphicsItems.length} tiles`,
-		);
+		if (DEBUG) {
+			console.log(
+				`[LOD] Re-render complete: ${this.totalRenderedPolygons.toLocaleString()} polygons in ${this.allGraphicsItems.length} tiles`,
+			);
+		}
 
 		// Apply layer visibility to newly created graphics
 		this.performViewportUpdate();
@@ -1070,8 +1091,10 @@ export class PixiRenderer {
 	 */
 	toggleFill(): void {
 		this.fillPolygons = !this.fillPolygons;
-		console.log(`[Renderer] Polygon fill mode: ${this.fillPolygons ? "filled" : "outline only"}`);
-		console.log(`[Renderer] Current scale: ${this.mainContainer.scale.x}`);
+		if (DEBUG) {
+			console.log(`[Renderer] Polygon fill mode: ${this.fillPolygons ? "filled" : "outline only"}`);
+			console.log(`[Renderer] Current scale: ${this.mainContainer.scale.x}`);
+		}
 
 		// Trigger re-render to apply the new fill mode
 		if (this.currentDocument) {
@@ -1113,20 +1136,24 @@ export class PixiRenderer {
 		const budgetMultiplier = budgetMultipliers[Math.min(this.currentRenderDepth, 3)] ?? 1;
 		const scaledBudget = Math.floor(this.maxPolygonsPerRender * budgetMultiplier);
 
-		console.log(
-			`[Render] Starting render: depth=${this.currentRenderDepth}, budget=${scaledBudget.toLocaleString()} (${budgetMultiplier}x base)`,
-		);
+		if (DEBUG) {
+			console.log(
+				`[Render] Starting render: depth=${this.currentRenderDepth}, budget=${scaledBudget.toLocaleString()} (${budgetMultiplier}x base)`,
+			);
+		}
 
 		// Reset cell render tracking
 		this.cellRenderCounts.clear();
 
 		// Log top cell structure for debugging
-		for (const topCellName of document.topCells) {
-			const cell = document.cells.get(topCellName);
-			if (cell) {
-				console.log(
-					`[Render] Top cell "${topCellName}": ${cell.polygons.length.toLocaleString()} polygons, ${cell.instances.length.toLocaleString()} instances`,
-				);
+		if (DEBUG) {
+			for (const topCellName of document.topCells) {
+				const cell = document.cells.get(topCellName);
+				if (cell) {
+					console.log(
+						`[Render] Top cell "${topCellName}": ${cell.polygons.length.toLocaleString()} polygons, ${cell.instances.length.toLocaleString()} instances`,
+					);
+				}
 			}
 		}
 
@@ -1199,18 +1226,20 @@ export class PixiRenderer {
 		this.totalRenderedPolygons = totalPolygons;
 
 		const renderTime = performance.now() - startTime;
-		console.log(
-			`[Render] Complete: ${totalPolygons.toLocaleString()} polygons in ${renderTime.toFixed(0)}ms (${this.allGraphicsItems.length} tiles, depth=${this.currentRenderDepth})`,
-		);
+		if (DEBUG) {
+			console.log(
+				`[Render] Complete: ${totalPolygons.toLocaleString()} polygons in ${renderTime.toFixed(0)}ms (${this.allGraphicsItems.length} tiles, depth=${this.currentRenderDepth})`,
+			);
 
-		// Log cell render statistics to detect instance explosion
-		const topCells = Array.from(this.cellRenderCounts.entries())
-			.sort((a, b) => b[1] - a[1])
-			.slice(0, 10);
-		if (topCells.length > 0) {
-			console.log("[Render] Top 10 most rendered cells:");
-			for (const [cellName, count] of topCells) {
-				console.log(`  ${cellName}: ${count} times`);
+			// Log cell render statistics to detect instance explosion
+			const topCells = Array.from(this.cellRenderCounts.entries())
+				.sort((a, b) => b[1] - a[1])
+				.slice(0, 10);
+			if (topCells.length > 0) {
+				console.log("[Render] Top 10 most rendered cells:");
+				for (const [cellName, count] of topCells) {
+					console.log(`  ${cellName}: ${count} times`);
+				}
 			}
 		}
 
@@ -1282,9 +1311,11 @@ export class PixiRenderer {
 			strokeWidthDB = minStrokeWidthDB;
 		}
 
-		console.log(
-			`[Render] Cell ${cell.name}: strokeWidthDB=${strokeWidthDB.toExponential(2)} DB units, scale=${currentScale.toExponential(3)}, expected screen pixels=${desiredScreenPixels}`,
-		);
+		if (DEBUG) {
+			console.log(
+				`[Render] Cell ${cell.name}: strokeWidthDB=${strokeWidthDB.toExponential(2)} DB units, scale=${currentScale.toExponential(3)}, expected screen pixels=${desiredScreenPixels}`,
+			);
+		}
 
 		// Batch polygons by layer AND spatial tile for efficient rendering and culling
 		// Tile key format: "layer:datatype:tileX:tileY"
@@ -1299,9 +1330,11 @@ export class PixiRenderer {
 		let directPolygonBudget = polygonBudget;
 		if (maxDepth > 0) {
 			directPolygonBudget = Math.floor(polygonBudget * 0.7);
-			console.log(
-				`[Render] Cell ${cell.name}: Reserving budget for instances (${directPolygonBudget.toLocaleString()} for direct polygons, ${(polygonBudget - directPolygonBudget).toLocaleString()} for instances)`,
-			);
+			if (DEBUG) {
+				console.log(
+					`[Render] Cell ${cell.name}: Reserving budget for instances (${directPolygonBudget.toLocaleString()} for direct polygons, ${(polygonBudget - directPolygonBudget).toLocaleString()} for instances)`,
+				);
+			}
 		}
 
 		let renderedPolygons = 0;
@@ -1311,9 +1344,11 @@ export class PixiRenderer {
 		for (let i = 0; i < totalPolygonsInCell; i++) {
 			// Check budget before rendering each polygon
 			if (renderedPolygons >= directPolygonBudget) {
-				console.log(
-					`[Render] Cell ${cell.name}: Direct polygon budget exhausted (${renderedPolygons.toLocaleString()}/${totalPolygonsInCell.toLocaleString()} rendered)`,
-				);
+				if (DEBUG) {
+					console.log(
+						`[Render] Cell ${cell.name}: Direct polygon budget exhausted (${renderedPolygons.toLocaleString()}/${totalPolygonsInCell.toLocaleString()} rendered)`,
+					);
+				}
 				break;
 			}
 
@@ -1405,9 +1440,11 @@ export class PixiRenderer {
 		let remainingBudget = polygonBudget - renderedPolygons;
 
 		if (maxDepth > 0 && remainingBudget > 0) {
-			console.log(
-				`[Render] Cell ${cell.name}: Rendering ${cell.instances.length} instances at depth ${maxDepth}`,
-			);
+			if (DEBUG) {
+				console.log(
+					`[Render] Cell ${cell.name}: Rendering ${cell.instances.length} instances at depth ${maxDepth}`,
+				);
+			}
 
 			for (const instance of cell.instances) {
 				if (remainingBudget <= 0) break;
@@ -1432,9 +1469,11 @@ export class PixiRenderer {
 				}
 			}
 
-			console.log(
-				`[Render] Cell ${cell.name}: Rendered ${totalPolygons - renderedPolygons} polygons from instances`,
-			);
+			if (DEBUG) {
+				console.log(
+					`[Render] Cell ${cell.name}: Rendered ${totalPolygons - renderedPolygons} polygons from instances`,
+				);
+			}
 		}
 
 		this.mainContainer.addChild(cellContainer);

@@ -78,7 +78,9 @@ onDestroy(() => {
 $effect(() => {
 	const gdsDocument = $gdsStore.document;
 	if (renderer?.isReady() && gdsDocument && gdsDocument !== lastRenderedDocument) {
-		console.log("[ViewerCanvas] Rendering document:", gdsDocument.name);
+		if (DEBUG) {
+			console.log("[ViewerCanvas] Rendering document:", gdsDocument.name);
+		}
 		lastRenderedDocument = gdsDocument;
 		// Reset layer store initialization flag when new document is loaded
 		layerStoreInitialized = false;
