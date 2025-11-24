@@ -4,6 +4,15 @@
 **Status:** Phase 1.1 Complete, Phase 1.2 In Progress
 **Related:** DevLog-001-mvp-implementation-plan.md (Week 2-3)
 
+## Important Notes
+
+**Testing Protocol:**
+- **USER runs the application and tests, NOT the AI assistant**
+- Use `pnpm run dev` to start the development server (NOT npm)
+- Use `pnpm run build` to build for production (NOT npm)
+- Manual testing with multiple browser windows/tabs is required for P2P features
+- AI assistant should NOT attempt to run servers or execute tests
+
 ## Overview
 
 This document outlines the detailed implementation plan for peer-to-peer collaboration features in GDSJam. The implementation is divided into phases, with Phase 1 focusing on session management, file sharing, and basic state synchronization (layer visibility and viewport awareness). Phase 2 (future work) will address commenting and annotations.

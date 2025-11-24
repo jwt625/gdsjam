@@ -27,6 +27,56 @@ onMount(async () => {
 			console.log("[App] Joining collaboration session:", roomId);
 		}
 		collaborationStore.joinSession(roomId);
+
+		// Poll for file availability with retries
+		let retryCount = 0;
+		const maxRetries = 20; // 20 retries * 500ms = 10 seconds max wait
+		const retryInterval = 500; // Check every 500ms
+
+		const checkForFile = async () => {
+			try {
+				// Check if file is available in session
+				if (collaborationStore.isFileAvailable()) {
+					if (DEBUG) {
+						console.log("[App] File available in session, downloading...");
+					}
+
+					// Download file from session
+					const { arrayBuffer, fileName } = await collaborationStore.downloadFile();
+
+					// Load the file
+					await loadGDSIIFromBuffer(arrayBuffer, fileName);
+
+					if (DEBUG) {
+						console.log("[App] File loaded from session successfully");
+					}
+				} else {
+					retryCount++;
+					if (retryCount < maxRetries) {
+						if (DEBUG && retryCount % 4 === 0) {
+							// Log every 2 seconds
+							console.log(`[App] Waiting for file... (${retryCount}/${maxRetries})`);
+						}
+						setTimeout(checkForFile, retryInterval);
+					} else {
+						if (DEBUG) {
+							console.log("[App] No file available in session after waiting");
+						}
+						gdsStore.setError(
+							"No file available in session. The host needs to upload a file first.",
+						);
+					}
+				}
+			} catch (error) {
+				console.error("[App] Failed to download file from session:", error);
+				gdsStore.setError(
+					`Failed to download file from session: ${error instanceof Error ? error.message : String(error)}`,
+				);
+			}
+		};
+
+		// Start checking after initial connection delay
+		setTimeout(checkForFile, 1000);
 	}
 
 	// Handle URL parameter (load file from URL)
@@ -56,11 +106,13 @@ onMount(async () => {
  * Handle creating a collaboration session
  */
 function handleCreateSession() {
-	if (!$gdsStore.document) {
-		gdsStore.setError("Please upload a file before creating a session");
-		return;
-	}
+	// Create session without requiring a file first
+	// File will be uploaded to session when user uploads it
 	collaborationStore.createSession();
+
+	if (DEBUG) {
+		console.log("[App] Session created. Upload a file to share it with peers.");
+	}
 }
 
 /**
@@ -122,7 +174,7 @@ async function copySessionLink() {
 						Leave Session
 					</button>
 				{:else}
-					<button class="btn btn-primary" onclick={handleCreateSession} disabled={!$gdsStore.document}>
+					<button class="btn btn-primary" onclick={handleCreateSession}>
 						Create Session
 					</button>
 				{/if}
@@ -135,15 +187,23 @@ async function copySessionLink() {
 			<div class="upload-overlay">
 				<FileUpload />
 			</div>
-		{:else if $gdsStore.isLoading || $gdsStore.isRendering}
+		{:else if $gdsStore.isLoading || $gdsStore.isRendering || $collaborationStore.isTransferring}
 			<div class="loading-overlay">
 				<div class="loading-content">
 					<div class="spinner"></div>
-					<p class="loading-message">{$gdsStore.loadingMessage}</p>
-					<div class="progress-bar">
-						<div class="progress-fill" style="width: {$gdsStore.loadingProgress}%"></div>
-					</div>
-					<p class="progress-text">{Math.round($gdsStore.loadingProgress)}%</p>
+					{#if $collaborationStore.isTransferring}
+						<p class="loading-message">{$collaborationStore.fileTransferMessage}</p>
+						<div class="progress-bar">
+							<div class="progress-fill" style="width: {$collaborationStore.fileTransferProgress}%"></div>
+						</div>
+						<p class="progress-text">{Math.round($collaborationStore.fileTransferProgress)}%</p>
+					{:else}
+						<p class="loading-message">{$gdsStore.loadingMessage}</p>
+						<div class="progress-bar">
+							<div class="progress-fill" style="width: {$gdsStore.loadingProgress}%"></div>
+						</div>
+						<p class="progress-text">{Math.round($gdsStore.loadingProgress)}%</p>
+					{/if}
 				</div>
 			</div>
 		{/if}

@@ -10,7 +10,8 @@
 
 import { DEBUG } from "../config";
 import { generateUUID } from "../utils/uuid";
-import type { SessionMetadata, UserInfo } from "./types";
+import { FileTransfer } from "./FileTransfer";
+import type { CollaborationEvent, SessionMetadata, UserInfo } from "./types";
 import { YjsProvider } from "./YjsProvider";
 
 const USER_ID_KEY = "gdsjam-user-id";
@@ -30,6 +31,8 @@ export class SessionManager {
 	private userId: string;
 	private sessionId: string | null = null;
 	private isHost: boolean = false;
+	private fileTransfer: FileTransfer | null = null;
+	private uploadedFileBuffer: ArrayBuffer | null = null; // Store file for sharing with peers
 
 	constructor() {
 		// Get or create user ID
@@ -223,9 +226,98 @@ export class SessionManager {
 	}
 
 	/**
+	 * Upload a file to the session (host only)
+	 * Stores the file in Y.js for automatic sync to peers
+	 */
+	async uploadFile(
+		arrayBuffer: ArrayBuffer,
+		fileName: string,
+		onProgress?: (progress: number, message: string) => void,
+		onEvent?: (event: CollaborationEvent) => void,
+	): Promise<void> {
+		if (!this.isHost) {
+			throw new Error("Only the host can upload files");
+		}
+
+		if (!this.sessionId) {
+			throw new Error("Not in a session");
+		}
+
+		// Store file buffer for potential re-sharing
+		this.uploadedFileBuffer = arrayBuffer;
+
+		// Create file transfer instance
+		this.fileTransfer = new FileTransfer(this.yjsProvider.getDoc(), onProgress, onEvent);
+
+		// Upload file
+		await this.fileTransfer.uploadFile(arrayBuffer, fileName, this.userId);
+
+		if (DEBUG) {
+			console.log("[SessionManager] File uploaded to session");
+		}
+	}
+
+	/**
+	 * Download file from session (peer only)
+	 * Waits for file chunks to sync, then downloads and validates
+	 */
+	async downloadFile(
+		onProgress?: (progress: number, message: string) => void,
+		onEvent?: (event: CollaborationEvent) => void,
+	): Promise<{ arrayBuffer: ArrayBuffer; fileName: string; fileHash: string }> {
+		if (!this.sessionId) {
+			throw new Error("Not in a session");
+		}
+
+		// Create file transfer instance
+		this.fileTransfer = new FileTransfer(this.yjsProvider.getDoc(), onProgress, onEvent);
+
+		// Download file
+		const result = await this.fileTransfer.downloadFile();
+
+		if (DEBUG) {
+			console.log("[SessionManager] File downloaded from session:", result.fileName);
+		}
+
+		return result;
+	}
+
+	/**
+	 * Check if a file is available in the session
+	 */
+	isFileAvailable(): boolean {
+		if (!this.fileTransfer) {
+			this.fileTransfer = new FileTransfer(this.yjsProvider.getDoc());
+		}
+		return this.fileTransfer.isFileAvailable();
+	}
+
+	/**
+	 * Get file metadata from session
+	 */
+	getFileMetadata(): Partial<SessionMetadata> | null {
+		if (!this.fileTransfer) {
+			this.fileTransfer = new FileTransfer(this.yjsProvider.getDoc());
+		}
+		return this.fileTransfer.getFileMetadata();
+	}
+
+	/**
+	 * Get file transfer progress
+	 */
+	getFileTransferProgress() {
+		if (!this.fileTransfer) {
+			return null;
+		}
+		return this.fileTransfer.getProgress();
+	}
+
+	/**
 	 * Destroy session manager
 	 */
 	destroy(): void {
 		this.yjsProvider.destroy();
+		this.uploadedFileBuffer = null;
+		this.fileTransfer = null;
 	}
 }

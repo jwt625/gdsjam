@@ -4,7 +4,7 @@
 
 import { writable } from "svelte/store";
 import { SessionManager } from "../lib/collaboration/SessionManager";
-import type { UserInfo } from "../lib/collaboration/types";
+import type { CollaborationEvent, UserInfo } from "../lib/collaboration/types";
 import { DEBUG } from "../lib/config";
 
 interface CollaborationState {
@@ -14,6 +14,9 @@ interface CollaborationState {
 	isHost: boolean;
 	connectedUsers: UserInfo[];
 	userId: string | null;
+	fileTransferProgress: number; // 0-100
+	fileTransferMessage: string;
+	isTransferring: boolean;
 }
 
 const initialState: CollaborationState = {
@@ -23,6 +26,9 @@ const initialState: CollaborationState = {
 	isHost: false,
 	connectedUsers: [],
 	userId: null,
+	fileTransferProgress: 0,
+	fileTransferMessage: "",
+	isTransferring: false,
 };
 
 function createCollaborationStore() {
@@ -175,6 +181,148 @@ function createCollaborationStore() {
 				return state;
 			});
 			return manager;
+		},
+
+		/**
+		 * Upload file to session (host only)
+		 */
+		uploadFile: async (arrayBuffer: ArrayBuffer, fileName: string) => {
+			// Get session manager reference
+			const getManager = (): SessionManager => {
+				let mgr: SessionManager | null = null;
+				update((state) => {
+					mgr = state.sessionManager;
+					return state;
+				});
+				if (!mgr) {
+					throw new Error("Session manager not initialized");
+				}
+				return mgr;
+			};
+
+			const manager = getManager();
+
+			update((state) => ({
+				...state,
+				isTransferring: true,
+				fileTransferProgress: 0,
+				fileTransferMessage: "Starting upload...",
+			}));
+
+			try {
+				await manager.uploadFile(
+					arrayBuffer,
+					fileName,
+					(progress: number, message: string) => {
+						update((state) => ({
+							...state,
+							fileTransferProgress: progress,
+							fileTransferMessage: message,
+						}));
+					},
+					(event: CollaborationEvent) => {
+						if (DEBUG) {
+							console.log("[collaborationStore] File transfer event:", event);
+						}
+					},
+				);
+
+				update((state) => ({
+					...state,
+					isTransferring: false,
+					fileTransferProgress: 100,
+					fileTransferMessage: "Upload complete",
+				}));
+			} catch (error) {
+				console.error("[collaborationStore] File upload failed:", error);
+				update((state) => ({
+					...state,
+					isTransferring: false,
+					fileTransferProgress: 0,
+					fileTransferMessage: "",
+				}));
+				throw error;
+			}
+		},
+
+		/**
+		 * Download file from session (peer only)
+		 */
+		downloadFile: async (): Promise<{
+			arrayBuffer: ArrayBuffer;
+			fileName: string;
+			fileHash: string;
+		}> => {
+			// Get session manager reference
+			const getManager = (): SessionManager => {
+				let mgr: SessionManager | null = null;
+				update((state) => {
+					mgr = state.sessionManager;
+					return state;
+				});
+				if (!mgr) {
+					throw new Error("Session manager not initialized");
+				}
+				return mgr;
+			};
+
+			const manager = getManager();
+
+			update((state) => ({
+				...state,
+				isTransferring: true,
+				fileTransferProgress: 0,
+				fileTransferMessage: "Starting download...",
+			}));
+
+			try {
+				const result = await manager.downloadFile(
+					(progress: number, message: string) => {
+						update((state) => ({
+							...state,
+							fileTransferProgress: progress,
+							fileTransferMessage: message,
+						}));
+					},
+					(event: CollaborationEvent) => {
+						if (DEBUG) {
+							console.log("[collaborationStore] File transfer event:", event);
+						}
+					},
+				);
+
+				update((state) => ({
+					...state,
+					isTransferring: false,
+					fileTransferProgress: 100,
+					fileTransferMessage: "Download complete",
+				}));
+
+				return result;
+			} catch (error) {
+				console.error("[collaborationStore] File download failed:", error);
+				update((state) => ({
+					...state,
+					isTransferring: false,
+					fileTransferProgress: 0,
+					fileTransferMessage: "",
+				}));
+				throw error;
+			}
+		},
+
+		/**
+		 * Check if file is available in session
+		 */
+		isFileAvailable: (): boolean => {
+			let available = false;
+			update((state) => {
+				if (state.sessionManager) {
+					available = state.sessionManager.isFileAvailable();
+				}
+				return state;
+			});
+			return available;
 		},
 
 		/**
