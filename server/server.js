@@ -1,6 +1,9 @@
 const http = require("http");
+const express = require("express");
+const cors = require("cors");
 const WebSocket = require("ws");
 const url = require("url");
+const { setupFileRoutes } = require("./fileStorage");
 
 const PORT = process.env.PORT || 4444;
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
@@ -17,11 +20,31 @@ const connectionTracker = new Map();
 // Map<roomName, Set<WebSocket>>
 const rooms = new Map();
 
-// Create HTTP server
-const server = http.createServer((req, res) => {
-	res.writeHead(200, { "Content-Type": "text/plain" });
-	res.end("GDSJam WebRTC Signaling Server\n");
+// Create Express app
+const app = express();
+
+// Configure CORS
+app.use(
+	cors({
+		origin: ALLOWED_ORIGINS,
+		credentials: true,
+	}),
+);
+
+// Parse JSON and URL-encoded bodies
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Setup file storage routes
+setupFileRoutes(app);
+
+// Default route for HTTP requests
+app.get("/", (req, res) => {
+	res.send("GDSJam WebRTC Signaling Server\n");
 });
+
+// Create HTTP server with Express app
+const server = http.createServer(app);
 
 // Create WebSocket server with noServer option for custom upgrade handling
 const wss = new WebSocket.Server({ noServer: true });
