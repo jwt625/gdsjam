@@ -72,6 +72,36 @@ export class YjsProvider {
 			console.log("[YjsProvider] Token present:", !!signalingToken);
 		}
 
+		// Load TURN server credentials from environment
+		const turnPassword = import.meta.env.VITE_TURN_PASSWORD;
+
+		// Build ICE servers configuration
+		const iceServers: RTCIceServer[] = [
+			// STUN servers for NAT discovery
+			{ urls: "stun:stun.l.google.com:19302" },
+			{ urls: "stun:stun1.l.google.com:19302" },
+			{ urls: "stun:stun2.l.google.com:19302" },
+		];
+
+		// Add TURN server if credentials are available
+		if (turnPassword) {
+			iceServers.push({
+				urls: [
+					"turn:signaling.gdsjam.com:3478",
+					"turn:signaling.gdsjam.com:3478?transport=tcp",
+					"turns:signaling.gdsjam.com:5349?transport=tcp",
+				],
+				username: "gdsjam",
+				credential: turnPassword,
+			});
+
+			if (DEBUG) {
+				console.log("[YjsProvider] TURN server configured");
+			}
+		} else if (DEBUG) {
+			console.log("[YjsProvider] TURN server not configured (credentials missing)");
+		}
+
 		this.provider = new WebrtcProvider(roomName, this.ydoc, {
 			// Self-hosted signaling server with token authentication
 			signaling: [signalingServerUrl],
@@ -79,14 +109,11 @@ export class YjsProvider {
 			awareness: this.awareness, // Use proper Awareness instance
 			maxConns: 20, // Max peer connections
 			filterBcConns: false, // Allow broadcast connections for local network discovery
-			// WebRTC peer options with STUN servers for NAT traversal
+			// WebRTC peer options with STUN and TURN servers for NAT traversal
 			peerOpts: {
 				config: {
-					iceServers: [
-						{ urls: "stun:stun.l.google.com:19302" },
-						{ urls: "stun:stun1.l.google.com:19302" },
-						{ urls: "stun:stun2.l.google.com:19302" },
-					],
+					iceServers,
+					iceTransportPolicy: "all", // Try all connection types (direct, STUN, TURN)
 				},
 			},
 		});

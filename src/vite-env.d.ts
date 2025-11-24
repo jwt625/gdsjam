@@ -6,6 +6,7 @@ interface ImportMetaEnv {
 	readonly VITE_FPS_UPDATE_INTERVAL: string;
 	readonly VITE_SIGNALING_SERVER_URL: string;
 	readonly VITE_SIGNALING_SERVER_TOKEN: string;
+	readonly VITE_TURN_PASSWORD: string;
 }
 
 interface ImportMeta {
