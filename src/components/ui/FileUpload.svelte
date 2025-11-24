@@ -1,6 +1,7 @@
 <script lang="ts">
 import { DEBUG } from "../../lib/config";
 import { loadGDSIIFromBuffer } from "../../lib/utils/gdsLoader";
+import { collaborationStore } from "../../stores/collaborationStore";
 import { gdsStore } from "../../stores/gdsStore";
 
 // biome-ignore lint/correctness/noUnusedVariables: Used in Svelte class binding
@@ -24,7 +25,27 @@ async function handleFile(file: File) {
 			console.log(`[FileUpload] File read complete: ${arrayBuffer.byteLength} bytes`);
 		}
 
+		// Load file locally first
 		await loadGDSIIFromBuffer(arrayBuffer, file.name);
+
+		// If in a session and is host, upload file to session
+		if ($collaborationStore.isInSession && $collaborationStore.isHost) {
+			if (DEBUG) {
+				console.log("[FileUpload] Uploading file to collaboration session...");
+			}
+
+			try {
+				await collaborationStore.uploadFile(arrayBuffer, file.name);
+				if (DEBUG) {
+					console.log("[FileUpload] File uploaded to session successfully");
+				}
+			} catch (error) {
+				console.error("[FileUpload] Failed to upload file to session:", error);
+				gdsStore.setError(
+					`File loaded locally but failed to upload to session: ${error instanceof Error ? error.message : String(error)}`,
+				);
+			}
+		}
 	} catch (error) {
 		console.error("[FileUpload] Failed to read file:", error);
 		gdsStore.setError(

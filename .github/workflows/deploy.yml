@@ -38,6 +38,9 @@ jobs:
 
       - name: Build
         run: pnpm build
+        env:
+          VITE_SIGNALING_SERVER_URL: ${{ secrets.VITE_SIGNALING_SERVER_URL }}
+          VITE_SIGNALING_SERVER_TOKEN: ${{ secrets.VITE_SIGNALING_SERVER_TOKEN }}
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

@@ -7,17 +7,79 @@ import ViewerCanvas from "./components/viewer/ViewerCanvas.svelte";
 import { DEBUG } from "./lib/config";
 import { loadGDSIIFromBuffer } from "./lib/utils/gdsLoader";
 import { fetchGDSIIFromURL } from "./lib/utils/urlLoader";
+// biome-ignore lint/correctness/noUnusedImports: Used in template via $collaborationStore
+import { collaborationStore } from "./stores/collaborationStore";
 // biome-ignore lint/correctness/noUnusedImports: Used in template via $gdsStore
 import { gdsStore } from "./stores/gdsStore";
 
 /**
- * Check for URL parameter and load file from URL if present
+ * Check for URL parameters and handle file loading or session joining
  */
 onMount(async () => {
 	// Parse URL parameters
 	const urlParams = new URLSearchParams(window.location.search);
 	const fileUrl = urlParams.get("url");
+	const roomId = urlParams.get("room");
 
+	// Handle room parameter (join collaboration session)
+	if (roomId) {
+		if (DEBUG) {
+			console.log("[App] Joining collaboration session:", roomId);
+		}
+		collaborationStore.joinSession(roomId);
+
+		// Poll for file availability with retries
+		let retryCount = 0;
+		const maxRetries = 20; // 20 retries * 500ms = 10 seconds max wait
+		const retryInterval = 500; // Check every 500ms
+
+		const checkForFile = async () => {
+			try {
+				// Check if file is available in session
+				if (collaborationStore.isFileAvailable()) {
+					if (DEBUG) {
+						console.log("[App] File available in session, downloading...");
+					}
+
+					// Download file from session
+					const { arrayBuffer, fileName } = await collaborationStore.downloadFile();
+
+					// Load the file
+					await loadGDSIIFromBuffer(arrayBuffer, fileName);
+
+					if (DEBUG) {
+						console.log("[App] File loaded from session successfully");
+					}
+				} else {
+					retryCount++;
+					if (retryCount < maxRetries) {
+						if (DEBUG && retryCount % 4 === 0) {
+							// Log every 2 seconds
+							console.log(`[App] Waiting for file... (${retryCount}/${maxRetries})`);
+						}
+						setTimeout(checkForFile, retryInterval);
+					} else {
+						if (DEBUG) {
+							console.log("[App] No file available in session after waiting");
+						}
+						gdsStore.setError(
+							"No file available in session. The host needs to upload a file first.",
+						);
+					}
+				}
+			} catch (error) {
+				console.error("[App] Failed to download file from session:", error);
+				gdsStore.setError(
+					`Failed to download file from session: ${error instanceof Error ? error.message : String(error)}`,
+				);
+			}
+		};
+
+		// Start checking after initial connection delay
+		setTimeout(checkForFile, 1000);
+	}
+
+	// Handle URL parameter (load file from URL)
 	if (fileUrl) {
 		if (DEBUG) {
 			console.log("[App] Loading file from URL parameter:", fileUrl);
@@ -39,18 +101,85 @@ onMount(async () => {
 		}
 	}
 });
+
+/**
+ * Handle creating a collaboration session
+ */
+function handleCreateSession() {
+	// Create session without requiring a file first
+	// File will be uploaded to session when user uploads it
+	collaborationStore.createSession();
+
+	if (DEBUG) {
+		console.log("[App] Session created. Upload a file to share it with peers.");
+	}
+}
+
+/**
+ * Handle leaving a collaboration session
+ */
+function handleLeaveSession() {
+	collaborationStore.leaveSession();
+}
+
+/**
+ * Copy session link to clipboard
+ */
+async function copySessionLink() {
+	const sessionId = $collaborationStore.sessionId;
+	if (!sessionId) return;
+
+	const url = new URL(window.location.href);
+	url.searchParams.set("room", sessionId);
+	const link = url.toString();
+
+	try {
+		await navigator.clipboard.writeText(link);
+		if (DEBUG) {
+			console.log("[App] Copied session link to clipboard:", link);
+		}
+		// TODO: Show success toast
+	} catch (error) {
+		console.error("[App] Failed to copy session link:", error);
+		gdsStore.setError("Failed to copy session link to clipboard");
+	}
+}
 </script>
 
 <main class="app-main">
 	<div class="header">
-		<div class="title-container">
-			<img src="/icon.svg" alt="GDSJam" class="title-icon" />
-			<h1 class="title">GDSJam</h1>
+		<div class="header-content">
+			<div class="title-section">
+				<div class="title-container">
+					<img src="/icon.svg" alt="GDSJam" class="title-icon" />
+					<h1 class="title">GDSJam</h1>
+				</div>
+				<p class="subtitle">Collaborative GDSII Viewer</p>
+				{#if $gdsStore.fileName}
+					<p class="file-name">Loaded: {$gdsStore.fileName}</p>
+				{/if}
+			</div>
+
+			<div class="session-controls">
+				{#if $collaborationStore.isInSession}
+					<div class="session-info">
+						<span class="session-label">Session Active</span>
+						<span class="session-id">{$collaborationStore.sessionId?.substring(0, 8)}...</span>
+						<span class="user-count">{$collaborationStore.connectedUsers.length} user{$collaborationStore.connectedUsers.length !== 1 ? 's' : ''}</span>
+					</div>
+					<button class="btn btn-secondary" onclick={copySessionLink}>
+						Copy Link
+					</button>
+					<button class="btn btn-danger" onclick={handleLeaveSession}>
+						Leave Session
+					</button>
+				{:else}
+					<button class="btn btn-primary" onclick={handleCreateSession}>
+						Create Session
+					</button>
+				{/if}
+			</div>
 		</div>
-		<p class="subtitle">Collaborative (not yet) GDSII Viewer</p>
-		{#if $gdsStore.fileName}
-			<p class="file-name">Loaded: {$gdsStore.fileName}</p>
-		{/if}
 	</div>
 
 	<div class="viewer-wrapper">
@@ -58,15 +187,23 @@ onMount(async () => {
 			<div class="upload-overlay">
 				<FileUpload />
 			</div>
-		{:else if $gdsStore.isLoading || $gdsStore.isRendering}
+		{:else if $gdsStore.isLoading || $gdsStore.isRendering || $collaborationStore.isTransferring}
 			<div class="loading-overlay">
 				<div class="loading-content">
 					<div class="spinner"></div>
-					<p class="loading-message">{$gdsStore.loadingMessage}</p>
-					<div class="progress-bar">
-						<div class="progress-fill" style="width: {$gdsStore.loadingProgress}%"></div>
-					</div>
-					<p class="progress-text">{Math.round($gdsStore.loadingProgress)}%</p>
+					{#if $collaborationStore.isTransferring}
+						<p class="loading-message">{$collaborationStore.fileTransferMessage}</p>
+						<div class="progress-bar">
+							<div class="progress-fill" style="width: {$collaborationStore.fileTransferProgress}%"></div>
+						</div>
+						<p class="progress-text">{Math.round($collaborationStore.fileTransferProgress)}%</p>
+					{:else}
+						<p class="loading-message">{$gdsStore.loadingMessage}</p>
+						<div class="progress-bar">
+							<div class="progress-fill" style="width: {$gdsStore.loadingProgress}%"></div>
+						</div>
+						<p class="progress-text">{Math.round($gdsStore.loadingProgress)}%</p>
+					{/if}
 				</div>
 			</div>
 		{/if}
@@ -80,7 +217,7 @@ onMount(async () => {
 				<div class="error-content">
 					<p class="error-title">Error</p>
 					<p class="error-message">{$gdsStore.error}</p>
-					<button class="error-button" on:click={() => gdsStore.clearError()}>
+					<button class="error-button" onclick={() => gdsStore.clearError()}>
 						Dismiss
 					</button>
 				</div>
@@ -113,6 +250,17 @@ onMount(async () => {
 		border-bottom: 1px solid #333;
 	}
 
+	.header-content {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 2rem;
+	}
+
+	.title-section {
+		flex: 1;
+	}
+
 	.title-container {
 		display: flex;
 		align-items: center;
@@ -142,6 +290,84 @@ onMount(async () => {
 		font-size: 0.875rem;
 		color: #4a9eff;
 		font-weight: 500;
+	}
+
+	.session-controls {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+	}
+
+	.session-info {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.5rem 1rem;
+		background-color: #1a1a1a;
+		border: 1px solid #333;
+		border-radius: 6px;
+	}
+
+	.session-label {
+		font-size: 0.75rem;
+		color: #888;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	.session-id {
+		font-size: 0.875rem;
+		color: #4a9eff;
+		font-family: monospace;
+	}
+
+	.user-count {
+		font-size: 0.875rem;
+		color: #4ecdc4;
+		font-weight: 500;
+	}
+
+	.btn {
+		padding: 0.5rem 1rem;
+		font-size: 0.875rem;
+		font-weight: 500;
+		border: none;
+		border-radius: 6px;
+		cursor: pointer;
+		transition: all 0.2s;
+		white-space: nowrap;
+	}
+
+	.btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.btn-primary {
+		background-color: #4a9eff;
+		color: #fff;
+	}
+
+	.btn-primary:hover:not(:disabled) {
+		background-color: #6bb3ff;
+	}
+
+	.btn-secondary {
+		background-color: #333;
+		color: #fff;
+	}
+
+	.btn-secondary:hover {
+		background-color: #444;
+	}
+
+	.btn-danger {
+		background-color: #ff4444;
+		color: #fff;
+	}
+
+	.btn-danger:hover {
+		background-color: #ff6666;
 	}
 
 	.viewer-wrapper {
@@ -290,6 +516,26 @@ onMount(async () => {
 	@media (max-width: 1023px) {
 		.keyboard-shortcuts {
 			display: none;
+		}
+
+		.header-content {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 1rem;
+		}
+
+		.session-controls {
+			width: 100%;
+			flex-wrap: wrap;
+		}
+
+		.session-info {
+			flex: 1;
+			min-width: 200px;
+		}
+
+		.btn {
+			flex: 1;
 		}
 	}
 </style>
