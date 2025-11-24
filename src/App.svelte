@@ -28,37 +28,74 @@ onMount(async () => {
 		}
 		collaborationStore.joinSession(roomId);
 
-		// Poll for file availability with retries
-		let retryCount = 0;
-		const maxRetries = 20; // 20 retries * 500ms = 10 seconds max wait
-		const retryInterval = 500; // Check every 500ms
+		// Wait for file metadata to appear in session
+		const sessionManager = collaborationStore.getSessionManager();
+		if (!sessionManager) {
+			console.error("[App] Session manager not available");
+			gdsStore.setError("Failed to initialize collaboration session");
+		} else {
+			// Check if file is already available
+			if (collaborationStore.isFileAvailable()) {
+				if (DEBUG) {
+					console.log("[App] File already available in session, downloading...");
+				}
 
-		const checkForFile = async () => {
-			try {
-				// Check if file is available in session
-				if (collaborationStore.isFileAvailable()) {
-					if (DEBUG) {
-						console.log("[App] File available in session, downloading...");
-					}
-
-					// Download file from session
+				try {
 					const { arrayBuffer, fileName } = await collaborationStore.downloadFile();
-
-					// Load the file
 					await loadGDSIIFromBuffer(arrayBuffer, fileName);
 
 					if (DEBUG) {
 						console.log("[App] File loaded from session successfully");
 					}
-				} else {
-					retryCount++;
-					if (retryCount < maxRetries) {
-						if (DEBUG && retryCount % 4 === 0) {
-							// Log every 2 seconds
-							console.log(`[App] Waiting for file... (${retryCount}/${maxRetries})`);
+				} catch (error) {
+					console.error("[App] Failed to download file from session:", error);
+					gdsStore.setError(
+						`Failed to download file from session: ${error instanceof Error ? error.message : String(error)}`,
+					);
+				}
+			} else {
+				// Wait for metadata to appear by observing the session map
+				const sessionMap = sessionManager.getProvider().getMap("session");
+				let hasDownloaded = false;
+
+				const observer = () => {
+					if (hasDownloaded) return;
+
+					if (sessionMap.has("fileId")) {
+						hasDownloaded = true;
+
+						if (DEBUG) {
+							console.log("[App] File metadata appeared in session, downloading...");
 						}
-						setTimeout(checkForFile, retryInterval);
-					} else {
+
+						collaborationStore
+							.downloadFile()
+							.then(({ arrayBuffer, fileName }) => {
+								return loadGDSIIFromBuffer(arrayBuffer, fileName);
+							})
+							.then(() => {
+								if (DEBUG) {
+									console.log("[App] File loaded from session successfully");
+								}
+							})
+							.catch((error) => {
+								console.error("[App] Failed to download file from session:", error);
+								gdsStore.setError(
+									`Failed to download file from session: ${error instanceof Error ? error.message : String(error)}`,
+								);
+							});
+					}
+				};
+
+				sessionMap.observe(observer);
+
+				if (DEBUG) {
+					console.log("[App] Waiting for file metadata to appear in session...");
+				}
+
+				// Set a timeout in case file never arrives
+				setTimeout(() => {
+					if (!hasDownloaded && !sessionMap.has("fileId")) {
 						if (DEBUG) {
 							console.log("[App] No file available in session after waiting");
 						}
@@ -66,17 +103,9 @@ onMount(async () => {
 							"No file available in session. The host needs to upload a file first.",
 						);
 					}
-				}
-			} catch (error) {
-				console.error("[App] Failed to download file from session:", error);
-				gdsStore.setError(
-					`Failed to download file from session: ${error instanceof Error ? error.message : String(error)}`,
-				);
+				}, 10000); // 10 second timeout
 			}
-		};
-
-		// Start checking after initial connection delay
-		setTimeout(checkForFile, 1000);
+		}
 	}
 
 	// Handle URL parameter (load file from URL)

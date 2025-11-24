@@ -4,6 +4,13 @@
 **Status:** Completed
 **Related:** DevLog-001-04-p2p-collaboration-phase1.md, DevLog-001-05-WebRTC-Signaling-Server-Setup-Guide.md
 
+---
+**⚠️ CRITICAL CONSTRAINT: NEVER ENABLE BROADCASTCHANNEL**
+- `filterBcConns` MUST always be `true` in y-webrtc configuration
+- BroadcastChannel causes issues with file sync and session state
+- Always force WebRTC connections even for same-browser tabs
+---
+
 ## Problem Statement
 
 WebRTC peer-to-peer connections fail for users behind restrictive NAT/firewalls (estimated 15-20% of users). Current implementation:

@@ -1,5 +1,12 @@
 # Project Summary: GDSJam — Web-Based Collaborative GDSII Viewer and Editor
 
+---
+**⚠️ CRITICAL CONSTRAINT: NEVER ENABLE BROADCASTCHANNEL**
+- `filterBcConns` MUST always be `true` in y-webrtc configuration
+- BroadcastChannel causes issues with file sync and session state
+- Always force WebRTC connections even for same-browser tabs
+---
+
 ## Overview
 **GDSJam** is a browser-native, collaborative platform for viewing and editing **GDSII** layouts — the de facto file format for integrated circuit (IC) and photonics design. The project’s long-term goal is to bridge **EDA-grade precision** with **modern, Figma-style real-time collaboration**, enabling engineers, layout designers, and researchers to design and review layouts together in an intuitive, web-based environment.
 

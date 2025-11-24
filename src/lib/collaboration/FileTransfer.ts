@@ -1,10 +1,10 @@
 /**
- * FileTransfer - Handles file chunking and transfer via Y.js
+ * FileTransfer - Handles file upload/download via HTTP server
  *
  * Responsibilities:
- * - Chunk files into 1MB pieces for transfer
- * - Store chunks in Y.js Array for automatic sync
- * - Reassemble chunks on receiving end
+ * - Upload files to server via HTTP
+ * - Download files from server via HTTP
+ * - Store file metadata in Y.js for sync
  * - Compute and validate SHA-256 hashes
  * - Track transfer progress
  */
@@ -12,16 +12,9 @@
 import type * as Y from "yjs";
 import { DEBUG } from "../config";
 import { computeSHA256 } from "../utils/hash";
-import type { CollaborationEvent, FileChunk, SessionMetadata } from "./types";
-
-// Chunk size: 16KB (RTCDataChannel message size limit)
-// WebRTC data channels have a default max message size of 16KB
-// See: https://webrtc.link/en/articles/rtcdatachannel-usage-and-message-size-limits/
-const CHUNK_SIZE = 16 * 1024; // 16KB
+import type { CollaborationEvent, SessionMetadata } from "./types";
 
 export interface FileTransferProgress {
-	chunksReceived: number;
-	totalChunks: number;
 	bytesReceived: number;
 	totalBytes: number;
 	percentage: number;
@@ -43,8 +36,8 @@ export class FileTransfer {
 	}
 
 	/**
-	 * Upload a file to the session (host side)
-	 * Chunks the file and stores it in Y.js for automatic sync to peers
+	 * Upload a file to the server (host side)
+	 * Uploads file via HTTP and stores metadata in Y.js for sync to peers
 	 */
 	async uploadFile(arrayBuffer: ArrayBuffer, fileName: string, userId: string): Promise<void> {
 		const startTime = performance.now();
@@ -63,58 +56,50 @@ export class FileTransfer {
 			console.log(`[FileTransfer] File hash: ${fileHash}`);
 		}
 
-		this.onProgress?.(10, "Chunking file...");
+		this.onProgress?.(20, "Uploading file to server...");
 
-		// Chunk the file
-		const chunks = this.chunkFile(arrayBuffer);
-		const totalChunks = chunks.length;
+		// Upload file to server
+		const fileServerUrl = import.meta.env.VITE_FILE_SERVER_URL || "https://signaling.gdsjam.com";
+		const fileServerToken = import.meta.env.VITE_FILE_SERVER_TOKEN;
 
-		if (DEBUG) {
-			console.log(`[FileTransfer] Created ${totalChunks} chunks`);
+		const formData = new FormData();
+		formData.append("file", new Blob([arrayBuffer]));
+		formData.append("fileHash", fileHash);
+
+		const response = await fetch(`${fileServerUrl}/api/files/upload`, {
+			method: "POST",
+			headers: {
+				Authorization: `Bearer ${fileServerToken}`,
+			},
+			body: formData,
+		});
+
+		if (!response.ok) {
+			throw new Error(`File upload failed: ${response.status} ${response.statusText}`);
 		}
 
-		// Store session metadata in a single transaction to avoid multiple broadcasts
+		const { fileId } = await response.json();
+
+		if (DEBUG) {
+			console.log(`[FileTransfer] File uploaded to server with ID: ${fileId}`);
+		}
+
+		this.onProgress?.(80, "Storing metadata in session...");
+
+		// Store metadata in Y.js (single transaction)
 		this.ydoc.transact(() => {
 			const sessionMap = this.ydoc.getMap<any>("session");
-			sessionMap.set("fileHash", fileHash);
+			sessionMap.set("fileId", fileId);
 			sessionMap.set("fileName", fileName);
 			sessionMap.set("fileSize", arrayBuffer.byteLength);
+			sessionMap.set("fileHash", fileHash);
 			sessionMap.set("uploadedBy", userId);
 			sessionMap.set("uploadedAt", Date.now());
 		});
 
-		this.onProgress?.(20, "Uploading chunks to session...");
-
-		// Store chunks in Y.js Array in a single transaction
-		// This prevents multiple broadcasts and reduces network overhead
-		this.ydoc.transact(() => {
-			const chunksArray = this.ydoc.getArray<Uint8Array>("fileChunks");
-			chunksArray.delete(0, chunksArray.length); // Clear any existing chunks
-
-			// Add all chunks at once
-			for (let i = 0; i < chunks.length; i++) {
-				chunksArray.push([chunks[i]]);
-
-				if (DEBUG) {
-					console.log(
-						`[FileTransfer] Pushed chunk ${i + 1}/${chunks.length}, array length now: ${chunksArray.length}`,
-					);
-				}
-
-				// Update progress every 10 chunks or on last chunk
-				if (i % 10 === 0 || i === chunks.length - 1) {
-					const progress = 20 + Math.floor(((i + 1) / chunks.length) * 80);
-					this.onProgress?.(progress, `Uploading chunks... ${i + 1}/${chunks.length}`);
-				}
-			}
-		});
-
 		if (DEBUG) {
-			const chunksArray = this.ydoc.getArray<Uint8Array>("fileChunks");
-			console.log(`[FileTransfer] Final chunks array length: ${chunksArray.length}`);
 			console.log(`[FileTransfer] Y.js document state after upload:`);
 			console.log(`  - Session map:`, this.ydoc.getMap("session").toJSON());
-			console.log(`  - File chunks count:`, chunksArray.length);
 		}
 
 		const elapsed = performance.now() - startTime;
@@ -129,8 +114,8 @@ export class FileTransfer {
 	}
 
 	/**
-	 * Download file from session (peer side)
-	 * Waits for all chunks to be synced, then reassembles the file
+	 * Download file from server (peer side)
+	 * Downloads file via HTTP using fileId from Y.js metadata
 	 */
 	async downloadFile(): Promise<{ arrayBuffer: ArrayBuffer; fileName: string; fileHash: string }> {
 		if (DEBUG) {
@@ -139,33 +124,25 @@ export class FileTransfer {
 
 		// Get session metadata
 		const sessionMap = this.ydoc.getMap<any>("session");
+		const fileId = sessionMap.get("fileId") as string;
 		const fileName = sessionMap.get("fileName") as string;
-		const fileSize = sessionMap.get("fileSize") as number;
 		const expectedHash = sessionMap.get("fileHash") as string;
 
-		if (!fileName || !fileSize || !expectedHash) {
+		if (!fileId || !fileName || !expectedHash) {
 			throw new Error("Session metadata incomplete - file not uploaded yet");
 		}
 
-		this.onProgress?.(0, "Waiting for file chunks...");
+		this.onProgress?.(0, "Downloading file from server...");
 
-		// Wait for all chunks to be available
-		const chunksArray = this.ydoc.getArray<Uint8Array>("fileChunks");
-		const expectedChunks = Math.ceil(fileSize / CHUNK_SIZE);
+		// Download file from server with retry logic
+		const fileServerUrl = import.meta.env.VITE_FILE_SERVER_URL || "https://signaling.gdsjam.com";
+		const fileServerToken = import.meta.env.VITE_FILE_SERVER_TOKEN;
 
-		if (DEBUG) {
-			console.log(
-				`[FileTransfer] Expecting ${expectedChunks} chunks (${(fileSize / 1024 / 1024).toFixed(1)} MB)`,
-			);
-		}
-
-		// Wait for chunks to sync (with timeout)
-		await this.waitForChunks(chunksArray, expectedChunks);
-
-		this.onProgress?.(50, "Reassembling file...");
-
-		// Reassemble chunks into ArrayBuffer
-		const arrayBuffer = this.reassembleChunks(chunksArray, fileSize);
+		const arrayBuffer = await this.downloadWithRetry(
+			`${fileServerUrl}/api/files/${fileId}`,
+			fileServerToken,
+			3,
+		);
 
 		this.onProgress?.(80, "Validating file hash...");
 
@@ -195,105 +172,41 @@ export class FileTransfer {
 	}
 
 	/**
-	 * Chunk a file into fixed-size pieces
+	 * Download file from server with retry logic
 	 */
-	private chunkFile(arrayBuffer: ArrayBuffer): Uint8Array[] {
-		const chunks: Uint8Array[] = [];
-		const totalChunks = Math.ceil(arrayBuffer.byteLength / CHUNK_SIZE);
+	private async downloadWithRetry(
+		url: string,
+		token: string | undefined,
+		maxRetries = 3,
+	): Promise<ArrayBuffer> {
+		for (let i = 0; i < maxRetries; i++) {
+			try {
+				const response = await fetch(url, {
+					headers: {
+						Authorization: `Bearer ${token}`,
+					},
+				});
 
-		for (let i = 0; i < totalChunks; i++) {
-			const start = i * CHUNK_SIZE;
-			const end = Math.min(start + CHUNK_SIZE, arrayBuffer.byteLength);
-			const chunk = new Uint8Array(arrayBuffer.slice(start, end));
-			chunks.push(chunk);
-		}
+				if (!response.ok) {
+					throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+				}
 
-		return chunks;
-	}
+				return await response.arrayBuffer();
+			} catch (error) {
+				if (i === maxRetries - 1) {
+					throw error;
+				}
 
-	/**
-	 * Reassemble chunks into a single ArrayBuffer
-	 */
-	private reassembleChunks(chunksArray: Y.Array<Uint8Array>, totalSize: number): ArrayBuffer {
-		const result = new Uint8Array(totalSize);
-		let offset = 0;
-
-		for (let i = 0; i < chunksArray.length; i++) {
-			const chunk = chunksArray.get(i);
-			if (!chunk) {
-				throw new Error(`Missing chunk at index ${i}`);
+				// Exponential backoff
+				const delay = 1000 * 2 ** i;
+				if (DEBUG) {
+					console.log(`[FileTransfer] Download failed, retrying in ${delay}ms...`, error);
+				}
+				await new Promise((resolve) => setTimeout(resolve, delay));
 			}
-			result.set(chunk, offset);
-			offset += chunk.length;
 		}
 
-		if (DEBUG) {
-			console.log(
-				`[FileTransfer] Reassembled ${chunksArray.length} chunks into ${totalSize} bytes`,
-			);
-		}
-
-		return result.buffer;
-	}
-
-	/**
-	 * Wait for all chunks to be synced from peers
-	 * Polls the Y.js array until all chunks are available
-	 */
-	private async waitForChunks(
-		chunksArray: Y.Array<Uint8Array>,
-		expectedChunks: number,
-	): Promise<void> {
-		const maxWaitTime = 300000; // 5 minutes timeout
-		const pollInterval = 100; // Check every 100ms
-		const startTime = Date.now();
-
-		return new Promise((resolve, reject) => {
-			const checkChunks = () => {
-				const currentChunks = chunksArray.length;
-
-				// Update progress
-				if (expectedChunks > 0) {
-					const progress = Math.floor((currentChunks / expectedChunks) * 50);
-					const sizeMB = ((currentChunks * CHUNK_SIZE) / 1024 / 1024).toFixed(1);
-					this.onProgress?.(
-						progress,
-						`Downloading chunks... ${currentChunks}/${expectedChunks} (${sizeMB} MB)`,
-					);
-
-					this.onEvent?.({
-						type: "file-transfer-progress",
-						progress,
-						message: `${currentChunks}/${expectedChunks} chunks`,
-					});
-				}
-
-				// Check if all chunks received
-				if (currentChunks >= expectedChunks) {
-					if (DEBUG) {
-						console.log(`[FileTransfer] All ${expectedChunks} chunks received`);
-					}
-					resolve();
-					return;
-				}
-
-				// Check timeout
-				if (Date.now() - startTime > maxWaitTime) {
-					reject(
-						new Error(
-							`File transfer timeout: Only received ${currentChunks}/${expectedChunks} chunks`,
-						),
-					);
-					return;
-				}
-
-				// Continue polling
-				setTimeout(checkChunks, pollInterval);
-			};
-
-			// Start polling
-			checkChunks();
-		});
+		throw new Error("Download failed after retries");
 	}
 
 	/**
@@ -307,17 +220,12 @@ export class FileTransfer {
 			return null;
 		}
 
-		const chunksArray = this.ydoc.getArray<Uint8Array>("fileChunks");
-		const totalChunks = Math.ceil(fileSize / CHUNK_SIZE);
-		const chunksReceived = chunksArray.length;
-		const bytesReceived = chunksReceived * CHUNK_SIZE;
-
+		// For HTTP-based transfer, we don't track intermediate progress
+		// Progress is reported via callbacks during upload/download
 		return {
-			chunksReceived,
-			totalChunks,
-			bytesReceived: Math.min(bytesReceived, fileSize),
+			bytesReceived: 0,
 			totalBytes: fileSize,
-			percentage: Math.floor((chunksReceived / totalChunks) * 100),
+			percentage: 0,
 		};
 	}
 
@@ -326,11 +234,7 @@ export class FileTransfer {
 	 */
 	isFileAvailable(): boolean {
 		const sessionMap = this.ydoc.getMap<any>("session");
-		return !!(
-			sessionMap.get("fileName") &&
-			sessionMap.get("fileSize") &&
-			sessionMap.get("fileHash")
-		);
+		return sessionMap.has("fileId");
 	}
 
 	/**

@@ -1,7 +1,7 @@
 # Client-Side File Storage Integration
 
-**Date:** 2025-11-24  
-**Status:** Planning  
+**Date:** 2025-11-24
+**Status:** Implementation Complete - Ready for Testing
 **Related:** DevLog-001-08 (Server-Side File Storage)
 
 ## Overview
@@ -129,7 +129,12 @@ No changes needed. Session creation/joining logic remains the same.
 
 ### Step 4: Update YjsProvider.ts
 
-**Change:** Re-enable BroadcastChannel for same-browser tabs
+**CRITICAL: NEVER ENABLE BROADCASTCHANNEL**
+
+**DO NOT CHANGE filterBcConns - it must remain `true`**
+
+BroadcastChannel causes issues with file sync and session state management.
+Always force WebRTC connections even for same-browser tabs.
 
 ```typescript
 this.provider = new WebrtcProvider(roomName, this.ydoc, {
@@ -137,7 +142,7 @@ this.provider = new WebrtcProvider(roomName, this.ydoc, {
   password: undefined,
   awareness: this.awareness,
   maxConns: 20,
-  filterBcConns: false, // Changed from true - allow BroadcastChannel
+  filterBcConns: true, // NEVER change to false - BroadcastChannel causes issues
   peerOpts: {
     config: {
       iceServers,
@@ -146,6 +151,8 @@ this.provider = new WebrtcProvider(roomName, this.ydoc, {
   },
 });
 ```
+
+**No changes needed to YjsProvider.ts for this update.**
 
 ### Step 5: Update App.svelte
 
@@ -253,13 +260,13 @@ async function downloadWithRetry(url: string, maxRetries = 3): Promise<ArrayBuff
 
 ## Deployment Checklist
 
-- [ ] Update .env.example and .env.production
-- [ ] Refactor FileTransfer.ts (remove chunking)
-- [ ] Update YjsProvider.ts (re-enable BroadcastChannel)
-- [ ] Update App.svelte (new download logic)
-- [ ] Add download progress UI
-- [ ] Add error handling and retry logic
-- [ ] Test locally with dev server
+- [x] Update .env.example and .env.production
+- [x] Refactor FileTransfer.ts (remove chunking)
+- [x] Verify YjsProvider.ts (filterBcConns MUST remain true - NEVER enable BroadcastChannel)
+- [x] Update App.svelte (new download logic)
+- [x] Add download progress UI (via collaborationStore.updateFileTransferProgress)
+- [x] Add error handling and retry logic (downloadWithRetry with exponential backoff)
+- [ ] Test locally with dev server (USER will test)
 - [ ] Update GitHub Secrets (VITE_FILE_SERVER_TOKEN)
 - [ ] Deploy to GitHub Pages
 - [ ] Test production deployment
@@ -279,7 +286,7 @@ async function downloadWithRetry(url: string, maxRetries = 3): Promise<ArrayBuff
 **Y.js Sync:**
 - Metadata-only sync is fast (< 1KB)
 - No more RTCDataChannel buffer issues
-- BroadcastChannel works for same-browser tabs
+- **BroadcastChannel is DISABLED** - WebRTC is used even for same-browser tabs (filterBcConns: true)
 
 ## Next Steps
 

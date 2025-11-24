@@ -1,8 +1,15 @@
 # DevLog 001-07: P2P File Sync Debugging
 
-**Date:** 2024-11-24  
-**Status:** In Progress  
+**Date:** 2024-11-24
+**Status:** In Progress
 **Related:** DevLog-001-04, DevLog-001-05, DevLog-001-06
+
+---
+**⚠️ CRITICAL CONSTRAINT: NEVER ENABLE BROADCASTCHANNEL**
+- `filterBcConns` MUST always be `true` in y-webrtc configuration
+- BroadcastChannel causes issues with file sync and session state
+- Always force WebRTC connections even for same-browser tabs
+---
 
 ## Problem Statement
 

@@ -1,5 +1,12 @@
 # DevLog-001-01: LOD and Performance Features Implementation Plan
 
+---
+**⚠️ CRITICAL CONSTRAINT: NEVER ENABLE BROADCASTCHANNEL**
+- `filterBcConns` MUST always be `true` in y-webrtc configuration
+- BroadcastChannel causes issues with file sync and session state
+- Always force WebRTC connections even for same-browser tabs
+---
+
 ## Metadata
 - **Document Version:** 2.4
 - **Created:** 2025-11-22

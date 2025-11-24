@@ -4,6 +4,13 @@
 **Status:** Phase 1.1 Complete, Phase 1.2 In Progress
 **Related:** DevLog-001-mvp-implementation-plan.md (Week 2-3)
 
+---
+**⚠️ CRITICAL CONSTRAINT: NEVER ENABLE BROADCASTCHANNEL**
+- `filterBcConns` MUST always be `true` in y-webrtc configuration
+- BroadcastChannel causes issues with file sync and session state
+- Always force WebRTC connections even for same-browser tabs
+---
+
 ## Important Notes
 
 **Testing Protocol:**

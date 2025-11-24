@@ -1,8 +1,15 @@
 # Server-Side File Storage Implementation
 
-**Date:** 2025-11-24  
-**Status:** Planning  
+**Date:** 2025-11-24
+**Status:** Planning
 **Related:** DevLog-001-07 (P2P File Sync Debugging)
+
+---
+**⚠️ CRITICAL CONSTRAINT: NEVER ENABLE BROADCASTCHANNEL**
+- `filterBcConns` MUST always be `true` in y-webrtc configuration
+- BroadcastChannel causes issues with file sync and session state
+- Always force WebRTC connections even for same-browser tabs
+---
 
 ## Problem Statement
 

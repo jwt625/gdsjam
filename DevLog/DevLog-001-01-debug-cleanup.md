@@ -2,6 +2,13 @@
 
 ## Date: 2025-11-22
 
+---
+**⚠️ CRITICAL CONSTRAINT: NEVER ENABLE BROADCASTCHANNEL**
+- `filterBcConns` MUST always be `true` in y-webrtc configuration
+- BroadcastChannel causes issues with file sync and session state
+- Always force WebRTC connections even for same-browser tabs
+---
+
 ## Objective
 Clean up debug console logs in the renderer to focus on what we currently need to check for the LOD rendering system.
 

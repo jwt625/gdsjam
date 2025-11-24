@@ -40,15 +40,6 @@ export interface UserInfo {
 }
 
 /**
- * File chunk for transfer
- */
-export interface FileChunk {
-	index: number;
-	data: Uint8Array;
-	totalChunks: number;
-}
-
-/**
  * Collaboration event types
  */
 export type CollaborationEvent =

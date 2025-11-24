@@ -113,7 +113,7 @@ export class YjsProvider {
 			password: undefined, // No password for MVP
 			awareness: this.awareness, // Use proper Awareness instance
 			maxConns: 20, // Max peer connections
-			filterBcConns: true, // Force WebRTC connections
+			filterBcConns: true, // NEVER allow BroadcastChannel - causes issues with file sync
 			// WebRTC peer options with STUN and TURN servers for NAT traversal
 			peerOpts: {
 				config: {
@@ -262,11 +262,9 @@ export class YjsProvider {
 
 				// Check Y.js document state
 				const sessionMap = this.ydoc.getMap("session");
-				const chunksArray = this.ydoc.getArray("fileChunks");
 				console.log("[YjsProvider] Y.js document state:");
 				console.log("  - Session map keys:", Array.from(sessionMap.keys()));
 				console.log("  - Session map data:", sessionMap.toJSON());
-				console.log("  - File chunks count:", chunksArray.length);
 			}, 3000);
 		}
 	}

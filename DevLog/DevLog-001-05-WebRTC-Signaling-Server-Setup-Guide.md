@@ -1,5 +1,12 @@
 # WebRTC Signaling Server Setup Guide
 
+---
+**⚠️ CRITICAL CONSTRAINT: NEVER ENABLE BROADCASTCHANNEL**
+- `filterBcConns` MUST always be `true` in y-webrtc configuration
+- BroadcastChannel causes issues with file sync and session state
+- Always force WebRTC connections even for same-browser tabs
+---
+
 ## What is a Signaling Server?
 
 A signaling server helps WebRTC peers **discover each other** and **exchange connection information**. It's a lightweight relay that:

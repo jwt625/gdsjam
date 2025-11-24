@@ -326,6 +326,17 @@ function createCollaborationStore() {
 		},
 
 		/**
+		 * Update file transfer progress
+		 */
+		updateFileTransferProgress: (progress: number, message: string) => {
+			update((state) => ({
+				...state,
+				fileTransferProgress: progress,
+				fileTransferMessage: message,
+			}));
+		},
+
+		/**
 		 * Reset store
 		 */
 		reset: () => {
