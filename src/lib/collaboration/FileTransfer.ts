@@ -90,11 +90,24 @@ export class FileTransfer {
 		for (let i = 0; i < chunks.length; i++) {
 			chunksArray.push([chunks[i]]);
 
+			if (DEBUG) {
+				console.log(
+					`[FileTransfer] Pushed chunk ${i + 1}/${chunks.length}, array length now: ${chunksArray.length}`,
+				);
+			}
+
 			// Update progress every 10 chunks or on last chunk
 			if (i % 10 === 0 || i === chunks.length - 1) {
 				const progress = 20 + Math.floor(((i + 1) / chunks.length) * 80);
 				this.onProgress?.(progress, `Uploading chunks... ${i + 1}/${chunks.length}`);
 			}
+		}
+
+		if (DEBUG) {
+			console.log(`[FileTransfer] Final chunks array length: ${chunksArray.length}`);
+			console.log(`[FileTransfer] Y.js document state after upload:`);
+			console.log(`  - Session map:`, this.ydoc.getMap("session").toJSON());
+			console.log(`  - File chunks count:`, this.ydoc.getArray("fileChunks").length);
 		}
 
 		const elapsed = performance.now() - startTime;

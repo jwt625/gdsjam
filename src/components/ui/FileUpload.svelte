@@ -29,6 +29,12 @@ async function handleFile(file: File) {
 		await loadGDSIIFromBuffer(arrayBuffer, file.name);
 
 		// If in a session and is host, upload file to session
+		if (DEBUG) {
+			console.log("[FileUpload] Checking collaboration state:");
+			console.log("  - isInSession:", $collaborationStore.isInSession);
+			console.log("  - isHost:", $collaborationStore.isHost);
+		}
+
 		if ($collaborationStore.isInSession && $collaborationStore.isHost) {
 			if (DEBUG) {
 				console.log("[FileUpload] Uploading file to collaboration session...");
@@ -45,6 +51,8 @@ async function handleFile(file: File) {
 					`File loaded locally but failed to upload to session: ${error instanceof Error ? error.message : String(error)}`,
 				);
 			}
+		} else if (DEBUG) {
+			console.log("[FileUpload] Not uploading to session (not in session or not host)");
 		}
 	} catch (error) {
 		console.error("[FileUpload] Failed to read file:", error);

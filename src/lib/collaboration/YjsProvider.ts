@@ -113,7 +113,7 @@ export class YjsProvider {
 			password: undefined, // No password for MVP
 			awareness: this.awareness, // Use proper Awareness instance
 			maxConns: 20, // Max peer connections
-			filterBcConns: false, // Allow broadcast connections for local network discovery
+			filterBcConns: true, // Force WebRTC connections
 			// WebRTC peer options with STUN and TURN servers for NAT traversal
 			peerOpts: {
 				config: {
@@ -122,6 +122,15 @@ export class YjsProvider {
 				},
 			},
 		});
+
+		// Listen to Y.js document updates
+		if (DEBUG) {
+			this.ydoc.on("update", (update: Uint8Array, origin: any) => {
+				console.log("[YjsProvider] Y.js document updated, origin:", origin);
+				const sessionMap = this.ydoc.getMap("session");
+				console.log("  - Session map keys:", Array.from(sessionMap.keys()));
+			});
+		}
 
 		// Set up event listeners
 		this.provider.on("synced", (event: { synced: boolean }) => {
@@ -250,6 +259,14 @@ export class YjsProvider {
 				console.log("  - Connected WebRTC peers:", peerCount);
 				console.log("  - Awareness states:", awarenessCount);
 				console.log("  - Peer IDs:", Array.from(this.connectedPeers));
+
+				// Check Y.js document state
+				const sessionMap = this.ydoc.getMap("session");
+				const chunksArray = this.ydoc.getArray("fileChunks");
+				console.log("[YjsProvider] Y.js document state:");
+				console.log("  - Session map keys:", Array.from(sessionMap.keys()));
+				console.log("  - Session map data:", sessionMap.toJSON());
+				console.log("  - File chunks count:", chunksArray.length);
 			}, 3000);
 		}
 	}
