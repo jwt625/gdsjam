@@ -55,6 +55,23 @@ function createCollaborationStore() {
 		}
 	});
 
+	// WORKAROUND: Also listen to awareness changes (fallback if WebRTC peers event doesn't fire)
+	sessionManager
+		.getProvider()
+		.getAwareness()
+		.on("change", () => {
+			if (DEBUG) {
+				console.log("[collaborationStore] Awareness changed, updating user list");
+			}
+			update((state) => {
+				if (!state.sessionManager) return state;
+				return {
+					...state,
+					connectedUsers: state.sessionManager.getConnectedUsers(),
+				};
+			});
+		});
+
 	// Clean up on page unload
 	if (typeof window !== "undefined") {
 		window.addEventListener("beforeunload", () => {

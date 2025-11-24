@@ -79,7 +79,16 @@ export class YjsProvider {
 			awareness: this.awareness, // Use proper Awareness instance
 			maxConns: 20, // Max peer connections
 			filterBcConns: false, // Allow broadcast connections for local network discovery
-			peerOpts: {}, // Default WebRTC peer options
+			// WebRTC peer options with STUN servers for NAT traversal
+			peerOpts: {
+				config: {
+					iceServers: [
+						{ urls: "stun:stun.l.google.com:19302" },
+						{ urls: "stun:stun1.l.google.com:19302" },
+						{ urls: "stun:stun2.l.google.com:19302" },
+					],
+				},
+			},
 		});
 
 		// Set up event listeners
@@ -97,6 +106,22 @@ export class YjsProvider {
 				console.log("[YjsProvider] Number of aware clients:", states.length);
 			}
 		});
+
+		// Log WebRTC connection status and listen to internal events
+		if (DEBUG && this.provider.room) {
+			// @ts-expect-error - accessing internal property for debugging
+			const room = this.provider.room;
+			console.log("[YjsProvider] WebRTC room created, waiting for peer connections...");
+
+			// Listen to signaling messages
+			// @ts-expect-error
+			if (room.provider && room.provider.on) {
+				// @ts-expect-error
+				room.provider.on("message", (data: any) => {
+					console.log("[YjsProvider] Signaling message received:", data);
+				});
+			}
+		}
 
 		this.provider.on(
 			"peers",
@@ -221,6 +246,13 @@ export class YjsProvider {
 	 */
 	onEvent(callback: CollaborationEventCallback): void {
 		this.eventCallbacks.push(callback);
+	}
+
+	/**
+	 * Get Awareness instance
+	 */
+	getAwareness(): Awareness {
+		return this.awareness;
 	}
 
 	/**

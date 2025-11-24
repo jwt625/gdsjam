@@ -1,12 +1,59 @@
 # DevLog-001-04: P2P Collaboration - Phase 1 Implementation Plan
 
-**Date:** 2024-11-23  
-**Status:** Planning  
+**Date:** 2024-11-23 (Started), 2024-11-24 (Updated)
+**Status:** Phase 1.1 Complete, Phase 1.2 In Progress
 **Related:** DevLog-001-mvp-implementation-plan.md (Week 2-3)
 
 ## Overview
 
 This document outlines the detailed implementation plan for peer-to-peer collaboration features in GDSJam. The implementation is divided into phases, with Phase 1 focusing on session management, file sharing, and basic state synchronization (layer visibility and viewport awareness). Phase 2 (future work) will address commenting and annotations.
+
+## Implementation Status
+
+### Phase 1.1: Y.js Integration and Session Management (COMPLETE)
+
+**Completed Components:**
+- Y.js dependencies installed (yjs@13.6.27, y-webrtc@10.3.0, y-protocols@1.0.6)
+- UUID utility extracted to shared module (`src/lib/utils/uuid.ts`)
+- Collaboration infrastructure created:
+  - `src/lib/collaboration/types.ts`: TypeScript interfaces for collaboration
+  - `src/lib/collaboration/YjsProvider.ts`: Y.js and WebRTC provider wrapper
+  - `src/lib/collaboration/SessionManager.ts`: High-level session management
+  - `src/stores/collaborationStore.ts`: Svelte store for collaboration state
+- Session UI integrated into `App.svelte` with create/join/leave controls
+- URL-based session handling with `?room=<uuid>` parameter
+- User ID persistence in localStorage
+- Self-hosted signaling server deployed on OCI instance (146.235.193.141:4444)
+- Environment variable configuration for signaling server URL and token
+- GitHub Actions workflow updated to use secrets for deployment
+
+**Current Functionality:**
+- Users can create collaboration sessions and share session links
+- Users can join sessions via URL
+- User presence tracking via Y.js Awareness API
+- User count displays correctly (2 users when two tabs/browsers join same session)
+- Session state persists across page reloads
+
+**Known Limitations:**
+- WebRTC peer-to-peer connections not establishing (peers event not firing)
+- User count currently relies on Awareness API fallback instead of WebRTC peers
+- STUN servers configured but WebRTC connections still failing
+- File transfer not yet implemented (Phase 1.2)
+- Layer visibility sync not yet implemented (Phase 1.3)
+- Viewport awareness not yet implemented (Phase 1.4)
+
+**Technical Notes:**
+- Signaling server successfully relays messages between clients
+- Y.js Awareness state synchronization working correctly
+- WebRTC connection failure likely due to browser restrictions or network configuration
+- Awareness-based user tracking provides functional workaround for MVP
+- Direct peer-to-peer connections will be required for efficient file transfer in Phase 1.2
+
+**Temporary Workarounds in Code:**
+- `src/stores/collaborationStore.ts` (lines 58-70): Awareness change listener updates user count when WebRTC peers event doesn't fire
+- `src/lib/collaboration/SessionManager.ts` (lines 162-178): Falls back to Awareness client IDs when WebRTC peer IDs are empty
+- These workarounds should be removed once WebRTC peer connections are established
+- Workarounds are clearly marked with comments for easy identification and removal
 
 ## Architecture Summary
 
@@ -537,7 +584,30 @@ User B clicks "Jump to User A":
 4. **Measurement tools**: Collaborative rulers and annotations
 5. **Session persistence**: Save to IndexedDB, restore on rejoin
 6. **TURN server**: Fallback for restrictive networks (requires hosting)
-7. **Self-hosted signaling**: Privacy and reliability improvements
+7. **WebRTC connection debugging**: Investigate and resolve peer connection failures
+
+## Next Steps
+
+### Immediate (Phase 1.2)
+1. Debug WebRTC peer connection failures
+2. Implement file transfer using Y.js shared types
+3. Add file hash validation
+4. Create file transfer progress UI
+
+### Short-term (Phase 1.3-1.4)
+1. Implement layer visibility synchronization
+2. Add viewport awareness indicators
+3. Complete Phase 1 testing and documentation
+
+### Configuration Required
+- Add GitHub Secrets for deployment:
+  - `VITE_SIGNALING_SERVER_URL`: ws://146.235.193.141:4444
+  - `VITE_SIGNALING_SERVER_TOKEN`: (authentication token)
+- Make OCI instance firewall rule persistent:
+  ```bash
+  sudo apt install iptables-persistent
+  # Save current rules when prompted
+  ```
 
 ## Success Metrics
 

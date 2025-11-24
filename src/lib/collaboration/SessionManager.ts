@@ -157,7 +157,30 @@ export class SessionManager {
 	 * Get all connected users
 	 */
 	getConnectedUsers(): UserInfo[] {
-		const peerIds = this.yjsProvider.getPeerIds();
+		// Try to get peers from WebRTC first
+		const webrtcPeerIds = this.yjsProvider.getPeerIds();
+
+		// Fallback: Get peers from awareness (works even if WebRTC fails)
+		const awareness = this.yjsProvider.getAwareness();
+		const awarenessStates = awareness.getStates();
+
+		if (DEBUG) {
+			console.log("[SessionManager] Getting connected users:");
+			console.log("  - WebRTC peer IDs:", webrtcPeerIds);
+			console.log("  - Awareness states:", Array.from(awarenessStates.entries()));
+			console.log("  - Current user ID:", this.userId);
+			console.log("  - Awareness client ID:", awareness.clientID);
+		}
+
+		// Awareness uses numeric client IDs, not our UUID user IDs
+		// We need to count unique awareness clients, excluding ourselves
+		const myClientId = awareness.clientID;
+		const otherClientIds = Array.from(awarenessStates.keys()).filter((id) => id !== myClientId);
+
+		// Use whichever has more peers (WebRTC is preferred, but awareness is fallback)
+		const peerIds =
+			webrtcPeerIds.length > 0 ? webrtcPeerIds : otherClientIds.map((id) => `client-${id}`);
+
 		const users: UserInfo[] = [];
 
 		// Add current user
@@ -176,6 +199,10 @@ export class SessionManager {
 				isHost: false, // TODO: Track actual host
 				joinedAt: Date.now(), // TODO: Track actual join time
 			});
+		}
+
+		if (DEBUG) {
+			console.log("[SessionManager] Total users:", users.length);
 		}
 
 		return users;
