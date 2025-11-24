@@ -42,6 +42,8 @@ jobs:
           # Signaling server configuration (required for P2P collaboration)
           VITE_SIGNALING_SERVER_URL: ${{ secrets.VITE_SIGNALING_SERVER_URL }}
           VITE_SIGNALING_SERVER_TOKEN: ${{ secrets.VITE_SIGNALING_SERVER_TOKEN }}
+          # TURN server configuration (required for WebRTC NAT traversal)
+          VITE_TURN_PASSWORD: ${{ secrets.VITE_TURN_PASSWORD }}
           # Debug mode (optional - defaults to .env.production value if not set)
           # To enable debug in production, add VITE_DEBUG secret with value "true"
           VITE_DEBUG: ${{ secrets.VITE_DEBUG }}
