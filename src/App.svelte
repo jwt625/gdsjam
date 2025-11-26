@@ -208,6 +208,14 @@ onMount(async () => {
 
 				sessionMap.observe(observer);
 
+				// Call observer once immediately to check current state
+				// (in case Y.js synced before we set up the observer)
+				observer();
+
+				// Also check after short delays to catch sync timing issues
+				setTimeout(observer, 500);
+				setTimeout(observer, 1500);
+
 				if (DEBUG) {
 					console.log("[App] Waiting for file metadata to appear in session...");
 				}
