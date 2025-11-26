@@ -245,7 +245,7 @@ function formatDimension(um: number): string {
 
 <style>
 	.performance-panel {
-		position: absolute;
+		position: fixed;
 		top: 35px;
 		right: 10px;
 		background: rgba(0, 0, 0, 0.85);
@@ -256,8 +256,21 @@ function formatDimension(um: number): string {
 		font-size: 11px;
 		color: #fff;
 		min-width: 280px;
+		max-height: calc(100vh - 50px);
+		overflow-y: auto;
+		-webkit-overflow-scrolling: touch;
+		overscroll-behavior: contain;
 		z-index: 1000;
 		backdrop-filter: blur(4px);
+	}
+
+	/* Mobile responsive adjustments */
+	@media (max-width: 1023px) {
+		.performance-panel {
+			max-height: calc(100vh - 100px);
+			max-width: calc(100vw - 20px);
+			font-size: 10px;
+		}
 	}
 
 	.panel-header {
