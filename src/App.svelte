@@ -11,6 +11,72 @@ import { fetchGDSIIFromURL } from "./lib/utils/urlLoader";
 import { collaborationStore } from "./stores/collaborationStore";
 import { gdsStore } from "./stores/gdsStore";
 
+// Hidden file input for keyboard shortcut
+let globalFileInput: HTMLInputElement;
+
+/**
+ * Handle file selection from the global file input (Ctrl/Cmd+O shortcut)
+ */
+async function handleGlobalFileInput(event: Event) {
+	const target = event.target as HTMLInputElement;
+	const file = target.files?.[0];
+	if (!file) return;
+
+	const fileSizeMB = (file.size / 1024 / 1024).toFixed(1);
+	if (DEBUG) {
+		console.log(`[App] Loading ${file.name} (${fileSizeMB} MB) via keyboard shortcut`);
+	}
+
+	try {
+		gdsStore.setLoading(true, "Reading file...", 0);
+
+		const arrayBuffer = await file.arrayBuffer();
+		if (DEBUG) {
+			console.log(`[App] File read complete: ${arrayBuffer.byteLength} bytes`);
+		}
+
+		await loadGDSIIFromBuffer(arrayBuffer, file.name);
+
+		// If in a session and is host, upload file to session
+		if ($collaborationStore.isInSession && $collaborationStore.isHost) {
+			if (DEBUG) {
+				console.log("[App] Uploading file to collaboration session...");
+			}
+
+			try {
+				await collaborationStore.uploadFile(arrayBuffer, file.name);
+				if (DEBUG) {
+					console.log("[App] File uploaded to session successfully");
+				}
+			} catch (error) {
+				console.error("[App] Failed to upload file to session:", error);
+				gdsStore.setError(
+					`File loaded locally but failed to upload to session: ${error instanceof Error ? error.message : String(error)}`,
+				);
+			}
+		}
+	} catch (error) {
+		console.error("[App] Failed to read file:", error);
+		gdsStore.setError(
+			`Failed to read file: ${error instanceof Error ? error.message : String(error)}`,
+		);
+	}
+
+	// Reset input so the same file can be selected again
+	target.value = "";
+}
+
+/**
+ * Handle keyboard shortcut for opening files (Ctrl/Cmd+O)
+ */
+function handleKeyDown(event: KeyboardEvent) {
+	// Check for Ctrl+O (Windows/Linux) or Cmd+O (Mac)
+	if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "o") {
+		event.preventDefault(); // Prevent browser's default "Open File" dialog
+		globalFileInput?.click();
+	}
+}
+
 /**
  * Check for URL parameters and handle file loading or session joining
  */
@@ -131,6 +197,17 @@ onMount(async () => {
 });
 </script>
 
+<svelte:window onkeydown={handleKeyDown} />
+
+<!-- Hidden file input for Ctrl/Cmd+O keyboard shortcut -->
+<input
+	type="file"
+	accept=".gds,.gdsii,.dxf"
+	bind:this={globalFileInput}
+	onchange={handleGlobalFileInput}
+	style="display: none;"
+/>
+
 <main class="app-main">
 	<HeaderBar />
 
@@ -157,7 +234,7 @@ onMount(async () => {
 
 	<div class="controls-info">
 		<p class="text-sm text-gray-400 keyboard-shortcuts">
-			Controls: Mouse wheel to zoom | Middle mouse or Space+Drag to pan | Arrow keys to move | Enter to zoom in | Shift+Enter to zoom out | F to fit view | G to toggle grid | O to toggle fill/outline | P to toggle info panel | L to toggle layer panel | Touch: One finger to pan, two fingers to zoom
+			Controls: Ctrl/Cmd+O to open file | Mouse wheel to zoom | Middle mouse or Space+Drag to pan | Arrow keys to move | Enter to zoom in | Shift+Enter to zoom out | F to fit view | G to toggle grid | O to toggle fill/outline | P to toggle info panel | L to toggle layer panel | Touch: One finger to pan, two fingers to zoom
 		</p>
 		<p class="text-sm text-gray-400 footer-note">
 			When not using sessions, this webapp is client-side only - your GDS file is not uploaded anywhere. Created by <a href="https://outside5sigma.com/" target="_blank" rel="noopener noreferrer" class="creator-link">Wentao</a>.

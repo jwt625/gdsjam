@@ -102,16 +102,19 @@ $effect(() => {
 	</div>
 </header>
 
+<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 {#if $collaborationStore.isInSession && showQRCode}
-	<div class="qr-code-panel">
-		<div class="qr-code-content">
-			<h3 class="qr-code-title">Scan to Join Session</h3>
-			{#if qrCodeDataUrl}
-				<img src={qrCodeDataUrl} alt="Session QR Code" class="qr-code-image" />
-				<p class="qr-code-hint">Scan this QR code with your mobile device to join the session</p>
-			{:else}
-				<p class="qr-code-loading">Generating QR code...</p>
-			{/if}
+	<div class="qr-code-backdrop" onclick={() => { showQRCode = false; }}>
+		<div class="qr-code-panel" onclick={(e) => e.stopPropagation()}>
+			<div class="qr-code-content">
+				<h3 class="qr-code-title">Scan to Join Session</h3>
+				{#if qrCodeDataUrl}
+					<img src={qrCodeDataUrl} alt="Session QR Code" class="qr-code-image" />
+					<p class="qr-code-hint">Scan this QR code with your mobile device to join the session</p>
+				{:else}
+					<p class="qr-code-loading">Generating QR code...</p>
+				{/if}
+			</div>
 		</div>
 	</div>
 {/if}
@@ -248,6 +251,26 @@ $effect(() => {
 		background-color: #ff6666;
 	}
 
+	.qr-code-backdrop {
+		position: fixed;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		background: rgba(0, 0, 0, 0.5);
+		z-index: 999;
+		animation: fadeInBackdrop 0.2s ease-out;
+	}
+
+	@keyframes fadeInBackdrop {
+		from {
+			opacity: 0;
+		}
+		to {
+			opacity: 1;
+		}
+	}
+
 	.qr-code-panel {
 		position: fixed;
 		top: 50%;
@@ -260,10 +283,10 @@ $effect(() => {
 		z-index: 1000;
 		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 		backdrop-filter: blur(4px);
-		animation: fadeIn 0.2s ease-out;
+		animation: fadeInPanel 0.2s ease-out;
 	}
 
-	@keyframes fadeIn {
+	@keyframes fadeInPanel {
 		from {
 			opacity: 0;
 			transform: translate(-50%, -50%) scale(0.95);
@@ -290,7 +313,9 @@ $effect(() => {
 
 	.qr-code-image {
 		width: 300px;
-		height: 300px;
+		max-width: 100%;
+		height: auto;
+		aspect-ratio: 1;
 		border: 4px solid #fff;
 		border-radius: 8px;
 		background-color: #fff;
