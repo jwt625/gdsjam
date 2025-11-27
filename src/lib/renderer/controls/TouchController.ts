@@ -21,6 +21,14 @@ export class TouchController {
 	private touches: Map<number, { x: number; y: number }> = new Map();
 	private lastTouchDistance = 0;
 
+	// Double-tap detection
+	private lastTapTime = 0;
+	private lastTapX = 0;
+	private lastTapY = 0;
+	private static readonly DOUBLE_TAP_DELAY_MS = 300;
+	private static readonly DOUBLE_TAP_DISTANCE_PX = 30;
+	private static readonly DOUBLE_TAP_ZOOM_FACTOR = 2.0;
+
 	// Event handler references for cleanup
 	private touchStartHandler: (e: TouchEvent) => void;
 	private touchMoveHandler: (e: TouchEvent) => void;
@@ -140,6 +148,36 @@ export class TouchController {
 
 	private onTouchEnd(e: TouchEvent): void {
 		e.preventDefault();
+
+		// Check for double-tap (single finger tap ending with no remaining touches)
+		if (e.touches.length === 0 && e.changedTouches.length === 1) {
+			const touch = e.changedTouches.item(0);
+			if (touch) {
+				const now = Date.now();
+				const timeSinceLastTap = now - this.lastTapTime;
+				const dx = Math.abs(touch.clientX - this.lastTapX);
+				const dy = Math.abs(touch.clientY - this.lastTapY);
+				const distance = Math.sqrt(dx * dx + dy * dy);
+
+				if (
+					timeSinceLastTap < TouchController.DOUBLE_TAP_DELAY_MS &&
+					distance < TouchController.DOUBLE_TAP_DISTANCE_PX
+				) {
+					// Double-tap detected - zoom in at tap location
+					const rect = this.canvas.getBoundingClientRect();
+					const canvasX = touch.clientX - rect.left;
+					const canvasY = touch.clientY - rect.top;
+					this.callbacks.onZoom(TouchController.DOUBLE_TAP_ZOOM_FACTOR, canvasX, canvasY, 0, 0);
+					// Reset to prevent triple-tap
+					this.lastTapTime = 0;
+				} else {
+					// Record this tap for potential double-tap
+					this.lastTapTime = now;
+					this.lastTapX = touch.clientX;
+					this.lastTapY = touch.clientY;
+				}
+			}
+		}
 
 		// Remove ended touches from tracking
 		const activeTouchIds = new Set<number>();

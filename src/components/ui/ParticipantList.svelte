@@ -25,47 +25,83 @@ let mouseDownPos = $state({ x: 0, y: 0 });
 const CLICK_THRESHOLD_MS = 200; // Max time for a click vs drag
 const DRAG_THRESHOLD_PX = 5; // Min movement to start drag
 
-function handleHeaderMouseDown(e: MouseEvent) {
+// Unified pointer handling for mouse and touch
+function handlePointerStart(clientX: number, clientY: number) {
 	mouseDownTime = Date.now();
-	mouseDownPos = { x: e.clientX, y: e.clientY };
-	dragStart = { x: e.clientX - panelPosition.x, y: e.clientY - panelPosition.y };
-
-	// Add global listeners for drag
-	window.addEventListener("mousemove", handleMouseMove);
-	window.addEventListener("mouseup", handleMouseUp);
+	mouseDownPos = { x: clientX, y: clientY };
+	dragStart = { x: clientX - panelPosition.x, y: clientY - panelPosition.y };
 }
 
-function handleMouseMove(e: MouseEvent) {
-	const dx = Math.abs(e.clientX - mouseDownPos.x);
-	const dy = Math.abs(e.clientY - mouseDownPos.y);
+function handlePointerMove(clientX: number, clientY: number) {
+	const dx = Math.abs(clientX - mouseDownPos.x);
+	const dy = Math.abs(clientY - mouseDownPos.y);
 
-	// Start dragging if moved beyond threshold
 	if (!isDragging && (dx > DRAG_THRESHOLD_PX || dy > DRAG_THRESHOLD_PX)) {
 		isDragging = true;
 	}
 
 	if (isDragging) {
 		panelPosition = {
-			x: e.clientX - dragStart.x,
-			y: e.clientY - dragStart.y,
+			x: clientX - dragStart.x,
+			y: clientY - dragStart.y,
 		};
 	}
 }
 
-function handleMouseUp(e: MouseEvent) {
-	window.removeEventListener("mousemove", handleMouseMove);
-	window.removeEventListener("mouseup", handleMouseUp);
-
+function handlePointerEnd(clientX: number, clientY: number) {
 	const elapsed = Date.now() - mouseDownTime;
-	const dx = Math.abs(e.clientX - mouseDownPos.x);
-	const dy = Math.abs(e.clientY - mouseDownPos.y);
+	const dx = Math.abs(clientX - mouseDownPos.x);
+	const dy = Math.abs(clientY - mouseDownPos.y);
 
-	// If it was a quick click without much movement, toggle collapse
 	if (elapsed < CLICK_THRESHOLD_MS && dx < DRAG_THRESHOLD_PX && dy < DRAG_THRESHOLD_PX) {
 		isCollapsed = !isCollapsed;
 	}
 
 	isDragging = false;
+}
+
+// Mouse event handlers
+function handleHeaderMouseDown(e: MouseEvent) {
+	handlePointerStart(e.clientX, e.clientY);
+	window.addEventListener("mousemove", handleMouseMove);
+	window.addEventListener("mouseup", handleMouseUp);
+}
+
+function handleMouseMove(e: MouseEvent) {
+	handlePointerMove(e.clientX, e.clientY);
+}
+
+function handleMouseUp(e: MouseEvent) {
+	window.removeEventListener("mousemove", handleMouseMove);
+	window.removeEventListener("mouseup", handleMouseUp);
+	handlePointerEnd(e.clientX, e.clientY);
+}
+
+// Touch event handlers
+function handleHeaderTouchStart(e: TouchEvent) {
+	if (e.touches.length !== 1) return;
+	const touch = e.touches[0]!;
+	handlePointerStart(touch.clientX, touch.clientY);
+	window.addEventListener("touchmove", handleTouchMove, { passive: false });
+	window.addEventListener("touchend", handleTouchEnd);
+	window.addEventListener("touchcancel", handleTouchEnd);
+}
+
+function handleTouchMove(e: TouchEvent) {
+	if (e.touches.length !== 1) return;
+	const touch = e.touches[0]!;
+	handlePointerMove(touch.clientX, touch.clientY);
+	if (isDragging) {
+		e.preventDefault(); // Prevent scrolling while dragging
+	}
+}
+
+function handleTouchEnd(e: TouchEvent) {
+	window.removeEventListener("touchmove", handleTouchMove);
+	window.removeEventListener("touchend", handleTouchEnd);
+	window.removeEventListener("touchcancel", handleTouchEnd);
+	const touch = e.changedTouches[0]!;
+	handlePointerEnd(touch.clientX, touch.clientY);
 }
 
 // Use connectedUsers from the store - it already has isHost computed correctly per user
@@ -109,6 +145,7 @@ function cancelTransfer() {
 		<div
 			class="panel-header"
 			onmousedown={handleHeaderMouseDown}
+			ontouchstart={handleHeaderTouchStart}
 			role="button"
 			tabindex="0"
 			aria-expanded={!isCollapsed}
