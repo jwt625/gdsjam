@@ -16,8 +16,56 @@ let transferTargetName = $state<string | null>(null);
 // Collapsed state for the panel
 let isCollapsed = $state(false);
 
-function toggleCollapsed() {
-	isCollapsed = !isCollapsed;
+// Drag state for panel positioning
+let panelPosition = $state({ x: 10, y: 100 });
+let isDragging = $state(false);
+let dragStart = $state({ x: 0, y: 0 });
+let mouseDownTime = $state(0);
+let mouseDownPos = $state({ x: 0, y: 0 });
+const CLICK_THRESHOLD_MS = 200; // Max time for a click vs drag
+const DRAG_THRESHOLD_PX = 5; // Min movement to start drag
+
+function handleHeaderMouseDown(e: MouseEvent) {
+	mouseDownTime = Date.now();
+	mouseDownPos = { x: e.clientX, y: e.clientY };
+	dragStart = { x: e.clientX - panelPosition.x, y: e.clientY - panelPosition.y };
+
+	// Add global listeners for drag
+	window.addEventListener("mousemove", handleMouseMove);
+	window.addEventListener("mouseup", handleMouseUp);
+}
+
+function handleMouseMove(e: MouseEvent) {
+	const dx = Math.abs(e.clientX - mouseDownPos.x);
+	const dy = Math.abs(e.clientY - mouseDownPos.y);
+
+	// Start dragging if moved beyond threshold
+	if (!isDragging && (dx > DRAG_THRESHOLD_PX || dy > DRAG_THRESHOLD_PX)) {
+		isDragging = true;
+	}
+
+	if (isDragging) {
+		panelPosition = {
+			x: e.clientX - dragStart.x,
+			y: e.clientY - dragStart.y,
+		};
+	}
+}
+
+function handleMouseUp(e: MouseEvent) {
+	window.removeEventListener("mousemove", handleMouseMove);
+	window.removeEventListener("mouseup", handleMouseUp);
+
+	const elapsed = Date.now() - mouseDownTime;
+	const dx = Math.abs(e.clientX - mouseDownPos.x);
+	const dy = Math.abs(e.clientY - mouseDownPos.y);
+
+	// If it was a quick click without much movement, toggle collapse
+	if (elapsed < CLICK_THRESHOLD_MS && dx < DRAG_THRESHOLD_PX && dy < DRAG_THRESHOLD_PX) {
+		isCollapsed = !isCollapsed;
+	}
+
+	isDragging = false;
 }
 
 // Use connectedUsers from the store - it already has isHost computed correctly per user
@@ -50,13 +98,26 @@ function cancelTransfer() {
 </script>
 
 {#if visible && $collaborationStore.isInSession}
-	<div class="participant-list" class:collapsed={isCollapsed}>
-		<button type="button" class="panel-header" onclick={toggleCollapsed} aria-expanded={!isCollapsed}>
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div
+		class="participant-list"
+		class:collapsed={isCollapsed}
+		class:dragging={isDragging}
+		style="left: {panelPosition.x}px; top: {panelPosition.y}px;"
+	>
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div
+			class="panel-header"
+			onmousedown={handleHeaderMouseDown}
+			role="button"
+			tabindex="0"
+			aria-expanded={!isCollapsed}
+		>
 			<h3>Participants ({connectedUsers.length})</h3>
 			<svg class="chevron-icon" class:rotated={isCollapsed} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 				<polyline points="6 9 12 15 18 9"></polyline>
 			</svg>
-		</button>
+		</div>
 
 		{#if !isCollapsed}
 			<div class="participant-items">
@@ -112,9 +173,9 @@ function cancelTransfer() {
 <style>
 	.participant-list {
 		position: fixed;
-		top: 100px;
-		left: 10px;
-		width: 240px;
+		min-width: 180px;
+		max-width: 320px;
+		width: auto;
 		max-height: 300px;
 		background: rgba(0, 0, 0, 0.9);
 		color: #ccc;
@@ -126,10 +187,16 @@ function cancelTransfer() {
 		flex-direction: column;
 		box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
 		transition: max-height 0.2s ease-out;
+		user-select: none;
 	}
 
 	.participant-list.collapsed {
 		max-height: 44px;
+	}
+
+	.participant-list.dragging {
+		cursor: grabbing;
+		opacity: 0.9;
 	}
 
 	.panel-header {
@@ -138,7 +205,7 @@ function cancelTransfer() {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		cursor: pointer;
+		cursor: grab;
 		background: transparent;
 		border: none;
 		border-bottom: 1px solid #444;
@@ -146,6 +213,10 @@ function cancelTransfer() {
 		text-align: left;
 		color: inherit;
 		font-family: inherit;
+	}
+
+	.participant-list.dragging .panel-header {
+		cursor: grabbing;
 	}
 
 	.panel-header:hover {
