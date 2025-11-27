@@ -8,10 +8,16 @@ const MAX_FILE_SIZE_MB = parseInt(process.env.MAX_FILE_SIZE_MB || "100", 10);
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
 
-// Rate limiting for file uploads
-const uploadTracker = new Map();
-const UPLOAD_RATE_LIMIT_WINDOW = 3600000; // 1 hour
-const UPLOAD_RATE_LIMIT_MAX = 10; // Max uploads per IP per hour
+// Rate limiting for file uploads (count-based)
+const uploadTracker = new Map(); // Map<IP, timestamp[]>
+const UPLOAD_RATE_LIMIT_WINDOW = parseInt(process.env.UPLOAD_RATE_LIMIT_WINDOW || "3600000", 10); // 1 hour default
+const UPLOAD_RATE_LIMIT_MAX = parseInt(process.env.UPLOAD_RATE_LIMIT_MAX || "100", 10); // Max uploads per IP per hour
+
+// Rate limiting for file uploads (size-based, weekly)
+const uploadSizeTracker = new Map(); // Map<IP, {timestamp, bytes}[]>
+const WEEKLY_SIZE_LIMIT_WINDOW = 7 * 24 * 60 * 60 * 1000; // 1 week in ms
+const WEEKLY_SIZE_LIMIT_MB = parseInt(process.env.WEEKLY_SIZE_LIMIT_MB || "1000", 10); // 1GB per IP per week default
+const WEEKLY_SIZE_LIMIT_BYTES = WEEKLY_SIZE_LIMIT_MB * 1024 * 1024;
 
 // Ensure storage directory exists
 if (!fs.existsSync(FILE_STORAGE_PATH)) {
@@ -82,7 +88,7 @@ function authenticateRequest(req, res, next) {
 }
 
 /**
- * Rate limit file uploads
+ * Rate limit file uploads (count-based, per hour)
  */
 function rateLimitUploads(req, res, next) {
 	const clientIp = req.ip || req.socket.remoteAddress;
@@ -93,9 +99,7 @@ function rateLimitUploads(req, res, next) {
 	}
 
 	const ipUploads = uploadTracker.get(clientIp);
-	const recentUploads = ipUploads.filter(
-		(timestamp) => now - timestamp < UPLOAD_RATE_LIMIT_WINDOW,
-	);
+	const recentUploads = ipUploads.filter((timestamp) => now - timestamp < UPLOAD_RATE_LIMIT_WINDOW);
 
 	if (recentUploads.length >= UPLOAD_RATE_LIMIT_MAX) {
 		return res.status(429).json({
@@ -107,6 +111,53 @@ function rateLimitUploads(req, res, next) {
 	uploadTracker.set(clientIp, recentUploads);
 
 	next();
+}
+
+/**
+ * Check weekly size limit for an IP
+ * Returns { allowed: boolean, usedBytes: number, remainingBytes: number }
+ */
+function checkWeeklySizeLimit(clientIp, fileSize) {
+	const now = Date.now();
+
+	if (!uploadSizeTracker.has(clientIp)) {
+		uploadSizeTracker.set(clientIp, []);
+	}
+
+	const ipUploads = uploadSizeTracker.get(clientIp);
+	// Filter to only entries within the weekly window
+	const recentUploads = ipUploads.filter(
+		(entry) => now - entry.timestamp < WEEKLY_SIZE_LIMIT_WINDOW,
+	);
+
+	// Calculate total bytes uploaded this week
+	const usedBytes = recentUploads.reduce((sum, entry) => sum + entry.bytes, 0);
+	const remainingBytes = WEEKLY_SIZE_LIMIT_BYTES - usedBytes;
+
+	if (usedBytes + fileSize > WEEKLY_SIZE_LIMIT_BYTES) {
+		return { allowed: false, usedBytes, remainingBytes };
+	}
+
+	return { allowed: true, usedBytes, remainingBytes };
+}
+
+/**
+ * Record a successful upload for weekly size tracking
+ */
+function recordUploadSize(clientIp, fileSize) {
+	const now = Date.now();
+
+	if (!uploadSizeTracker.has(clientIp)) {
+		uploadSizeTracker.set(clientIp, []);
+	}
+
+	const ipUploads = uploadSizeTracker.get(clientIp);
+	// Clean up old entries while adding new one
+	const recentUploads = ipUploads.filter(
+		(entry) => now - entry.timestamp < WEEKLY_SIZE_LIMIT_WINDOW,
+	);
+	recentUploads.push({ timestamp: now, bytes: fileSize });
+	uploadSizeTracker.set(clientIp, recentUploads);
 }
 
 /**
@@ -128,6 +179,7 @@ function setupFileRoutes(app) {
 					return res.status(400).json({ error: "No file uploaded" });
 				}
 
+				const clientIp = req.ip || req.socket.remoteAddress;
 				const fileBuffer = req.file.buffer;
 				const fileSize = fileBuffer.length;
 
@@ -135,6 +187,16 @@ function setupFileRoutes(app) {
 				if (fileSize > MAX_FILE_SIZE_BYTES) {
 					return res.status(413).json({
 						error: `File too large. Maximum size is ${MAX_FILE_SIZE_MB}MB`,
+					});
+				}
+
+				// Check weekly size limit
+				const sizeCheck = checkWeeklySizeLimit(clientIp, fileSize);
+				if (!sizeCheck.allowed) {
+					const usedMB = (sizeCheck.usedBytes / 1024 / 1024).toFixed(1);
+					const remainingMB = Math.max(0, sizeCheck.remainingBytes / 1024 / 1024).toFixed(1);
+					return res.status(429).json({
+						error: `Weekly upload limit exceeded. You have used ${usedMB}MB of ${WEEKLY_SIZE_LIMIT_MB}MB this week. Remaining: ${remainingMB}MB.`,
 					});
 				}
 
@@ -156,6 +218,7 @@ function setupFileRoutes(app) {
 					console.log(
 						`[${new Date().toISOString()}] File already exists (deduplicated): ${fileHash}`,
 					);
+					// Don't count deduplicated files against size limit
 					return res.json({
 						fileId: fileHash,
 						size: fileSize,
@@ -166,8 +229,11 @@ function setupFileRoutes(app) {
 				// Write file to disk
 				fs.writeFileSync(filePath, fileBuffer);
 
+				// Record the upload size for weekly tracking
+				recordUploadSize(clientIp, fileSize);
+
 				console.log(
-					`[${new Date().toISOString()}] File uploaded: ${fileHash} (${(fileSize / 1024 / 1024).toFixed(2)}MB)`,
+					`[${new Date().toISOString()}] File uploaded: ${fileHash} (${(fileSize / 1024 / 1024).toFixed(2)}MB) from ${clientIp}`,
 				);
 
 				res.json({
@@ -273,6 +339,7 @@ function setupFileRoutes(app) {
 	console.log(
 		`  - Rate limit: ${UPLOAD_RATE_LIMIT_MAX} uploads per IP per ${UPLOAD_RATE_LIMIT_WINDOW / 1000 / 60} minutes`,
 	);
+	console.log(`  - Weekly size limit: ${WEEKLY_SIZE_LIMIT_MB}MB per IP per week`);
 }
 
 /**
@@ -431,7 +498,8 @@ function getOpenAPISpec() {
 							},
 						},
 						429: {
-							description: "Rate limit exceeded (max 10 uploads per hour per IP)",
+							description:
+								"Rate limit exceeded (max 100 uploads per hour per IP, or 1GB per week per IP)",
 							content: {
 								"application/json": {
 									schema: {
