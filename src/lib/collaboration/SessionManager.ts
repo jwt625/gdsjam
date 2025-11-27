@@ -657,6 +657,18 @@ export class SessionManager {
 	}
 
 	/**
+	 * Get transfer candidates (viewers sorted by joinedAt)
+	 * Returns user IDs of all participants except current host
+	 */
+	getTransferCandidates(): string[] {
+		const currentHostId = this.hostManager.getCurrentHostId();
+		const participants = this.participantManager.getParticipants();
+
+		// Filter out current host, return sorted by joinedAt (already sorted by getParticipants)
+		return participants.filter((p) => p.userId !== currentHostId).map((p) => p.userId);
+	}
+
+	/**
 	 * Check if beforeunload warning is needed
 	 */
 	getHostWarningNeeded(): boolean {

@@ -4,6 +4,7 @@ import ErrorToast from "./components/ui/ErrorToast.svelte";
 import FileUpload from "./components/ui/FileUpload.svelte";
 import HeaderBar from "./components/ui/HeaderBar.svelte";
 import LoadingOverlay from "./components/ui/LoadingOverlay.svelte";
+import ParticipantList from "./components/ui/ParticipantList.svelte";
 import ViewerCanvas from "./components/viewer/ViewerCanvas.svelte";
 import { DEBUG } from "./lib/config";
 import { loadGDSIIFromBuffer } from "./lib/utils/gdsLoader";
@@ -320,6 +321,11 @@ onMount(async () => {
 
 		{#if $gdsStore.document}
 			<ViewerCanvas />
+		{/if}
+
+		<!-- Participant List overlay (only shown in session) -->
+		{#if $collaborationStore.isInSession}
+			<ParticipantList />
 		{/if}
 
 		{#if $gdsStore.error}

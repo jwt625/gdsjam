@@ -353,10 +353,11 @@ export class HostManager {
 
 	/**
 	 * Get transfer candidates (viewers sorted by joinedAt)
+	 * NOTE: This method is deprecated. Use SessionManager.getTransferCandidates() instead.
+	 * It coordinates between HostManager and ParticipantManager.
 	 */
 	getTransferCandidates(): string[] {
-		// TODO: Implement when ParticipantManager is ready
-		// Return viewers sorted by joinedAt (first joined = default)
+		// This is now handled by SessionManager which has access to ParticipantManager
 		return [];
 	}
 

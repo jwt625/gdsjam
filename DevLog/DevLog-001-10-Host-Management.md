@@ -326,6 +326,24 @@ File: `src/stores/collaborationStore.ts`
 Changes:
 - Add `transferHost(userId)` action
 
+## Bug Fixes
+
+### Viewer File Sync Regression (2025-11-27)
+
+**Problem:** After Phase 0 refactoring, viewers no longer received file sync from host when host uploaded before creating session.
+
+**Root Cause:** The refactored `joinSession()` added Y.js writes (`tryReclaimHost()`, `registerParticipant()`) that executed before Y.js sync completed. These writes conflicted with and overwrote the host's session data (including file metadata).
+
+**Original behavior:** `joinSession()` only connected to Y.js room with no document writes.
+
+**Fix:** Made `joinSession()` async and added `waitForSync(5000)` before any Y.js writes. The viewer now waits for sync to complete, ensuring the host's data is present before writing participant info.
+
+**Files Changed:**
+- `src/lib/collaboration/YjsProvider.ts` - Added `waitForSync()` method
+- `src/lib/collaboration/SessionManager.ts` - Made `joinSession()` async
+- `src/stores/collaborationStore.ts` - Made store action async
+- `src/App.svelte` - Added await to joinSession call
+
 ## Risk Mitigations
 
 | Risk | Mitigation |
@@ -433,21 +451,21 @@ Phase 1 (Issue #19 - Host Management): COMPLETE (implementation done, needs test
 - [ ] Run Phase 1 unit tests
 - [ ] Run Phase 1 integration tests
 
-Phase 2 (Participant List UI): COMPLETE (implementation done, needs UI component)
+Phase 2 (Participant List UI): COMPLETE
 - [x] Implement `generateUniqueDisplayName(userId, existingNames)` with collision handling
 - [x] Implement `registerParticipant()` to add self to Y.js with unique name
 - [x] Implement `setLocalAwarenessState()` in ParticipantManager
 - [x] Implement `getParticipants()` sorted by joinedAt
-- [ ] Create ParticipantList.svelte component
-- [ ] Integrate participant list into sidebar/panel
+- [x] Create ParticipantList.svelte component
+- [x] Integrate participant list into App.svelte (overlay on viewer)
 - [ ] Run Phase 2 unit tests
 - [ ] Run Phase 2 integration tests
 
-Phase 3 (Host Transfer): COMPLETE (implementation done, needs UI component)
-- [x] Implement `getTransferCandidates()` returning viewers by joinedAt
+Phase 3 (Host Transfer): COMPLETE
+- [x] Implement `getTransferCandidates()` returning viewers by joinedAt (in SessionManager)
 - [x] Implement `transferHost(targetUserId)` in HostManager
-- [ ] Add "Make Host" button to ParticipantList (default: first joined)
-- [ ] Add confirmation dialog for transfer
+- [x] Add "Make Host" button to ParticipantList (visible only to host)
+- [x] Add confirmation dialog for transfer
 - [ ] Run Phase 3 unit tests
 - [ ] Run Phase 3 integration tests
 
@@ -461,7 +479,8 @@ Phase 3 (Host Transfer): COMPLETE (implementation done, needs UI component)
 | `src/lib/collaboration/SessionManager.ts` | 0 | Refactor: delegate to managers, use typed Y.js access |
 | `src/lib/collaboration/FileTransfer.ts` | 0 | Update to use `YjsSessionData` type |
 | `src/stores/collaborationStore.ts` | 1, 3 | New actions, enhanced beforeunload, leaveSession cleanup |
-| `src/components/ParticipantList.svelte` | 2, 3 | New file: participant list UI with transfer |
+| `src/components/ui/ParticipantList.svelte` | 2, 3 | New file: participant list UI with transfer |
+| `src/App.svelte` | 2 | Integrate ParticipantList overlay |
 | `tests/collaboration/HostManager.test.ts` | 1 | New file: unit tests for host management |
 | `tests/collaboration/ParticipantManager.test.ts` | 2 | New file: unit tests for participant management |
 

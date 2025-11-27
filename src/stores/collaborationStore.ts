@@ -673,6 +673,20 @@ function createCollaborationStore() {
 			});
 			return needed;
 		},
+
+		/**
+		 * Get transfer candidates (viewers sorted by joinedAt)
+		 */
+		getTransferCandidates: (): string[] => {
+			let candidates: string[] = [];
+			update((state) => {
+				if (state.sessionManager) {
+					candidates = state.sessionManager.getTransferCandidates();
+				}
+				return state;
+			});
+			return candidates;
+		},
 	};
 }
 
