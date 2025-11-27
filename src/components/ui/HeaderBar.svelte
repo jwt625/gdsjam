@@ -2,11 +2,15 @@
 import QRCode from "qrcode";
 import type { YjsParticipant } from "../../lib/collaboration/types";
 import { DEBUG } from "../../lib/config";
+import { loadGDSIIFromBuffer } from "../../lib/utils/gdsLoader";
 import { collaborationStore } from "../../stores/collaborationStore";
 import { gdsStore } from "../../stores/gdsStore";
 
 let showQRCode = $state(false);
 let qrCodeDataUrl = $state("");
+
+// File upload
+let fileInputElement: HTMLInputElement;
 
 // Leave session dialog state
 let showLeaveDialog = $state(false);
@@ -115,7 +119,97 @@ $effect(() => {
 		qrCodeDataUrl = "";
 	}
 });
+
+// Determine if upload button should be shown
+// Show when: layout rendered AND (not in session OR is host)
+const canUpload = $derived(
+	$gdsStore.document !== null && (!$collaborationStore.isInSession || $collaborationStore.isHost),
+);
+
+/**
+ * Trigger file input click
+ */
+function triggerFileInput() {
+	fileInputElement.click();
+}
+
+/**
+ * Handle file input change
+ */
+async function handleFileInput(event: Event) {
+	const target = event.target as HTMLInputElement;
+	const file = target.files?.[0];
+	if (!file) return;
+
+	const fileSizeMB = (file.size / 1024 / 1024).toFixed(1);
+	if (DEBUG) {
+		console.log(`[HeaderBar] Loading ${file.name} (${fileSizeMB} MB)`);
+	}
+
+	try {
+		gdsStore.setLoading(true, "Reading file...", 0);
+
+		const arrayBuffer = await file.arrayBuffer();
+		if (DEBUG) {
+			console.log(`[HeaderBar] File read complete: ${arrayBuffer.byteLength} bytes`);
+		}
+
+		// Load file locally first
+		await loadGDSIIFromBuffer(arrayBuffer, file.name);
+
+		// If in a session and is host, upload file to session
+		if ($collaborationStore.isInSession && $collaborationStore.isHost) {
+			if (DEBUG) {
+				console.log("[HeaderBar] Uploading file to collaboration session...");
+			}
+
+			try {
+				await collaborationStore.uploadFile(arrayBuffer, file.name);
+				if (DEBUG) {
+					console.log("[HeaderBar] File uploaded to session successfully");
+				}
+			} catch (error) {
+				console.error("[HeaderBar] Failed to upload file to session:", error);
+				gdsStore.setError(
+					`File loaded locally but failed to upload to session: ${error instanceof Error ? error.message : String(error)}`,
+				);
+			}
+		} else if (!$collaborationStore.isInSession) {
+			// Not in a session - upload as pending so it can be shared when session is created
+			if (DEBUG) {
+				console.log("[HeaderBar] Uploading file as pending (for future session)...");
+			}
+
+			try {
+				await collaborationStore.uploadFilePending(arrayBuffer, file.name);
+				if (DEBUG) {
+					console.log("[HeaderBar] File uploaded as pending successfully");
+				}
+			} catch (error) {
+				console.error("[HeaderBar] Failed to upload pending file:", error);
+				// Don't show error - file is loaded locally, just won't be shareable
+			}
+		}
+	} catch (error) {
+		console.error("[HeaderBar] Failed to read file:", error);
+		gdsStore.setError(
+			`Failed to read file: ${error instanceof Error ? error.message : String(error)}`,
+		);
+	}
+
+	// Reset file input so the same file can be uploaded again
+	target.value = "";
+}
 </script>
+
+<!-- Hidden file input for upload button -->
+<input
+	type="file"
+	accept=".gds,.gdsii,.dxf"
+	bind:this={fileInputElement}
+	onchange={handleFileInput}
+	style="display: none;"
+/>
 
 <header class="header">
 	<div class="header-content">
@@ -131,6 +225,14 @@ $effect(() => {
 		</div>
 
 		<div class="session-controls">
+			{#if canUpload}
+				<button type="button" class="btn btn-upload" onclick={triggerFileInput}>
+					<svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+					</svg>
+					Upload File
+				</button>
+			{/if}
 			{#if $collaborationStore.isInSession}
 				<div class="session-info">
 					<span class="role-badge" class:host={$collaborationStore.isHost}>
@@ -358,6 +460,23 @@ $effect(() => {
 
 	.btn-danger:hover {
 		background-color: #ff6666;
+	}
+
+	.btn-upload {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		background-color: #2d5a3d;
+		color: #fff;
+	}
+
+	.btn-upload:hover {
+		background-color: #3a7350;
+	}
+
+	.btn-icon {
+		width: 1rem;
+		height: 1rem;
 	}
 
 	.qr-code-backdrop {
