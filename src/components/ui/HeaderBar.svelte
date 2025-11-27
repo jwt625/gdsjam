@@ -230,10 +230,11 @@ $effect(() => {
 	}
 
 	.title-container {
-		display: flex;
+		display: inline-flex;
 		align-items: center;
 		gap: 0.75rem;
 		text-decoration: none;
+		width: fit-content;
 	}
 
 	.title-container:hover .title {
