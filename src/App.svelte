@@ -4,6 +4,7 @@ import ErrorToast from "./components/ui/ErrorToast.svelte";
 import FileUpload from "./components/ui/FileUpload.svelte";
 import HeaderBar from "./components/ui/HeaderBar.svelte";
 import LoadingOverlay from "./components/ui/LoadingOverlay.svelte";
+import ParticipantList from "./components/ui/ParticipantList.svelte";
 import ViewerCanvas from "./components/viewer/ViewerCanvas.svelte";
 import { DEBUG } from "./lib/config";
 import { loadGDSIIFromBuffer } from "./lib/utils/gdsLoader";
@@ -118,9 +119,10 @@ onMount(async () => {
 		if (DEBUG) {
 			console.log("[App] Joining collaboration session:", roomId);
 		}
-		collaborationStore.joinSession(roomId);
+		// Wait for Y.js sync before checking for file metadata
+		await collaborationStore.joinSession(roomId);
 
-		// Wait for file metadata to appear in session
+		// File metadata should be available after sync
 		const sessionManager = collaborationStore.getSessionManager();
 		if (!sessionManager) {
 			console.error("[App] Session manager not available");
@@ -319,6 +321,11 @@ onMount(async () => {
 
 		{#if $gdsStore.document}
 			<ViewerCanvas />
+		{/if}
+
+		<!-- Participant List overlay (only shown in session) -->
+		{#if $collaborationStore.isInSession}
+			<ParticipantList />
 		{/if}
 
 		{#if $gdsStore.error}

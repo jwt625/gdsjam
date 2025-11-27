@@ -80,10 +80,33 @@ function createCollaborationStore() {
 
 	// Clean up on page unload
 	if (typeof window !== "undefined") {
-		window.addEventListener("beforeunload", () => {
+		window.addEventListener("beforeunload", (event) => {
+			// Mark host for recovery if we're host (for page refresh)
+			sessionManager.markHostForRecovery();
+
+			// Show warning if host is leaving with viewers
+			if (sessionManager.getHostWarningNeeded()) {
+				event.preventDefault();
+				// Modern browsers require returnValue to be set
+				event.returnValue = "You are the session host. Leaving will affect other viewers.";
+				return event.returnValue;
+			}
+
 			sessionManager.destroy();
 		});
 	}
+
+	// Subscribe to host changes
+	sessionManager.onHostChanged((newHostId) => {
+		if (DEBUG) {
+			console.log("[collaborationStore] Host changed to:", newHostId);
+		}
+		update((state) => ({
+			...state,
+			isHost: newHostId === sessionManager.getUserId(),
+			connectedUsers: state.sessionManager?.getConnectedUsers() ?? [],
+		}));
+	});
 
 	return {
 		subscribe,
@@ -112,23 +135,32 @@ function createCollaborationStore() {
 		},
 
 		/**
-		 * Join an existing session
+		 * Join an existing session (async - waits for Y.js sync)
 		 */
-		joinSession: (sessionId: string) => {
+		joinSession: async (sessionId: string) => {
+			let sessionManager: SessionManager | null = null;
+
+			update((state) => {
+				sessionManager = state.sessionManager;
+				return state;
+			});
+
+			if (!sessionManager) return;
+
+			await (sessionManager as SessionManager).joinSession(sessionId);
+
+			if (DEBUG) {
+				console.log("[collaborationStore] Joined session:", sessionId);
+			}
+
 			update((state) => {
 				if (!state.sessionManager) return state;
-
-				state.sessionManager.joinSession(sessionId);
-
-				if (DEBUG) {
-					console.log("[collaborationStore] Joined session:", sessionId);
-				}
 
 				return {
 					...state,
 					isInSession: true,
 					sessionId,
-					isHost: false,
+					isHost: state.sessionManager.getIsHost(),
 					connectedUsers: state.sessionManager.getConnectedUsers(),
 				};
 			});
@@ -173,34 +205,19 @@ function createCollaborationStore() {
 
 		/**
 		 * Get session manager instance
+		 * Note: Returns the closure-scoped sessionManager directly to avoid state mutation during render
 		 */
 		getSessionManager: (): SessionManager | null => {
-			let manager: SessionManager | null = null;
-			update((state) => {
-				manager = state.sessionManager;
-				return state;
-			});
-			return manager;
+			return sessionManager;
 		},
 
 		/**
 		 * Upload file to session (host only)
 		 */
 		uploadFile: async (arrayBuffer: ArrayBuffer, fileName: string) => {
-			// Get session manager reference
-			const getManager = (): SessionManager => {
-				let mgr: SessionManager | null = null;
-				update((state) => {
-					mgr = state.sessionManager;
-					return state;
-				});
-				if (!mgr) {
-					throw new Error("Session manager not initialized");
-				}
-				return mgr;
-			};
-
-			const manager = getManager();
+			if (!sessionManager) {
+				throw new Error("Session manager not initialized");
+			}
 
 			update((state) => ({
 				...state,
@@ -210,7 +227,7 @@ function createCollaborationStore() {
 			}));
 
 			try {
-				await manager.uploadFile(
+				await sessionManager.uploadFile(
 					arrayBuffer,
 					fileName,
 					(progress: number, message: string) => {
@@ -228,7 +245,7 @@ function createCollaborationStore() {
 				);
 
 				// Save to localStorage for session recovery
-				const metadata = manager.getFileMetadata();
+				const metadata = sessionManager.getFileMetadata();
 				if (
 					metadata &&
 					metadata.fileId &&
@@ -236,7 +253,7 @@ function createCollaborationStore() {
 					metadata.fileHash &&
 					metadata.fileSize
 				) {
-					manager.saveSessionToLocalStorage(
+					sessionManager.saveSessionToLocalStorage(
 						metadata.fileId,
 						metadata.fileName,
 						metadata.fileHash,
@@ -270,20 +287,9 @@ function createCollaborationStore() {
 			fileName: string;
 			fileHash: string;
 		}> => {
-			// Get session manager reference
-			const getManager = (): SessionManager => {
-				let mgr: SessionManager | null = null;
-				update((state) => {
-					mgr = state.sessionManager;
-					return state;
-				});
-				if (!mgr) {
-					throw new Error("Session manager not initialized");
-				}
-				return mgr;
-			};
-
-			const manager = getManager();
+			if (!sessionManager) {
+				throw new Error("Session manager not initialized");
+			}
 
 			update((state) => ({
 				...state,
@@ -293,7 +299,7 @@ function createCollaborationStore() {
 			}));
 
 			try {
-				const result = await manager.downloadFile(
+				const result = await sessionManager.downloadFile(
 					(progress: number, message: string) => {
 						update((state) => ({
 							...state,
@@ -309,7 +315,7 @@ function createCollaborationStore() {
 				);
 
 				// Save to localStorage for session recovery
-				const metadata = manager.getFileMetadata();
+				const metadata = sessionManager.getFileMetadata();
 				if (
 					metadata &&
 					metadata.fileId &&
@@ -317,7 +323,7 @@ function createCollaborationStore() {
 					metadata.fileHash &&
 					metadata.fileSize
 				) {
-					manager.saveSessionToLocalStorage(
+					sessionManager.saveSessionToLocalStorage(
 						metadata.fileId,
 						metadata.fileName,
 						metadata.fileHash,
@@ -349,14 +355,7 @@ function createCollaborationStore() {
 		 * Check if file is available in session
 		 */
 		isFileAvailable: (): boolean => {
-			let available = false;
-			update((state) => {
-				if (state.sessionManager) {
-					available = state.sessionManager.isFileAvailable();
-				}
-				return state;
-			});
-			return available;
+			return sessionManager?.isFileAvailable() ?? false;
 		},
 
 		/**
@@ -371,19 +370,9 @@ function createCollaborationStore() {
 			fileName: string;
 			fileHash: string;
 		}> => {
-			const getManager = (): SessionManager => {
-				let mgr: SessionManager | null = null;
-				update((state) => {
-					mgr = state.sessionManager;
-					return state;
-				});
-				if (!mgr) {
-					throw new Error("Session manager not initialized");
-				}
-				return mgr;
-			};
-
-			const manager = getManager();
+			if (!sessionManager) {
+				throw new Error("Session manager not initialized");
+			}
 
 			update((state) => ({
 				...state,
@@ -393,7 +382,7 @@ function createCollaborationStore() {
 			}));
 
 			try {
-				const result = await manager.downloadFileById(
+				const result = await sessionManager.downloadFileById(
 					fileId,
 					fileName,
 					fileHash,
@@ -560,6 +549,100 @@ function createCollaborationStore() {
 				}
 				return initialState;
 			});
+		},
+
+		// ==========================================
+		// Host Management Actions
+		// ==========================================
+
+		/**
+		 * Check if viewer can claim host
+		 */
+		canClaimHost: (): boolean => {
+			let canClaim = false;
+			update((state) => {
+				if (state.sessionManager) {
+					canClaim = state.sessionManager.canClaimHost();
+				}
+				return state;
+			});
+			return canClaim;
+		},
+
+		/**
+		 * Claim host status (viewer becomes host)
+		 */
+		claimHost: () => {
+			update((state) => {
+				if (!state.sessionManager) return state;
+
+				const success = state.sessionManager.claimHost();
+
+				if (DEBUG) {
+					console.log("[collaborationStore] Claim host:", success);
+				}
+
+				if (success) {
+					return {
+						...state,
+						isHost: true,
+						connectedUsers: state.sessionManager.getConnectedUsers(),
+					};
+				}
+				return state;
+			});
+		},
+
+		/**
+		 * Transfer host to another user
+		 */
+		transferHost: (targetUserId: string) => {
+			update((state) => {
+				if (!state.sessionManager) return state;
+
+				const success = state.sessionManager.transferHost(targetUserId);
+
+				if (DEBUG) {
+					console.log("[collaborationStore] Transfer host to:", targetUserId, "success:", success);
+				}
+
+				if (success) {
+					return {
+						...state,
+						isHost: false,
+						connectedUsers: state.sessionManager.getConnectedUsers(),
+					};
+				}
+				return state;
+			});
+		},
+
+		/**
+		 * Check if host warning is needed before leaving
+		 */
+		getHostWarningNeeded: (): boolean => {
+			let needed = false;
+			update((state) => {
+				if (state.sessionManager) {
+					needed = state.sessionManager.getHostWarningNeeded();
+				}
+				return state;
+			});
+			return needed;
+		},
+
+		/**
+		 * Get transfer candidates (viewers sorted by joinedAt)
+		 */
+		getTransferCandidates: (): string[] => {
+			let candidates: string[] = [];
+			update((state) => {
+				if (state.sessionManager) {
+					candidates = state.sessionManager.getTransferCandidates();
+				}
+				return state;
+			});
+			return candidates;
 		},
 	};
 }

@@ -5,7 +5,7 @@
  */
 
 /**
- * Session metadata stored in Y.js
+ * Session metadata stored in Y.js (legacy interface for backward compatibility)
  */
 export interface SessionMetadata {
 	sessionId: string;
@@ -15,6 +15,42 @@ export interface SessionMetadata {
 	uploadedBy: string; // User ID of host
 	uploadedAt: number; // Unix timestamp
 	createdAt: number;
+}
+
+/**
+ * Y.js session map data structure
+ * All fields stored in the shared "session" Y.Map
+ * This is the source of truth for session state
+ */
+export interface YjsSessionData {
+	// Session identity
+	sessionId: string;
+	createdAt: number;
+
+	// File metadata
+	fileId: string;
+	fileName: string;
+	fileSize: number;
+	fileHash: string; // SHA-256 hex string
+	uploadedBy: string; // userId of original uploader (immutable)
+	uploadedAt: number;
+
+	// Host management
+	currentHostId: string; // userId of current host
+	hostLastSeen: number; // timestamp for absence detection
+
+	// Participant tracking
+	participants: YjsParticipant[];
+}
+
+/**
+ * Participant information stored in Y.js
+ */
+export interface YjsParticipant {
+	userId: string;
+	displayName: string; // Unique "Anonymous Animal" name
+	joinedAt: number;
+	color: string;
 }
 
 /**

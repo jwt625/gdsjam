@@ -349,6 +349,58 @@ export class YjsProvider {
 	}
 
 	/**
+	 * Wait for Y.js to sync with peers
+	 * Returns a promise that resolves when sync is complete or timeout expires
+	 * @param timeoutMs - Maximum time to wait for sync (default: 5000ms)
+	 */
+	waitForSync(timeoutMs: number = 5000): Promise<boolean> {
+		return new Promise((resolve) => {
+			// If no provider, resolve immediately
+			if (!this.provider) {
+				resolve(false);
+				return;
+			}
+
+			// If already synced, resolve immediately
+			if (this.provider.synced) {
+				if (DEBUG) {
+					console.log("[YjsProvider] Already synced, no need to wait");
+				}
+				resolve(true);
+				return;
+			}
+
+			let resolved = false;
+
+			// Set up timeout
+			const timeout = setTimeout(() => {
+				if (!resolved) {
+					resolved = true;
+					if (DEBUG) {
+						console.log("[YjsProvider] Sync timeout expired after", timeoutMs, "ms");
+					}
+					resolve(false);
+				}
+			}, timeoutMs);
+
+			// Listen for sync event
+			const onSynced = (event: { synced: boolean }) => {
+				if (event.synced && !resolved) {
+					resolved = true;
+					clearTimeout(timeout);
+					this.provider?.off("synced", onSynced);
+					if (DEBUG) {
+						console.log("[YjsProvider] Sync completed");
+					}
+					resolve(true);
+				}
+			};
+
+			this.provider.on("synced", onSynced);
+		});
+	}
+
+	/**
 	 * Notify all event callbacks
 	 */
 	private notifyEvent(event: Parameters<CollaborationEventCallback>[0]): void {
