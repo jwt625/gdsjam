@@ -1,3 +1,5 @@
+require("dotenv").config();
+
 const http = require("http");
 const express = require("express");
 const cors = require("cors");
@@ -10,8 +12,8 @@ const AUTH_TOKEN = process.env.AUTH_TOKEN;
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
 	? process.env.ALLOWED_ORIGINS.split(",")
 	: ["https://gdsjam.com", "http://localhost:5173", "http://localhost:4173"];
-const RATE_LIMIT_WINDOW = 60000; // 1 minute
-const RATE_LIMIT_MAX_CONNECTIONS = 10; // Max connections per IP per window
+const RATE_LIMIT_WINDOW = parseInt(process.env.RATE_LIMIT_WINDOW || "60000", 10); // 1 minute default
+const RATE_LIMIT_MAX_CONNECTIONS = parseInt(process.env.RATE_LIMIT_MAX_CONNECTIONS || "10", 10); // Max connections per IP per window
 
 // Rate limiting: Track connections per IP
 const connectionTracker = new Map();
