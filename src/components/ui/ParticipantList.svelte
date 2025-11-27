@@ -15,6 +15,13 @@ let showTransferConfirm = $state(false);
 let transferTargetId = $state<string | null>(null);
 let transferTargetName = $state<string | null>(null);
 
+// Collapsed state for the panel
+let isCollapsed = $state(false);
+
+function toggleCollapsed() {
+	isCollapsed = !isCollapsed;
+}
+
 // Get current user ID
 const currentUserId = $derived($collaborationStore.userId);
 const isHost = $derived($collaborationStore.isHost);
@@ -67,35 +74,40 @@ function cancelTransfer() {
 </script>
 
 {#if visible && $collaborationStore.isInSession}
-	<div class="participant-list">
-		<div class="panel-header">
+	<div class="participant-list" class:collapsed={isCollapsed}>
+		<button type="button" class="panel-header" onclick={toggleCollapsed} aria-expanded={!isCollapsed}>
 			<h3>Participants ({participants.length})</h3>
-		</div>
+			<svg class="chevron-icon" class:rotated={isCollapsed} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<polyline points="6 9 12 15 18 9"></polyline>
+			</svg>
+		</button>
 
-		<div class="participant-items">
-			{#each participants as participant (participant.userId)}
-				<div class="participant-item">
-					<div class="color-indicator" style="background-color: {participant.color}"></div>
-					<span class="participant-name">
-						{participant.displayName}
-						{#if participant.userId === currentUserId}
-							<span class="you-badge">You</span>
+		{#if !isCollapsed}
+			<div class="participant-items">
+				{#each participants as participant (participant.userId)}
+					<div class="participant-item">
+						<div class="color-indicator" style="background-color: {participant.color}"></div>
+						<span class="participant-name">
+							{participant.displayName}
+							{#if participant.userId === currentUserId}
+								<span class="you-badge">You</span>
+							{/if}
+						</span>
+						{#if participant.userId === currentHostId}
+							<span class="host-badge">Host</span>
+						{:else if isHost}
+							<button
+								type="button"
+								class="make-host-btn"
+								onclick={() => handleMakeHost(participant.userId, participant.displayName)}
+							>
+								Make Host
+							</button>
 						{/if}
-					</span>
-					{#if participant.userId === currentHostId}
-						<span class="host-badge">Host</span>
-					{:else if isHost}
-						<button
-							type="button"
-							class="make-host-btn"
-							onclick={() => handleMakeHost(participant.userId, participant.displayName)}
-						>
-							Make Host
-						</button>
-					{/if}
-				</div>
-			{/each}
-		</div>
+					</div>
+				{/each}
+			</div>
+		{/if}
 	</div>
 {/if}
 
@@ -124,7 +136,7 @@ function cancelTransfer() {
 <style>
 	.participant-list {
 		position: fixed;
-		top: 10px;
+		top: 80px;
 		left: 10px;
 		width: 240px;
 		max-height: 300px;
@@ -137,17 +149,49 @@ function cancelTransfer() {
 		display: flex;
 		flex-direction: column;
 		box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+		transition: max-height 0.2s ease-out;
+	}
+
+	.participant-list.collapsed {
+		max-height: 44px;
 	}
 
 	.panel-header {
 		padding: 12px;
 		border-bottom: 1px solid #444;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		cursor: pointer;
+		background: transparent;
+		border: none;
+		border-bottom: 1px solid #444;
+		width: 100%;
+		text-align: left;
+		color: inherit;
+		font-family: inherit;
+	}
+
+	.panel-header:hover {
+		background: rgba(255, 255, 255, 0.05);
 	}
 
 	.panel-header h3 {
 		margin: 0;
 		font-size: 14px;
 		color: #fff;
+	}
+
+	.chevron-icon {
+		width: 16px;
+		height: 16px;
+		color: #888;
+		transition: transform 0.2s ease-out;
+		flex-shrink: 0;
+	}
+
+	.chevron-icon.rotated {
+		transform: rotate(-90deg);
 	}
 
 	.participant-items {

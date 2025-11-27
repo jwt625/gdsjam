@@ -268,14 +268,15 @@ export class ParticipantManager {
 	}
 
 	/**
-	 * Get all participants sorted by joinedAt
+	 * Get all participants sorted by userId for deterministic ordering
+	 * Used for auto-promotion: lowest userId becomes host when host leaves
 	 */
 	getParticipants(): YjsParticipant[] {
 		const sessionMap = this.yjsProvider.getMap<any>("session");
 		const participants = (sessionMap.get("participants") as YjsParticipant[]) || [];
 
-		// Sort by joinedAt (first joined first)
-		return [...participants].sort((a, b) => a.joinedAt - b.joinedAt);
+		// Sort by userId for deterministic ordering (consistent across all clients)
+		return [...participants].sort((a, b) => a.userId.localeCompare(b.userId));
 	}
 
 	/**
