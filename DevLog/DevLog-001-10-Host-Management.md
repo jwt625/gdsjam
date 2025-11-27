@@ -1,9 +1,10 @@
 # Host Management and Transfer
 
 **Date:** 2025-11-27
-**Status:** Planning
+**Status:** In Progress (PR #24 pending review feedback)
 **Related:** Issue #19, DevLog-001-08, DevLog-001-09
 **Issue:** https://github.com/jwt625/gdsjam/issues/19
+**PR:** https://github.com/jwt625/gdsjam/pull/24
 
 ## Problem Statement
 
@@ -602,6 +603,48 @@ Phase 3 (Host Transfer): COMPLETE
 - [x] Add confirmation dialog for transfer
 - [ ] Run Phase 3 unit tests
 - [ ] Run Phase 3 integration tests
+
+Phase 4 (Robust Host Transfer - PR #24): IN PROGRESS
+- [x] Add automatic host promotion when host leaves or disconnects
+- [x] Implement participant heartbeat system (5s interval) with `lastSeen` tracking
+- [x] Add stale participant cleanup (15s threshold)
+- [x] Add host transfer confirmation dialog when host leaves with other participants
+- [x] Fix host/viewer badge display in participant list
+- [x] Add collapsible participant list panel
+- [x] Add `onHostAbsent()` callback in HostManager
+- [x] Add periodic host existence check (2s interval) in SessionManager
+- [x] Use deterministic userId-based ordering for auto-promotion
+- [ ] Address PR review feedback (see below)
+- [ ] Run tests
+
+### PR #24 Review Feedback (Pending)
+
+**Critical Issues:**
+
+1. **Race Condition in Heartbeat Updates** (`ParticipantManager.ts:144-156`)
+   - Read-modify-write pattern for `lastSeen` is not atomic in Y.js
+   - Multiple clients updating simultaneously could overwrite each other's changes
+   - Recommendation: Use Y.Map keyed by userId for atomic per-participant updates
+
+2. **Stale Threshold Too Aggressive** (`ParticipantManager.ts:188`)
+   - 15s threshold with 5s heartbeat is too tight; network delays could prematurely remove participants
+   - Recommendation: Increase to 20-25 seconds (at least 3x heartbeat interval)
+
+3. **Missing Error Handling in Auto-Promotion** (`SessionManager.ts:821-840`)
+   - `tryAutoPromote()` lacks error handling for `claimHost()` failures
+   - Recommendation: Add try-catch and retry logic
+
+**Performance Concern:**
+
+- Every 5s, every participant updates the entire participants array (N writes per 5s)
+- Recommendation: Consider using Y.js Awareness API for ephemeral heartbeats instead of persisting to document
+
+**Missing Test Coverage:**
+
+- Unit tests for ParticipantManager (heartbeat, cleanup)
+- Unit tests for HostManager (host absent callbacks)
+- Integration tests for SessionManager (auto-promotion)
+- E2E tests (host closes tab, multiple viewers promotion)
 
 ## Files Changed Summary
 

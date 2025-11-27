@@ -28,50 +28,68 @@ const USER_COLOR_PALETTE = [
 ];
 
 // Word lists for display name generation
+// Literary adjectives from Shakespeare, Borges, Dostoevsky, classic sci-fi, and other authors
 const ADJECTIVES = [
-	"Anonymous",
-	"Curious",
-	"Clever",
-	"Swift",
-	"Gentle",
-	"Brave",
-	"Quiet",
-	"Bright",
-	"Calm",
-	"Eager",
-	"Friendly",
-	"Happy",
-	"Jolly",
-	"Kind",
-	"Lively",
-	"Merry",
-	"Noble",
-	"Patient",
-	"Peaceful",
-	"Witty",
+	"Eldritch", // Lovecraftian/Gothic
+	"Melancholy", // Dostoevsky
+	"Quixotic", // Cervantes
+	"Ineffable", // Borges
+	"Erstwhile", // Shakespearean
+	"Penumbral", // Borges
+	"Woebegone", // Gothic
+	"Mercurial", // Shakespeare
+	"Labyrinthine", // Borges
+	"Forsooth", // Shakespearean
+	"Ethereal", // Romantic
+	"Phantasmal", // Poe
+	"Tempestuous", // Shakespeare
+	"Vertiginous", // Borges
+	"Mordant", // Dostoevsky
+	"Lachrymose", // Victorian
+	"Phosphorescent", // Nabokov
+	"Sibylline", // Classical
+	"Crepuscular", // Borges
+	"Gossamer", // Romantic
+	// Classic Sci-Fi
+	"Prescient", // Dune - the spice grants prescience
+	"Grokking", // Stranger in a Strange Land
+	"Ansible", // Ursula K. Le Guin
+	"Hyperion", // Dan Simmons
+	"Solarian", // Asimov's Foundation
+	"Neuromantic", // William Gibson
+	"Bene", // Dune - Bene Gesserit
+	"Muaddib", // Dune - Paul's Fremen name
 ];
 
+// Extinct and fictional sci-fi animals for anonymous user names
 const ANIMALS = [
-	"Otter",
-	"Panda",
-	"Fox",
-	"Owl",
-	"Dolphin",
-	"Koala",
-	"Penguin",
-	"Rabbit",
-	"Squirrel",
-	"Turtle",
-	"Bear",
-	"Cat",
-	"Dog",
-	"Eagle",
-	"Falcon",
-	"Giraffe",
-	"Hedgehog",
-	"Jaguar",
-	"Kangaroo",
-	"Lion",
+	// Extinct
+	"Dodo", // Mauritius, extinct 1681
+	"Mammoth", // Ice Age megafauna
+	"Thylacine", // Tasmanian Tiger, extinct 1936
+	"Quagga", // South African zebra, extinct 1883
+	"Aurochs", // Wild cattle ancestor, extinct 1627
+	"Moa", // Giant New Zealand bird
+	"Glyptodon", // Armored mammal
+	"Megatherium", // Giant ground sloth
+	"Smilodon", // Saber-toothed cat
+	"Archaeopteryx", // First bird
+	"Trilobite", // Ancient arthropod
+	"Pteranodon", // Flying reptile
+	"Megalodon", // Giant shark
+	// Sci-Fi creatures
+	"Sandworm", // Dune - Shai-Hulud
+	"Thumper", // Dune - worm caller
+	"Stilgar", // Dune - Fremen leader (honorary creature)
+	"Thranx", // Alan Dean Foster's insectoid aliens
+	"Tribble", // Star Trek
+	"Sarlacc", // Star Wars
+	"Xenomorph", // Alien
+	"Replicant", // Blade Runner
+	"Tralfamadorian", // Vonnegut
+	"Bugger", // Ender's Game (Formics)
+	"Tarka", // Ring of Bright Water / Watership Down era
+	"Hrududu", // Watership Down - rabbit word for car/machine
 ];
 
 // Heartbeat interval for participant liveness (milliseconds)
