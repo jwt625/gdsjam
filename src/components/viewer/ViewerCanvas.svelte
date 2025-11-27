@@ -25,20 +25,27 @@ onMount(() => {
 	// Initialize renderer asynchronously
 	if (canvas) {
 		(async () => {
-			renderer = new PixiRenderer();
-			await renderer.init(canvas);
+			const newRenderer = new PixiRenderer();
+			await newRenderer.init(canvas);
 
+			// Set renderer AFTER init completes so $effect sees it as ready
+			renderer = newRenderer;
+
+			if (DEBUG) console.log("[ViewerCanvas] Renderer initialized and ready");
+
+			// If document was loaded before renderer was ready, render it now
 			if ($gdsStore.document) {
+				if (DEBUG) console.log("[ViewerCanvas] Document was waiting, rendering now");
 				lastRenderedDocument = $gdsStore.document;
 				gdsStore.setRendering(true, "Rendering...", 0);
-				await renderer.renderGDSDocument($gdsStore.document, (progress, message) => {
+				await newRenderer.renderGDSDocument($gdsStore.document, (progress, message) => {
 					gdsStore.setRendering(true, message, progress);
 					if (progress >= 100) {
 						setTimeout(() => gdsStore.setRendering(false), 500);
 					}
 				});
 			} else {
-				if (DEBUG) console.log("[ViewerCanvas] No document to render");
+				if (DEBUG) console.log("[ViewerCanvas] No document to render yet");
 			}
 		})();
 	}
@@ -77,10 +84,16 @@ onDestroy(() => {
 });
 
 // Subscribe to GDS store and render when document changes
-// Only react to document changes, not other store properties
+// React to both document changes AND renderer becoming ready
 $effect(() => {
 	const gdsDocument = $gdsStore.document;
-	if (renderer?.isReady() && gdsDocument && gdsDocument !== lastRenderedDocument) {
+	const rendererReady = renderer?.isReady() ?? false;
+
+	if (DEBUG && gdsDocument && !rendererReady) {
+		console.log("[ViewerCanvas] Document ready but renderer not initialized yet");
+	}
+
+	if (rendererReady && renderer && gdsDocument && gdsDocument !== lastRenderedDocument) {
 		if (DEBUG) {
 			console.log("[ViewerCanvas] Rendering document:", gdsDocument.name);
 		}
@@ -88,8 +101,11 @@ $effect(() => {
 		// Reset layer store initialization flag when new document is loaded
 		layerStoreInitialized = false;
 		gdsStore.setRendering(true, "Rendering...", 0);
+
+		// Capture renderer reference for async callback
+		const currentRenderer = renderer;
 		(async () => {
-			await renderer.renderGDSDocument(gdsDocument, (progress, message) => {
+			await currentRenderer.renderGDSDocument(gdsDocument, (progress, message) => {
 				gdsStore.setRendering(true, message, progress);
 				if (progress >= 100) {
 					setTimeout(() => gdsStore.setRendering(false), 500);

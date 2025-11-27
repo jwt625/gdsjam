@@ -284,7 +284,8 @@ export class SessionManager {
 
 		if (wasHost) {
 			// ======================================
-			// HOST REFRESH PATH: I am source of truth
+			// HOST REFRESH PATH: I am source of truth for metadata
+			// But file buffer is lost - need to get it from peers
 			// ======================================
 			if (DEBUG) {
 				console.log("[SessionManager] HOST PATH: Restoring from localStorage");
@@ -296,7 +297,15 @@ export class SessionManager {
 			// Connect to Y.js room
 			this.yjsProvider.connect(sessionId);
 
-			// Write session data to Y.js (host is authoritative)
+			// Wait for initial sync to get file buffer from peers
+			// (Host has metadata authority, but file buffer comes from peers)
+			const synced = await this.yjsProvider.waitForSync(5000);
+
+			if (DEBUG) {
+				console.log("[SessionManager] HOST PATH: Initial sync completed:", synced);
+			}
+
+			// Write session data to Y.js (host is authoritative for metadata)
 			this.yjsProvider.getDoc().transact(() => {
 				const sessionMap = this.yjsProvider.getMap<any>("session");
 
