@@ -205,34 +205,19 @@ function createCollaborationStore() {
 
 		/**
 		 * Get session manager instance
+		 * Note: Returns the closure-scoped sessionManager directly to avoid state mutation during render
 		 */
 		getSessionManager: (): SessionManager | null => {
-			let manager: SessionManager | null = null;
-			update((state) => {
-				manager = state.sessionManager;
-				return state;
-			});
-			return manager;
+			return sessionManager;
 		},
 
 		/**
 		 * Upload file to session (host only)
 		 */
 		uploadFile: async (arrayBuffer: ArrayBuffer, fileName: string) => {
-			// Get session manager reference
-			const getManager = (): SessionManager => {
-				let mgr: SessionManager | null = null;
-				update((state) => {
-					mgr = state.sessionManager;
-					return state;
-				});
-				if (!mgr) {
-					throw new Error("Session manager not initialized");
-				}
-				return mgr;
-			};
-
-			const manager = getManager();
+			if (!sessionManager) {
+				throw new Error("Session manager not initialized");
+			}
 
 			update((state) => ({
 				...state,
@@ -242,7 +227,7 @@ function createCollaborationStore() {
 			}));
 
 			try {
-				await manager.uploadFile(
+				await sessionManager.uploadFile(
 					arrayBuffer,
 					fileName,
 					(progress: number, message: string) => {
@@ -260,7 +245,7 @@ function createCollaborationStore() {
 				);
 
 				// Save to localStorage for session recovery
-				const metadata = manager.getFileMetadata();
+				const metadata = sessionManager.getFileMetadata();
 				if (
 					metadata &&
 					metadata.fileId &&
@@ -268,7 +253,7 @@ function createCollaborationStore() {
 					metadata.fileHash &&
 					metadata.fileSize
 				) {
-					manager.saveSessionToLocalStorage(
+					sessionManager.saveSessionToLocalStorage(
 						metadata.fileId,
 						metadata.fileName,
 						metadata.fileHash,
@@ -302,20 +287,9 @@ function createCollaborationStore() {
 			fileName: string;
 			fileHash: string;
 		}> => {
-			// Get session manager reference
-			const getManager = (): SessionManager => {
-				let mgr: SessionManager | null = null;
-				update((state) => {
-					mgr = state.sessionManager;
-					return state;
-				});
-				if (!mgr) {
-					throw new Error("Session manager not initialized");
-				}
-				return mgr;
-			};
-
-			const manager = getManager();
+			if (!sessionManager) {
+				throw new Error("Session manager not initialized");
+			}
 
 			update((state) => ({
 				...state,
@@ -325,7 +299,7 @@ function createCollaborationStore() {
 			}));
 
 			try {
-				const result = await manager.downloadFile(
+				const result = await sessionManager.downloadFile(
 					(progress: number, message: string) => {
 						update((state) => ({
 							...state,
@@ -341,7 +315,7 @@ function createCollaborationStore() {
 				);
 
 				// Save to localStorage for session recovery
-				const metadata = manager.getFileMetadata();
+				const metadata = sessionManager.getFileMetadata();
 				if (
 					metadata &&
 					metadata.fileId &&
@@ -349,7 +323,7 @@ function createCollaborationStore() {
 					metadata.fileHash &&
 					metadata.fileSize
 				) {
-					manager.saveSessionToLocalStorage(
+					sessionManager.saveSessionToLocalStorage(
 						metadata.fileId,
 						metadata.fileName,
 						metadata.fileHash,
@@ -381,14 +355,7 @@ function createCollaborationStore() {
 		 * Check if file is available in session
 		 */
 		isFileAvailable: (): boolean => {
-			let available = false;
-			update((state) => {
-				if (state.sessionManager) {
-					available = state.sessionManager.isFileAvailable();
-				}
-				return state;
-			});
-			return available;
+			return sessionManager?.isFileAvailable() ?? false;
 		},
 
 		/**
@@ -403,19 +370,9 @@ function createCollaborationStore() {
 			fileName: string;
 			fileHash: string;
 		}> => {
-			const getManager = (): SessionManager => {
-				let mgr: SessionManager | null = null;
-				update((state) => {
-					mgr = state.sessionManager;
-					return state;
-				});
-				if (!mgr) {
-					throw new Error("Session manager not initialized");
-				}
-				return mgr;
-			};
-
-			const manager = getManager();
+			if (!sessionManager) {
+				throw new Error("Session manager not initialized");
+			}
 
 			update((state) => ({
 				...state,
@@ -425,7 +382,7 @@ function createCollaborationStore() {
 			}));
 
 			try {
-				const result = await manager.downloadFileById(
+				const result = await sessionManager.downloadFileById(
 					fileId,
 					fileName,
 					fileHash,
