@@ -13,7 +13,8 @@ import { DEBUG } from "../config";
 import type { YjsProvider } from "./YjsProvider";
 
 // localStorage key prefix for host recovery (same browser, cross-tab)
-const HOST_RECOVERY_KEY_PREFIX = "gdsjam-was-host-";
+// Format: gdsjam_host_{sessionId} = userId
+const HOST_RECOVERY_KEY_PREFIX = "gdsjam_host_";
 
 // Grace period for disconnect detection (milliseconds)
 const DISCONNECT_GRACE_PERIOD = 10000; // 10 seconds
@@ -214,6 +215,22 @@ export class HostManager {
 			}
 		} catch (error) {
 			console.error("[HostManager] Failed to clear host recovery flag:", error);
+		}
+	}
+
+	/**
+	 * Check if user has host recovery flag for current session
+	 * Used to detect host refresh scenario before sync
+	 */
+	hasHostRecoveryFlag(): boolean {
+		if (!this.sessionId) return false;
+
+		const key = `${HOST_RECOVERY_KEY_PREFIX}${this.sessionId}`;
+		try {
+			const storedUserId = localStorage.getItem(key);
+			return storedUserId === this.userId;
+		} catch {
+			return false;
 		}
 	}
 

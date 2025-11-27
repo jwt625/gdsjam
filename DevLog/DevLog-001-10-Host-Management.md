@@ -344,6 +344,109 @@ Changes:
 - `src/stores/collaborationStore.ts` - Made store action async
 - `src/App.svelte` - Added await to joinSession call
 
+## State Architecture and Ground Truth (2025-11-27)
+
+### Design Intent
+
+The application has two modes:
+1. **No Session (Pure FE Viewer):** Local-only GDS file viewer. No server communication. Refresh clears everything. This is expected behavior.
+2. **With Session (Collaborative):** Real-time collaboration with host/viewer model. Server stores files, Y.js syncs state.
+
+### Ground Truth Rules
+
+| Role | Ground Truth | Rationale |
+|------|--------------|-----------|
+| **HOST** | localStorage | Host owns the session. Can always restore after refresh. |
+| **VIEWER** | Y.js (from host/peers) | Viewers receive state from host. Cannot restore alone. |
+
+### State Storage Locations
+
+```mermaid
+flowchart TB
+    subgraph "Browser Storage (Persistent)"
+        LS[localStorage]
+        LS --> LS1["USER_ID_KEY: gdsjam_user_id<br/>Value: persistent user UUID"]
+        LS --> LS2["HOST_RECOVERY_KEY: gdsjam_host_{sessionId}<br/>Value: userId (set when becoming host)"]
+        LS --> LS3["SESSION_STORAGE_KEY: gdsjam_session_{sessionId}<br/>Value: {fileId, fileName, fileHash, fileSize}"]
+    end
+
+    subgraph "Y.js Document (In-Memory, Synced via WebRTC)"
+        YJS[Y.js Doc]
+        YJS --> YJS1["session Map"]
+        YJS1 --> S1["sessionId, createdAt, uploadedBy"]
+        YJS1 --> S2["currentHostId, hostLastSeen"]
+        YJS1 --> S3["participants: YjsParticipant[]"]
+        YJS1 --> S4["fileId, fileName, fileSize, fileHash"]
+    end
+
+    subgraph "Y.js Awareness (Ephemeral, Real-time)"
+        AWR[Awareness Protocol]
+        AWR --> A1["Per-client: userId, isHost, cursor"]
+    end
+
+    subgraph "File Server (Persistent)"
+        FS[File Server]
+        FS --> F1["Files stored by SHA-256 hash"]
+    end
+```
+
+### State Recovery Matrix
+
+| State | HOST can recover from | VIEWER can recover from |
+|-------|----------------------|------------------------|
+| User Identity | localStorage | localStorage |
+| Host Status | localStorage flag | Y.js (from host) |
+| File Content | File server (via stored fileId) | File server (via Y.js fileId) |
+| File Metadata | localStorage | Y.js (from host) |
+| Participants List | Cannot (ephemeral) | Cannot (ephemeral) |
+| Session Existence | URL `?room=xyz` | URL `?room=xyz` |
+
+### Correct joinSession Flow
+
+```mermaid
+flowchart TD
+    J1["joinSession(roomId)"] --> J2{Check localStorage:<br/>Am I the host?}
+
+    J2 -->|"Yes: gdsjam_host_{roomId} = myUserId"| HOST
+    J2 -->|"No: no host flag or different userId"| VIEWER
+
+    subgraph HOST["Host Refresh Path"]
+        H1[I am source of truth]
+        H1 --> H2[Load file metadata from localStorage]
+        H2 --> H3[Connect to Y.js]
+        H3 --> H4[Write session data to Y.js]
+        H4 --> H5[Reclaim host status]
+        H5 --> H6[Download file from server using stored fileId]
+    end
+
+    subgraph VIEWER["Viewer Join Path"]
+        V1[Host is source of truth]
+        V1 --> V2[Connect to Y.js]
+        V2 --> V3[Wait for sync from host/peers]
+        V3 --> V4{Y.js has file metadata?}
+        V4 -->|Yes| V5[Download file from server]
+        V4 -->|No| V6[Wait for metadata observer<br/>or show 'waiting for host']
+    end
+```
+
+### Key Insights
+
+1. **Host OWNS the session data** - Their localStorage is authoritative
+2. **Y.js is a broadcast channel** - Distributes host's data to viewers
+3. **Viewers are receivers, not sources** - They defer to Y.js state
+4. **No session = no persistence** - Without `?room=`, app is stateless viewer
+5. **pendingFile is intentionally not persisted** - Pre-session state should not survive refresh
+
+### Current Bug (Host Refresh)
+
+The current `joinSession()` doesn't distinguish host from viewer:
+1. Connects to Y.js
+2. Waits for sync (5s timeout) - times out if no peers
+3. Writes participant data but NOT file metadata
+4. File metadata is never restored from localStorage
+
+**Fix Required:** Check if user is host FIRST (before Y.js operations). If host, restore from localStorage then write to Y.js. If viewer, wait for sync.
+
 ## Risk Mitigations
 
 | Risk | Mitigation |

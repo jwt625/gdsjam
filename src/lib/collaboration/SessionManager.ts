@@ -17,8 +17,11 @@ import { ParticipantManager } from "./ParticipantManager";
 import type { CollaborationEvent, SessionMetadata, UserInfo } from "./types";
 import { YjsProvider } from "./YjsProvider";
 
-const USER_ID_KEY = "gdsjam-user-id";
-const SESSION_STORAGE_PREFIX = "gdsjam-session-";
+// localStorage keys (documented in DevLog-001-10)
+// Format: gdsjam_user_id = persistent user UUID
+const USER_ID_KEY = "gdsjam_user_id";
+// Format: gdsjam_session_{sessionId} = {fileId, fileName, fileHash, fileSize}
+const SESSION_STORAGE_PREFIX = "gdsjam_session_";
 
 // Stored session info for recovery after refresh
 interface StoredSessionInfo {
@@ -251,35 +254,129 @@ export class SessionManager {
 
 	/**
 	 * Join an existing session
-	 * Waits for Y.js sync before writing to avoid conflicts that wipe host data.
+	 *
+	 * Ground Truth Architecture (from DevLog-001-10):
+	 * - HOST: localStorage is ground truth. Can always restore after refresh.
+	 * - VIEWER: Y.js (from host/peers) is ground truth. Defer to host.
+	 *
+	 * Flow:
+	 * 1. Check localStorage FIRST: Am I the host?
+	 * 2a. HOST path: I am source of truth -> Load from localStorage, connect to Y.js, write to Y.js
+	 * 2b. VIEWER path: Host is source of truth -> Connect to Y.js, wait for sync
 	 */
 	async joinSession(sessionId: string): Promise<void> {
 		this.sessionId = sessionId;
 
-		// Connect to Y.js room
-		this.yjsProvider.connect(sessionId);
-
-		// Initialize managers (sets up observers, no Y.js writes yet)
+		// Initialize managers with sessionId (sets up observers, no Y.js writes yet)
+		// Must happen before checking host flag so hasHostRecoveryFlag() works
 		this.hostManager.initialize(sessionId);
 		this.participantManager.initialize(sessionId);
 
-		// Set awareness immediately (safe - uses awareness protocol, not Y.js doc)
-		this.participantManager.setLocalAwarenessState({ isHost: false });
-
-		// Wait for Y.js to sync with peers before any document writes
-		const synced = await this.yjsProvider.waitForSync(5000);
+		// STEP 1: Check localStorage FIRST - Am I the host?
+		const wasHost = this.hostManager.hasHostRecoveryFlag();
 
 		if (DEBUG) {
-			console.log("[SessionManager] Sync completed:", synced);
+			console.log("[SessionManager] joinSession - checking host status:", {
+				sessionId,
+				wasHost,
+			});
 		}
 
-		// Now safe to write - document has host's data
-		const reclaimed = this.hostManager.tryReclaimHost();
-		this.participantManager.registerParticipant();
-		this.participantManager.setLocalAwarenessState({ isHost: reclaimed });
+		if (wasHost) {
+			// ======================================
+			// HOST REFRESH PATH: I am source of truth
+			// ======================================
+			if (DEBUG) {
+				console.log("[SessionManager] HOST PATH: Restoring from localStorage");
+			}
 
-		if (DEBUG) {
-			console.log("[SessionManager] Joined session:", sessionId, "reclaimed host:", reclaimed);
+			// Load file metadata from localStorage
+			const storedSession = this.loadSessionFromLocalStorage();
+
+			// Connect to Y.js room
+			this.yjsProvider.connect(sessionId);
+
+			// Write session data to Y.js (host is authoritative)
+			this.yjsProvider.getDoc().transact(() => {
+				const sessionMap = this.yjsProvider.getMap<any>("session");
+
+				// Restore session identity
+				sessionMap.set("sessionId", sessionId);
+				sessionMap.set("createdAt", Date.now());
+				sessionMap.set("uploadedBy", this.userId);
+
+				// Restore host management fields
+				sessionMap.set("currentHostId", this.userId);
+				sessionMap.set("hostLastSeen", Date.now());
+
+				// Restore file metadata if we have it
+				if (storedSession) {
+					sessionMap.set("fileId", storedSession.fileId);
+					sessionMap.set("fileName", storedSession.fileName);
+					sessionMap.set("fileSize", storedSession.fileSize);
+					sessionMap.set("fileHash", storedSession.fileHash);
+					sessionMap.set("uploadedAt", storedSession.savedAt);
+				}
+
+				// Re-register as participant
+				const existingParticipants = (sessionMap.get("participants") as any[]) || [];
+				const existingNames = existingParticipants.map((p) => p.displayName);
+				const displayName = this.participantManager.generateUniqueDisplayName(
+					this.userId,
+					existingNames.filter((n) => n !== undefined),
+				);
+				const hostParticipant = {
+					userId: this.userId,
+					displayName,
+					joinedAt: Date.now(),
+					color: this.participantManager.getLocalColor(),
+				};
+
+				// Replace or add self to participants
+				const filteredParticipants = existingParticipants.filter((p) => p.userId !== this.userId);
+				sessionMap.set("participants", [...filteredParticipants, hostParticipant]);
+				this.participantManager.setLocalDisplayName(displayName);
+			});
+
+			// Update local state
+			this.hostManager.setIsHostLocal(true);
+			this.hostManager.startHostHeartbeat();
+			this.participantManager.setLocalAwarenessState({ isHost: true });
+
+			// Clear recovery flag (successfully reclaimed)
+			this.hostManager.clearHostRecoveryFlag();
+
+			if (DEBUG) {
+				console.log("[SessionManager] HOST PATH complete - restored from localStorage");
+			}
+		} else {
+			// ======================================
+			// VIEWER PATH: Host is source of truth
+			// ======================================
+			if (DEBUG) {
+				console.log("[SessionManager] VIEWER PATH: Waiting for sync from host");
+			}
+
+			// Set awareness immediately (safe - uses awareness protocol, not Y.js doc)
+			this.participantManager.setLocalAwarenessState({ isHost: false });
+
+			// Connect to Y.js room
+			this.yjsProvider.connect(sessionId);
+
+			// Wait for Y.js to sync with peers before any document writes
+			const synced = await this.yjsProvider.waitForSync(5000);
+
+			if (DEBUG) {
+				console.log("[SessionManager] Sync completed:", synced);
+			}
+
+			// Now safe to write - document has host's data
+			this.participantManager.registerParticipant();
+			this.participantManager.setLocalAwarenessState({ isHost: false });
+
+			if (DEBUG) {
+				console.log("[SessionManager] VIEWER PATH complete - synced from host/peers");
+			}
 		}
 	}
 

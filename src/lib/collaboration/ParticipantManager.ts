@@ -223,6 +223,33 @@ export class ParticipantManager {
 	}
 
 	/**
+	 * Re-register existing participant (for host reclaim after refresh)
+	 * Finds existing participant entry and updates local state without Y.js write
+	 */
+	reregisterExistingParticipant(): void {
+		const sessionMap = this.yjsProvider.getMap<any>("session");
+		const existingParticipants = (sessionMap.get("participants") as YjsParticipant[]) || [];
+
+		// Find our existing entry
+		const existing = existingParticipants.find((p) => p.userId === this.userId);
+		if (existing) {
+			this.localDisplayName = existing.displayName;
+			if (DEBUG) {
+				console.log(
+					"[ParticipantManager] Re-registered existing participant:",
+					existing.displayName,
+				);
+			}
+		} else {
+			// Fallback: register as new if not found (shouldn't happen for host reclaim)
+			if (DEBUG) {
+				console.log("[ParticipantManager] Existing participant not found, registering as new");
+			}
+			this.registerParticipant();
+		}
+	}
+
+	/**
 	 * Unregister self from participants (on leave)
 	 */
 	unregisterParticipant(): void {
