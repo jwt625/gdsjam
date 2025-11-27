@@ -70,6 +70,7 @@ export interface ViewportState {
  */
 export interface UserInfo {
 	id: string;
+	displayName: string; // Display name for the user
 	color: string; // Assigned color for viewport rectangles
 	isHost: boolean;
 	joinedAt: number;

@@ -468,6 +468,7 @@ export class SessionManager {
 		// Convert YjsParticipant to UserInfo
 		const users: UserInfo[] = participants.map((p) => ({
 			id: p.userId,
+			displayName: p.displayName,
 			color: p.color,
 			isHost: p.userId === currentHostId,
 			joinedAt: p.joinedAt,
@@ -477,6 +478,7 @@ export class SessionManager {
 		if (users.length === 0) {
 			users.push({
 				id: this.userId,
+				displayName: this.participantManager.getLocalDisplayName() || "You",
 				color: this.participantManager.getLocalColor(),
 				isHost: this.hostManager.getIsHost(),
 				joinedAt: Date.now(),

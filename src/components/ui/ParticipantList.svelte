@@ -1,5 +1,4 @@
 <script lang="ts">
-import type { YjsParticipant } from "../../lib/collaboration/types";
 import { DEBUG } from "../../lib/config";
 import { collaborationStore } from "../../stores/collaborationStore";
 
@@ -9,8 +8,7 @@ interface Props {
 
 const { visible = true }: Props = $props();
 
-// Local state for participant list and confirmation dialog
-let participants = $state<YjsParticipant[]>([]);
+// Local state for confirmation dialog
 let showTransferConfirm = $state(false);
 let transferTargetId = $state<string | null>(null);
 let transferTargetName = $state<string | null>(null);
@@ -22,33 +20,11 @@ function toggleCollapsed() {
 	isCollapsed = !isCollapsed;
 }
 
-// Get current user ID
+// Use connectedUsers from the store - it already has isHost computed correctly per user
+// This automatically updates when host changes via store subscription
 const currentUserId = $derived($collaborationStore.userId);
 const isHost = $derived($collaborationStore.isHost);
-const currentHostId = $derived.by(() => {
-	const sessionManager = collaborationStore.getSessionManager();
-	return sessionManager?.getHostManager()?.getCurrentHostId() ?? null;
-});
-
-// Subscribe to participant changes
-$effect(() => {
-	const sessionManager = collaborationStore.getSessionManager();
-	if (!sessionManager) return;
-
-	const participantManager = sessionManager.getParticipantManager();
-	if (!participantManager) return;
-
-	// Initial load
-	participants = participantManager.getParticipants();
-
-	// Subscribe to changes
-	participantManager.onParticipantsChanged((newParticipants) => {
-		participants = newParticipants;
-		if (DEBUG) {
-			console.log("[ParticipantList] Participants updated:", newParticipants.length);
-		}
-	});
-});
+const connectedUsers = $derived($collaborationStore.connectedUsers);
 
 function handleMakeHost(userId: string, displayName: string) {
 	transferTargetId = userId;
@@ -76,7 +52,7 @@ function cancelTransfer() {
 {#if visible && $collaborationStore.isInSession}
 	<div class="participant-list" class:collapsed={isCollapsed}>
 		<button type="button" class="panel-header" onclick={toggleCollapsed} aria-expanded={!isCollapsed}>
-			<h3>Participants ({participants.length})</h3>
+			<h3>Participants ({connectedUsers.length})</h3>
 			<svg class="chevron-icon" class:rotated={isCollapsed} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 				<polyline points="6 9 12 15 18 9"></polyline>
 			</svg>
@@ -84,22 +60,22 @@ function cancelTransfer() {
 
 		{#if !isCollapsed}
 			<div class="participant-items">
-				{#each participants as participant (participant.userId)}
+				{#each connectedUsers as user (user.id)}
 					<div class="participant-item">
-						<div class="color-indicator" style="background-color: {participant.color}"></div>
+						<div class="color-indicator" style="background-color: {user.color}"></div>
 						<span class="participant-name">
-							{participant.displayName}
-							{#if participant.userId === currentUserId}
+							{user.displayName}
+							{#if user.id === currentUserId}
 								<span class="you-badge">You</span>
 							{/if}
 						</span>
-						{#if participant.userId === currentHostId}
+						{#if user.isHost}
 							<span class="host-badge">Host</span>
 						{:else if isHost}
 							<button
 								type="button"
 								class="make-host-btn"
-								onclick={() => handleMakeHost(participant.userId, participant.displayName)}
+								onclick={() => handleMakeHost(user.id, user.displayName)}
 							>
 								Make Host
 							</button>
@@ -136,7 +112,7 @@ function cancelTransfer() {
 <style>
 	.participant-list {
 		position: fixed;
-		top: 80px;
+		top: 100px;
 		left: 10px;
 		width: 240px;
 		max-height: 300px;
