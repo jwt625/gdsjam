@@ -405,7 +405,7 @@ Changes:
 
 ## TODO
 
-Phase 0 (Refactoring): ✅ COMPLETE
+Phase 0 (Refactoring): COMPLETE
 - [x] Add `YjsSessionData` and `YjsParticipant` interfaces to `types.ts`
 - [x] Create `HostManager.ts` with host state interface (stub methods)
 - [x] Create `ParticipantManager.ts` with participant/naming interface (stub methods)
@@ -416,7 +416,7 @@ Phase 0 (Refactoring): ✅ COMPLETE
 - [x] Verify collaborationStore works unchanged (facade pattern)
 - [ ] Run existing tests to confirm no regressions
 
-Phase 1 (Issue #19 - Host Management): ✅ COMPLETE (implementation done, needs testing)
+Phase 1 (Issue #19 - Host Management): COMPLETE (implementation done, needs testing)
 - [x] Implement `setCurrentHostId()` and `getCurrentHostId()` in HostManager
 - [x] Implement `updateHostLastSeen()` with interval timer
 - [x] Implement `isCurrentHostConnected()` using Awareness API
@@ -433,7 +433,7 @@ Phase 1 (Issue #19 - Host Management): ✅ COMPLETE (implementation done, needs 
 - [ ] Run Phase 1 unit tests
 - [ ] Run Phase 1 integration tests
 
-Phase 2 (Participant List UI): ✅ COMPLETE (implementation done, needs UI component)
+Phase 2 (Participant List UI): COMPLETE (implementation done, needs UI component)
 - [x] Implement `generateUniqueDisplayName(userId, existingNames)` with collision handling
 - [x] Implement `registerParticipant()` to add self to Y.js with unique name
 - [x] Implement `setLocalAwarenessState()` in ParticipantManager
@@ -443,7 +443,7 @@ Phase 2 (Participant List UI): ✅ COMPLETE (implementation done, needs UI compo
 - [ ] Run Phase 2 unit tests
 - [ ] Run Phase 2 integration tests
 
-Phase 3 (Host Transfer): ✅ COMPLETE (implementation done, needs UI component)
+Phase 3 (Host Transfer): COMPLETE (implementation done, needs UI component)
 - [x] Implement `getTransferCandidates()` returning viewers by joinedAt
 - [x] Implement `transferHost(targetUserId)` in HostManager
 - [ ] Add "Make Host" button to ParticipantList (default: first joined)

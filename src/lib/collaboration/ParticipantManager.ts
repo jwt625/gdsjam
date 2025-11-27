@@ -266,6 +266,18 @@ export class ParticipantManager {
 	}
 
 	/**
+	 * Set local user's display name (without writing to Y.js)
+	 * Used when display name is already set in a transaction
+	 */
+	setLocalDisplayName(displayName: string): void {
+		this.localDisplayName = displayName;
+
+		if (DEBUG) {
+			console.log("[ParticipantManager] Set local display name:", displayName);
+		}
+	}
+
+	/**
 	 * Get local user's color
 	 */
 	getLocalColor(): string {

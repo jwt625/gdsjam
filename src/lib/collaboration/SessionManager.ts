@@ -97,12 +97,27 @@ export class SessionManager {
 		this.hostManager.initialize(sessionId);
 		this.participantManager.initialize(sessionId);
 
-		// Initialize session metadata in a single transaction to avoid multiple broadcasts
+		// Initialize ALL session metadata in a single transaction to avoid race conditions
+		// This includes: session info, file info, host info, and initial participant
+		// Multiple transactions can cause sync issues where viewers see incomplete state
 		this.yjsProvider.getDoc().transact(() => {
 			const sessionMap = this.yjsProvider.getMap<any>("session");
 			sessionMap.set("sessionId", sessionId);
 			sessionMap.set("createdAt", Date.now());
 			sessionMap.set("uploadedBy", this.userId);
+
+			// Host management fields
+			sessionMap.set("currentHostId", this.userId);
+			sessionMap.set("hostLastSeen", Date.now());
+
+			// Initial participant (host)
+			const hostParticipant = {
+				userId: this.userId,
+				displayName: this.participantManager.generateUniqueDisplayName(this.userId, []),
+				joinedAt: Date.now(),
+				color: this.participantManager.getLocalColor(),
+			};
+			sessionMap.set("participants", [hostParticipant]);
 
 			// If there's a pending file (uploaded before session creation), add its metadata
 			if (this.pendingFile) {
@@ -118,9 +133,12 @@ export class SessionManager {
 			}
 		});
 
-		// Set ourselves as host and register as participant
-		this.hostManager.setCurrentHostId(this.userId);
-		this.participantManager.registerParticipant();
+		// Update local state in managers (no Y.js writes, just local state)
+		this.hostManager.setIsHostLocal(true);
+		this.hostManager.startHostHeartbeat();
+		this.participantManager.setLocalDisplayName(
+			this.participantManager.generateUniqueDisplayName(this.userId, []),
+		);
 		this.participantManager.setLocalAwarenessState({ isHost: true });
 
 		// Store the pending file buffer for potential re-sharing, save to localStorage, then clear pending state

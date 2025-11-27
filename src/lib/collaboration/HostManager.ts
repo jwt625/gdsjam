@@ -114,9 +114,21 @@ export class HostManager {
 	}
 
 	/**
+	 * Set local isHost state without writing to Y.js
+	 * Used when host state is already set in a transaction
+	 */
+	setIsHostLocal(isHost: boolean): void {
+		this.isHost = isHost;
+
+		if (DEBUG) {
+			console.log("[HostManager] Set local isHost:", isHost);
+		}
+	}
+
+	/**
 	 * Start heartbeat interval to update hostLastSeen
 	 */
-	private startHostHeartbeat(): void {
+	startHostHeartbeat(): void {
 		this.stopHostHeartbeat();
 		this.hostHeartbeatInterval = setInterval(() => {
 			this.updateHostLastSeen();
