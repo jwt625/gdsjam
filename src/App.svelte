@@ -176,35 +176,43 @@ onMount(async () => {
 				// Wait for metadata to appear by observing the session map
 				const sessionMap = sessionManager.getProvider().getMap("session");
 				const awareness = sessionManager.getProvider().getAwareness();
-				let hasDownloaded = false;
+				let currentFileId: string | null = null;
+				let isDownloading = false;
 				let hasShownSessionEndedNotice = false;
 
-				const observer = () => {
-					if (hasDownloaded) return;
+				const downloadNewFile = async (fileId: string) => {
+					if (isDownloading) return;
+					isDownloading = true;
 
-					if (sessionMap.has("fileId")) {
-						hasDownloaded = true;
+					if (DEBUG) {
+						console.log("[App] New file detected in session, downloading...", fileId);
+					}
+
+					try {
+						const { arrayBuffer, fileName } = await collaborationStore.downloadFile();
+						await loadGDSIIFromBuffer(arrayBuffer, fileName);
+						currentFileId = fileId;
 
 						if (DEBUG) {
-							console.log("[App] File metadata appeared in session, downloading...");
+							console.log("[App] File loaded from session successfully");
 						}
+					} catch (error) {
+						console.error("[App] Failed to download file from session:", error);
+						gdsStore.setError(
+							`Failed to download file from session: ${error instanceof Error ? error.message : String(error)}`,
+						);
+					} finally {
+						isDownloading = false;
+					}
+				};
 
-						collaborationStore
-							.downloadFile()
-							.then(({ arrayBuffer, fileName }) => {
-								return loadGDSIIFromBuffer(arrayBuffer, fileName);
-							})
-							.then(() => {
-								if (DEBUG) {
-									console.log("[App] File loaded from session successfully");
-								}
-							})
-							.catch((error) => {
-								console.error("[App] Failed to download file from session:", error);
-								gdsStore.setError(
-									`Failed to download file from session: ${error instanceof Error ? error.message : String(error)}`,
-								);
-							});
+				const observer = () => {
+					if (isDownloading) return;
+
+					const fileId = sessionMap.get("fileId") as string | undefined;
+					if (fileId && fileId !== currentFileId) {
+						// New file available - download it
+						downloadNewFile(fileId);
 					}
 				};
 
@@ -224,7 +232,7 @@ onMount(async () => {
 
 				// Check session status based on peer count instead of aggressive timeout
 				const checkSessionStatus = () => {
-					if (hasDownloaded || sessionMap.has("fileId")) {
+					if (currentFileId || sessionMap.has("fileId")) {
 						return; // File available, no need to check
 					}
 
@@ -253,8 +261,7 @@ onMount(async () => {
 
 				// Listen for awareness changes to update peer count
 				awareness.on("change", () => {
-					if (hasDownloaded) return;
-
+					// No early return needed - awareness changes don't trigger downloads
 					const peerCount = awareness.getStates().size - 1;
 					if (DEBUG) {
 						console.log("[App] Awareness changed - peer count:", peerCount);
