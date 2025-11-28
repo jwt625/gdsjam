@@ -1,8 +1,9 @@
 # View Box Sharing
 
 **Date:** 2025-11-27
-**Status:** Planning
+**Status:** Phase 1 Complete
 **Issue:** https://github.com/jwt625/gdsjam/issues/15
+**PR:** https://github.com/jwt625/gdsjam/pull/25
 
 ## Problem Statement
 
@@ -89,7 +90,7 @@ When following host, disable these inputs:
 
 ## Implementation Phases
 
-### Phase 1: Host Broadcast and Follow Sync
+### Phase 1: Host Broadcast and Follow Sync [COMPLETE]
 
 Core viewport synchronization between host and followers.
 
@@ -100,29 +101,44 @@ Core viewport synchronization between host and followers.
 - Following viewers have viewport locked to host
 - New joiners default to follow when broadcast is active
 
-**Files to Create:**
-- `src/lib/collaboration/ViewportSync.ts` - Viewport state sync via Awareness API
+**Files Created:**
+- `src/lib/collaboration/ViewportSync.ts` - Viewport state sync via Awareness API (275 lines)
 
-**Files to Modify:**
-- `src/lib/collaboration/types.ts` - Add ViewportState interface
-- `src/lib/collaboration/SessionManager.ts` - Expose viewport sync methods
-- `src/lib/collaboration/YjsProvider.ts` - Add viewport to awareness state
-- `src/stores/collaborationStore.ts` - Add broadcast/follow state and actions
-- `src/components/ui/ParticipantList.svelte` - Add broadcast toggle (host) and follow checkbox (viewers)
-- `src/components/viewer/ViewerCanvas.svelte` - Connect viewport sync to renderer
-- `src/lib/renderer/PixiRenderer.ts` - Add viewport change callback for sync
+**Files Modified:**
+- `src/lib/collaboration/types.ts` - Renamed ViewportState to CollaborativeViewportState
+- `src/lib/collaboration/SessionManager.ts` - Added ViewportSync integration and facade methods
+- `src/stores/collaborationStore.ts` - Added broadcast/follow state, toast management
+- `src/components/ui/ParticipantList.svelte` - Added broadcast toggle (host) and follow checkbox (viewers)
+- `src/components/viewer/ViewerCanvas.svelte` - Connected viewport sync, viewport locking, toast display
+- `src/lib/renderer/PixiRenderer.ts` - Added onViewportChanged, onViewportBlocked callbacks, viewport lock
 
-**TODO:**
-- [ ] Define ViewportState interface in types.ts
-- [ ] Create ViewportSync class with throttled broadcast
-- [ ] Add setViewportAwareness() to YjsProvider
-- [ ] Add onViewportChanged callback to PixiRenderer
-- [ ] Implement broadcast toggle in SessionManager
-- [ ] Add follow state to collaborationStore
-- [ ] Update ParticipantList with broadcast/follow UI
-- [ ] Connect ViewerCanvas to apply received viewport state
-- [ ] Handle new joiner default follow behavior
-- [ ] Add host "reset all to follow" action
+**Implementation Notes:**
+- 200ms throttle on viewport broadcasts
+- Coordinate transformation handles Y-flip (scaleY = -scaleX) for GDSII coordinate system
+- Toast auto-hides after 2 seconds, re-shows on blocked interaction
+- Viewport lock disables: pan, zoom, fit-to-view (F key and mobile button)
+- Broadcast state stored in Y.js session map (ephemeral)
+- Viewport data stored in Y.js Awareness API (ephemeral)
+
+**Completed Tasks:**
+- [x] Define CollaborativeViewportState interface in types.ts
+- [x] Create ViewportSync class with throttled broadcast
+- [x] Add onViewportChanged callback to PixiRenderer
+- [x] Add onViewportBlocked callback for locked viewport feedback
+- [x] Implement broadcast toggle in SessionManager
+- [x] Add follow state to collaborationStore
+- [x] Update ParticipantList with broadcast/follow UI
+- [x] Connect ViewerCanvas to apply received viewport state
+- [x] Handle new joiner default follow behavior
+- [x] Add error handling in doBroadcast
+- [x] Add null checks in setupViewportSync
+- [x] fitToView respects viewport lock
+
+**Deferred to Phase 2/3:**
+- [ ] Host "reset all to follow" action
+- [ ] Optimize awareness listener (filter by added/removed)
+- [ ] Improve type safety (reduce `any` usage in Y.js maps)
+- [ ] Add test coverage
 
 ### Phase 2: Minimap with Own Viewport
 

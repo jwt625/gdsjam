@@ -113,18 +113,23 @@ export class ViewportSync {
 	 * Actually broadcast the viewport via Awareness
 	 */
 	private doBroadcast(viewport: CollaborativeViewportState): void {
-		const awareness = this.yjsProvider.getAwareness();
-		const currentState = awareness.getLocalState() || {};
+		try {
+			const awareness = this.yjsProvider.getAwareness();
+			const currentState = awareness.getLocalState() || {};
 
-		awareness.setLocalState({
-			...currentState,
-			viewport,
-		});
+			awareness.setLocalState({
+				...currentState,
+				viewport,
+			});
 
-		this.lastBroadcastTime = Date.now();
+			this.lastBroadcastTime = Date.now();
 
-		if (DEBUG) {
-			console.log("[ViewportSync] Broadcast viewport:", viewport);
+			if (DEBUG) {
+				console.log("[ViewportSync] Broadcast viewport:", viewport);
+			}
+		} catch (error) {
+			console.error("[ViewportSync] Failed to broadcast viewport:", error);
+			// Don't throw - viewport sync is non-critical
 		}
 	}
 
@@ -135,7 +140,7 @@ export class ViewportSync {
 		const awareness = this.yjsProvider.getAwareness();
 		const currentState = awareness.getLocalState() || {};
 
-		// Remove viewport field (using _ prefix to indicate intentionally unused)
+		// Remove viewport field by destructuring it out
 		const { viewport: _viewport, ...rest } = currentState as any;
 		awareness.setLocalState(rest);
 

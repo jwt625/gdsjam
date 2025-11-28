@@ -86,8 +86,9 @@ onMount(() => {
  * Set up viewport sync callbacks for collaboration
  */
 function setupViewportSync() {
+	if (!renderer || !isInSession) return;
 	const sessionManager = collaborationStore.getSessionManager();
-	if (!sessionManager || !renderer) return;
+	if (!sessionManager) return;
 
 	// Set up callbacks for viewport sync
 	sessionManager.setViewportSyncCallbacks({
