@@ -120,6 +120,20 @@ Core viewport synchronization between host and followers.
 - Broadcast state stored in Y.js session map (ephemeral)
 - Viewport data stored in Y.js Awareness API (ephemeral)
 
+**Bug Fixes:**
+
+1. **Viewport sync not working when file uploaded before session**
+   - Root cause: `setupViewportSync()` only ran once during `onMount` when `isInSession` was `false`
+   - Fix: Added reactive `$effect` in ViewerCanvas.svelte to re-call `setupViewportSync()` when `isInSession` becomes true
+
+2. **Late-joining viewers not auto-following host**
+   - Root cause: Y.Map observers only fire on changes, not initial state. Previous attempts (calling after sync, rebroadcasting on peer-join) failed due to timing issues.
+   - Fix: Implemented priority-based sync system:
+     - P0 (Host toggle): Y.Map changes reset all viewer overrides
+     - P1 (Viewer toggle): Local override takes precedence over heartbeat
+     - P2 (Heartbeat): Host includes `broadcastEnabled: true` in awareness updates
+   - Late joiners receive broadcast state via first awareness update, resolving timing issues
+
 **Completed Tasks:**
 - [x] Define CollaborativeViewportState interface in types.ts
 - [x] Create ViewportSync class with throttled broadcast
