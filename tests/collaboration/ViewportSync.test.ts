@@ -206,7 +206,7 @@ describe("ViewportSync", () => {
 
 		it("should call onHostViewportChanged when host viewport updates (for non-host)", () => {
 			// Set up as viewer
-			const sync = new ViewportSync(mockProvider as any, "viewer-user", callbacks);
+			new ViewportSync(mockProvider as any, "viewer-user", callbacks);
 
 			// Set up host's broadcast
 			mockProvider._sessionMapData.set("broadcastEnabled", true);
@@ -222,6 +222,28 @@ describe("ViewportSync", () => {
 			mockProvider._triggerAwarenessChange();
 
 			expect(callbacks.onHostViewportChanged).toHaveBeenCalled();
+		});
+
+		it("should notify initial broadcast state when joining session with active broadcast", () => {
+			// Set up existing broadcast before viewer joins
+			mockProvider._sessionMapData.set("broadcastEnabled", true);
+			mockProvider._sessionMapData.set("broadcastHostId", "host-user");
+
+			// Create sync as a late-joining viewer
+			new ViewportSync(mockProvider as any, "late-viewer", callbacks);
+
+			// Should have been called during construction with initial state
+			expect(callbacks.onBroadcastStateChanged).toHaveBeenCalledWith(true, "host-user");
+		});
+
+		it("should not notify initial broadcast state when broadcast is disabled", () => {
+			// No broadcast set up
+
+			// Create sync
+			new ViewportSync(mockProvider as any, "viewer-user", callbacks);
+
+			// Should NOT have been called (broadcast not enabled)
+			expect(callbacks.onBroadcastStateChanged).not.toHaveBeenCalled();
 		});
 	});
 

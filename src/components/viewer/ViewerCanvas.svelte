@@ -208,6 +208,15 @@ $effect(() => {
 		console.log("[ViewerCanvas] Viewport locked:", shouldLock);
 	}
 });
+
+// Re-setup viewport sync when session state changes
+// This handles the case where file was uploaded before session was created
+$effect(() => {
+	// Track isInSession to re-trigger when joining session
+	if (isInSession && renderer?.isReady()) {
+		setupViewportSync();
+	}
+});
 </script>
 
 <div class="viewer-container">
