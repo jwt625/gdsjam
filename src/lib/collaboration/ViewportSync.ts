@@ -14,7 +14,7 @@
  */
 
 import { DEBUG } from "../config";
-import type { AwarenessState, CollaborativeViewportState, YjsSessionData } from "./types";
+import type { AwarenessState, CollaborativeViewportState } from "./types";
 import type { YjsProvider } from "./YjsProvider";
 
 // Throttle interval for viewport broadcasts (milliseconds)
@@ -150,17 +150,10 @@ export class ViewportSync {
 	}
 
 	/**
-	 * Get typed session map
-	 */
-	private getSessionMap() {
-		return this.yjsProvider.getMap<YjsSessionData[keyof YjsSessionData]>("session");
-	}
-
-	/**
 	 * Enable broadcast mode (host only)
 	 */
 	enableBroadcast(): void {
-		const sessionMap = this.getSessionMap();
+		const sessionMap = this.yjsProvider.getMap<boolean | string>("session");
 		this.yjsProvider.getDoc().transact(() => {
 			sessionMap.set("broadcastEnabled", true);
 			sessionMap.set("broadcastHostId", this.userId);
@@ -175,7 +168,7 @@ export class ViewportSync {
 	 * Disable broadcast mode
 	 */
 	disableBroadcast(): void {
-		const sessionMap = this.getSessionMap();
+		const sessionMap = this.yjsProvider.getMap<boolean | string>("session");
 		this.yjsProvider.getDoc().transact(() => {
 			sessionMap.set("broadcastEnabled", false);
 			sessionMap.delete("broadcastHostId");
@@ -192,7 +185,7 @@ export class ViewportSync {
 	 * Check if broadcast is currently enabled
 	 */
 	isBroadcastEnabled(): boolean {
-		const sessionMap = this.getSessionMap();
+		const sessionMap = this.yjsProvider.getMap<boolean | string>("session");
 		return sessionMap.get("broadcastEnabled") === true;
 	}
 
@@ -200,7 +193,7 @@ export class ViewportSync {
 	 * Get current broadcast host ID
 	 */
 	getBroadcastHostId(): string | null {
-		const sessionMap = this.getSessionMap();
+		const sessionMap = this.yjsProvider.getMap<boolean | string>("session");
 		const hostId = sessionMap.get("broadcastHostId");
 		return typeof hostId === "string" ? hostId : null;
 	}
@@ -249,9 +242,9 @@ export class ViewportSync {
 	 * Set up listener for session map changes (broadcast state)
 	 */
 	private setupSessionMapListener(): void {
-		const sessionMap = this.getSessionMap();
+		const sessionMap = this.yjsProvider.getMap<boolean | string>("session");
 
-		sessionMap.observe((event) => {
+		sessionMap.observe((event: { keysChanged: Set<string> }) => {
 			if (event.keysChanged.has("broadcastEnabled") || event.keysChanged.has("broadcastHostId")) {
 				const enabled = this.isBroadcastEnabled();
 				const hostId = this.getBroadcastHostId();
