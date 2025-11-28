@@ -21,6 +21,24 @@ Users in a collaborative session need to share viewport state for two use cases:
 | Viewer control | Checkbox to toggle "Follow host" on/off |
 | Host control | Can reset all viewers to follow mode |
 | Viewport lock | Locked when following; viewers cannot pan/zoom |
+| Lock feedback | Non-invasive floating toast: "Host is controlling your view" (disappears quickly) |
+
+### Viewport Lock Implementation
+
+When following host, disable these inputs:
+- Arrow key panning
+- Mouse wheel zoom
+- Pinch-to-zoom (mobile)
+- Fit-to-view keyboard shortcut (F key)
+- Fit-to-view mobile button
+- Touch/mouse pan gestures
+
+### Viewport Sync Details
+
+| Aspect | Decision | Rationale |
+|--------|----------|-----------|
+| Position sync | Apply host's center point and zoom | Viewers see same content; edges differ by screen size |
+| Broadcast persistence | Save in host's localStorage + check Y.js on reconnect | Survives host refresh |
 
 ### Viewport Visualization
 
@@ -194,11 +212,11 @@ File transfer uses Y.js document (persistent CRDT). Viewport sync uses Awareness
 
 **Consideration:** When host transfers, decide whether new host inherits broadcast state or starts fresh. Recommend: clear broadcast on transfer (new host starts fresh).
 
-### 5. Race Condition on Refresh: MODERATE RISK
+### 5. Race Condition on Refresh: LOW RISK
 
-`hostBroadcastEnabled` is in Y.js session map, not localStorage. After host refresh, broadcast state may be lost.
+`broadcastEnabled` is in Y.js session map, not localStorage. After host refresh, broadcast state may be lost.
 
-**Mitigation for MVP:** Accept that broadcast state is lost on refresh. Host can re-enable. Low impact.
+**Mitigation for Phase 1 MVP:** Accept that broadcast state is lost on refresh. Host can re-enable. Low impact - viewport/broadcast state is cheap and non-critical.
 
 ### 6. Performance: MODERATE RISK
 
@@ -220,11 +238,56 @@ PR #24 feedback notes race condition in heartbeat updates and aggressive stale t
 | Separation of concerns | Moderate | Extend `ParticipantManager.setLocalAwarenessState()` |
 | File transfer interference | Very Low | Separate data paths |
 | Host state interference | Low | Clear broadcast on host transfer |
-| Race condition (refresh) | Moderate | Accept broadcast loss on refresh for MVP |
+| Race condition (refresh) | Low | Accept loss on refresh for MVP |
 | Performance | Moderate | Debounce/filter awareness listener |
 | Existing PR #24 bugs | Low | Address in parallel |
 
 **Overall:** Existing architecture is well-suited for viewport sync. Main concerns are performance (awareness listener optimization) and separation of concerns (ViewportSync interaction with ParticipantManager). No fundamental architectural changes needed.
+
+## Pre-Implementation Decisions (Resolved)
+
+### 1. Duplicate ViewportState Interface - RESOLVED
+
+**Decision:** Rename collaboration type to `CollaborativeViewportState` before starting implementation.
+
+- `src/lib/renderer/PixiRenderer.ts`: Keep as `ViewportState` (internal renderer state)
+- `src/lib/collaboration/types.ts`: Rename to `CollaborativeViewportState` (sync metadata)
+
+### 2. Awareness Listener Optimization - RESOLVED
+
+**Decision:** Accept for MVP. No optimization needed.
+
+Rationale: ~250 awareness updates/sec with 50 participants is trivial for modern JS. Can optimize later if profiling shows issues.
+
+### 3. Viewport Callback in PixiRenderer - RESOLVED
+
+**Decision:** Add `onViewportChanged` callback to PixiRenderer.
+
+- Call from `handleZoom()` and `handlePan()`
+- Throttle at the caller (ViewportSync), not in PixiRenderer
+
+### 4. Toast Timing for "Host is controlling your view" - RESOLVED
+
+**Decision:** Show toast in both cases:
+- Once when follow mode is first enabled (or user joins with broadcast active)
+- Again when user tries to interact while locked (click, drag, scroll, keyboard)
+
+### 5. Single Writer Pattern for Awareness - RESOLVED
+
+**Decision for Phase 1:** Use `awareness.setLocalStateField('viewport', data)` which merges with existing fields. Keep ViewportSync separate from ParticipantManager.
+
+This approach:
+- Avoids coupling ViewportSync to ParticipantManager
+- Uses Y.js's built-in field merging
+- Does not affect Phase 3 implementation (can revisit pattern then)
+
+### 6. Broadcast/Viewport State Persistence on Refresh - RESOLVED
+
+**Decision:** Accept state loss on host refresh for Phase 1 MVP.
+
+- Viewport position (x, y, scale) is cheap/non-critical
+- broadcastEnabled flag loss is acceptable - host can re-enable
+- Simplifies implementation; no localStorage needed for this feature
 
 ## Success Criteria
 
