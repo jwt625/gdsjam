@@ -479,6 +479,22 @@ HOST PATH was waiting for Y.js sync (5s timeout) even though host has all metada
 
 **Fix:** Removed `waitForSync()` call from HOST PATH. Host connects to Y.js without waiting, then writes authoritative metadata immediately.
 
+**Bug 4: Host Re-Upload Not Syncing to Viewers**
+
+When host uploaded a new file (replacing an existing one), viewers did not receive the update without manually refreshing the page.
+
+**Root Cause:** The file observer in `App.svelte` had two issues:
+1. Used a boolean `hasDownloaded` flag - once set to `true` after the first download, subsequent file changes were ignored.
+2. The observer was only set up in the `else` branch (when no file was initially available). Viewers joining after the host uploaded would download immediately but no observer would be set up for subsequent uploads.
+
+**Fix:** Refactored `App.svelte` to:
+- Replace `hasDownloaded` boolean with `currentFileId: string | null` to track the actual file ID
+- Move observer setup before the initial file check so it is always set up
+- Detect new files when `fileId !== currentFileId` and trigger download
+
+**Files Changed:**
+- `src/App.svelte` - Refactored file observer to always listen for new file uploads
+
 ## Risk Mitigations
 
 | Risk | Mitigation |

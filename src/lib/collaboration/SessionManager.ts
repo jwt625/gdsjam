@@ -14,7 +14,13 @@ import { generateUUID } from "../utils/uuid";
 import { FileTransfer } from "./FileTransfer";
 import { HostManager } from "./HostManager";
 import { ParticipantManager } from "./ParticipantManager";
-import type { CollaborationEvent, SessionMetadata, UserInfo } from "./types";
+import type {
+	CollaborationEvent,
+	CollaborativeViewportState,
+	SessionMetadata,
+	UserInfo,
+} from "./types";
+import { ViewportSync, type ViewportSyncCallbacks } from "./ViewportSync";
 import { YjsProvider } from "./YjsProvider";
 
 // localStorage keys (documented in DevLog-001-10)
@@ -51,6 +57,8 @@ export class SessionManager {
 	private uploadedFileBuffer: ArrayBuffer | null = null; // Store file for sharing with peers
 	private pendingFile: PendingFile | null = null; // File uploaded before session creation
 	private hostCheckInterval: ReturnType<typeof setInterval> | null = null;
+	private viewportSync: ViewportSync | null = null;
+	private viewportSyncCallbacks: ViewportSyncCallbacks = {};
 
 	constructor() {
 		// Get or create user ID
@@ -100,6 +108,9 @@ export class SessionManager {
 		// Initialize managers for this session
 		this.hostManager.initialize(sessionId);
 		this.participantManager.initialize(sessionId);
+
+		// Initialize viewport sync
+		this.initializeViewportSync();
 
 		// Enable auto-promotion: oldest viewer becomes host when host leaves
 		this.setupAutoPromotion();
@@ -275,6 +286,9 @@ export class SessionManager {
 		// Must happen before checking host flag so hasHostRecoveryFlag() works
 		this.hostManager.initialize(sessionId);
 		this.participantManager.initialize(sessionId);
+
+		// Initialize viewport sync (after managers, before auto-promotion)
+		this.initializeViewportSync();
 
 		// Enable auto-promotion: oldest viewer becomes host when host leaves
 		this.setupAutoPromotion();
@@ -922,5 +936,88 @@ export class SessionManager {
 				console.log("[SessionManager] Not first in order, waiting for:", firstParticipant.userId);
 			}
 		}
+	}
+
+	// ==========================================
+	// Viewport Sync Facade Methods
+	// ==========================================
+
+	/**
+	 * Initialize ViewportSync with current callbacks
+	 */
+	private initializeViewportSync(): void {
+		// Destroy existing instance if any
+		if (this.viewportSync) {
+			this.viewportSync.destroy();
+		}
+
+		this.viewportSync = new ViewportSync(this.yjsProvider, this.userId, this.viewportSyncCallbacks);
+
+		if (DEBUG) {
+			console.log("[SessionManager] ViewportSync initialized");
+		}
+	}
+
+	/**
+	 * Set viewport sync callbacks
+	 * Call this before creating/joining a session, or call again to update callbacks
+	 */
+	setViewportSyncCallbacks(callbacks: ViewportSyncCallbacks): void {
+		this.viewportSyncCallbacks = callbacks;
+
+		// Update existing ViewportSync if already initialized
+		if (this.viewportSync) {
+			this.viewportSync.setCallbacks(callbacks);
+		}
+	}
+
+	/**
+	 * Enable viewport broadcast (host only)
+	 */
+	enableViewportBroadcast(): void {
+		if (!this.hostManager.getIsHost()) {
+			console.warn("[SessionManager] Only host can enable viewport broadcast");
+			return;
+		}
+		this.viewportSync?.enableBroadcast();
+	}
+
+	/**
+	 * Disable viewport broadcast (host only)
+	 */
+	disableViewportBroadcast(): void {
+		if (!this.hostManager.getIsHost()) {
+			console.warn("[SessionManager] Only host can disable viewport broadcast");
+			return;
+		}
+		this.viewportSync?.disableBroadcast();
+	}
+
+	/**
+	 * Check if viewport broadcast is enabled
+	 */
+	isViewportBroadcastEnabled(): boolean {
+		return this.viewportSync?.isBroadcastEnabled() ?? false;
+	}
+
+	/**
+	 * Broadcast current viewport state (called by renderer on viewport change)
+	 */
+	broadcastViewport(x: number, y: number, scale: number): void {
+		this.viewportSync?.broadcastViewport(x, y, scale);
+	}
+
+	/**
+	 * Get host's current viewport (for viewers to follow)
+	 */
+	getHostViewport(): CollaborativeViewportState | null {
+		return this.viewportSync?.getHostViewport() ?? null;
+	}
+
+	/**
+	 * Get ViewportSync instance (for advanced use)
+	 */
+	getViewportSync(): ViewportSync | null {
+		return this.viewportSync;
 	}
 }

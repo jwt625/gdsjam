@@ -1,7 +1,9 @@
 <script lang="ts">
 import { onDestroy, onMount } from "svelte";
+import type { CollaborativeViewportState } from "../../lib/collaboration/types";
 import { DEBUG } from "../../lib/config";
 import { PixiRenderer } from "../../lib/renderer/PixiRenderer";
+import { collaborationStore } from "../../stores/collaborationStore";
 import { gdsStore } from "../../stores/gdsStore";
 import { layerStore } from "../../stores/layerStore";
 import type { GDSDocument } from "../../types/gds";
@@ -19,6 +21,12 @@ let panelsVisible = $state(false);
 let layerPanelVisible = $state(false);
 let layerStoreInitialized = false;
 
+// Viewport sync state
+const isHost = $derived($collaborationStore.isHost);
+const isFollowing = $derived($collaborationStore.isFollowing);
+const isBroadcasting = $derived($collaborationStore.isBroadcasting);
+const isInSession = $derived($collaborationStore.isInSession);
+
 onMount(() => {
 	if (DEBUG) console.log("[ViewerCanvas] Initializing...");
 
@@ -27,6 +35,9 @@ onMount(() => {
 		(async () => {
 			renderer = new PixiRenderer();
 			await renderer.init(canvas);
+
+			// Set up viewport sync callbacks
+			setupViewportSync();
 
 			if ($gdsStore.document) {
 				lastRenderedDocument = $gdsStore.document;
@@ -71,6 +82,81 @@ onMount(() => {
 	};
 });
 
+/**
+ * Set up viewport sync callbacks for collaboration
+ */
+function setupViewportSync() {
+	if (!renderer || !isInSession) return;
+	const sessionManager = collaborationStore.getSessionManager();
+	if (!sessionManager) return;
+
+	// Set up callbacks for viewport sync
+	sessionManager.setViewportSyncCallbacks({
+		// When host's viewport changes, apply it if we're following
+		onHostViewportChanged: (viewport: CollaborativeViewportState) => {
+			if (!renderer || !isFollowing) return;
+
+			if (DEBUG) {
+				console.log("[ViewerCanvas] Applying host viewport:", viewport);
+			}
+
+			// Apply the host's viewport state
+			// We need to convert from host's screen coordinates to our screen
+			// The host sends: x, y (container position), scale, width, height
+			// We apply: center point and scale, adjusted for our screen size
+			const ourScreen = renderer.getScreenDimensions();
+
+			// Calculate the center point in world coordinates from host's viewport
+			// Host's center in screen coords: (width/2, height/2)
+			// In PixiJS with Y-flip: scaleY = -scaleX, so:
+			//   worldX = (screenX - containerX) / scaleX
+			//   worldY = (screenY - containerY) / scaleY = (screenY - containerY) / (-scaleX)
+			const hostCenterWorldX = (viewport.width / 2 - viewport.x) / viewport.scale;
+			const hostCenterWorldY = (viewport.height / 2 - viewport.y) / -viewport.scale;
+
+			// Apply same center point to our screen
+			// containerX = screenCenterX - worldX * scaleX
+			// containerY = screenCenterY - worldY * scaleY = screenCenterY - worldY * (-scaleX)
+			const newX = ourScreen.width / 2 - hostCenterWorldX * viewport.scale;
+			const newY = ourScreen.height / 2 - hostCenterWorldY * -viewport.scale;
+
+			renderer.setViewportState({
+				x: newX,
+				y: newY,
+				scale: viewport.scale,
+			});
+		},
+
+		// When broadcast state changes
+		onBroadcastStateChanged: (enabled: boolean, hostId: string | null) => {
+			collaborationStore.handleBroadcastStateChanged(enabled, hostId);
+		},
+	});
+
+	// Set up viewport change callback for broadcasting (host only)
+	renderer.setOnViewportChanged((viewportState) => {
+		if (!isInSession || !isHost || !isBroadcasting) return;
+
+		const sessionManager = collaborationStore.getSessionManager();
+		sessionManager?.broadcastViewport(viewportState.x, viewportState.y, viewportState.scale);
+	});
+
+	// Set up blocked callback for showing toast when user tries to interact while following
+	renderer.setOnViewportBlocked(() => {
+		if (isFollowing && !isHost) {
+			collaborationStore.showFollowToast();
+		}
+	});
+
+	// Update screen dimensions for viewport sync
+	const screen = renderer.getScreenDimensions();
+	sessionManager.getViewportSync()?.setScreenDimensions(screen.width, screen.height);
+
+	if (DEBUG) {
+		console.log("[ViewerCanvas] Viewport sync set up");
+	}
+}
+
 onDestroy(() => {
 	if (DEBUG) console.log("[ViewerCanvas] Destroying renderer");
 	renderer?.destroy();
@@ -109,6 +195,19 @@ $effect(() => {
 			console.log("[ViewerCanvas] Initialized layer store with", gdsDocument.layers.size, "layers");
 	}
 });
+
+// Lock/unlock viewport when following state changes
+$effect(() => {
+	if (!renderer) return;
+
+	// Lock viewport when following (viewer only, not host)
+	const shouldLock = isFollowing && !isHost;
+	renderer.setViewportLocked(shouldLock);
+
+	if (DEBUG) {
+		console.log("[ViewerCanvas] Viewport locked:", shouldLock);
+	}
+});
 </script>
 
 <div class="viewer-container">
@@ -122,6 +221,25 @@ $effect(() => {
 		performanceVisible={panelsVisible}
 		layersVisible={layerPanelVisible}
 	/>
+
+	<!-- Follow mode toast -->
+	{#if $collaborationStore.showFollowToast}
+		<div class="follow-toast" role="status" aria-live="polite">
+			<svg class="toast-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<circle cx="12" cy="12" r="10"></circle>
+				<path d="M12 8v4l2 2"></path>
+			</svg>
+			<span>Host is controlling your view</span>
+			<button
+				type="button"
+				class="toast-dismiss"
+				onclick={() => collaborationStore.hideFollowToast()}
+				aria-label="Dismiss"
+			>
+				×
+			</button>
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -136,6 +254,60 @@ $effect(() => {
 		display: block;
 		width: 100%;
 		height: 100%;
+	}
+
+	/* Follow mode toast */
+	.follow-toast {
+		position: absolute;
+		top: 16px;
+		left: 50%;
+		transform: translateX(-50%);
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 8px 12px;
+		background: rgba(74, 158, 255, 0.9);
+		color: white;
+		border-radius: 6px;
+		font-family: system-ui, -apple-system, sans-serif;
+		font-size: 13px;
+		font-weight: 500;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+		z-index: 1000;
+		animation: slideDown 0.2s ease-out;
+	}
+
+	@keyframes slideDown {
+		from {
+			opacity: 0;
+			transform: translateX(-50%) translateY(-10px);
+		}
+		to {
+			opacity: 1;
+			transform: translateX(-50%) translateY(0);
+		}
+	}
+
+	.toast-icon {
+		width: 16px;
+		height: 16px;
+		flex-shrink: 0;
+	}
+
+	.toast-dismiss {
+		background: none;
+		border: none;
+		color: white;
+		font-size: 18px;
+		line-height: 1;
+		cursor: pointer;
+		padding: 0 4px;
+		opacity: 0.7;
+		transition: opacity 0.15s;
+	}
+
+	.toast-dismiss:hover {
+		opacity: 1;
 	}
 </style>
 

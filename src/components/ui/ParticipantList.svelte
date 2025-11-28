@@ -110,6 +110,18 @@ const currentUserId = $derived($collaborationStore.userId);
 const isHost = $derived($collaborationStore.isHost);
 const connectedUsers = $derived($collaborationStore.connectedUsers);
 
+// Viewport sync state
+const isBroadcasting = $derived($collaborationStore.isBroadcasting);
+const isFollowing = $derived($collaborationStore.isFollowing);
+
+function handleBroadcastToggle() {
+	collaborationStore.toggleBroadcast();
+}
+
+function handleFollowToggle() {
+	collaborationStore.toggleFollowing();
+}
+
 function handleMakeHost(userId: string, displayName: string) {
 	transferTargetId = userId;
 	transferTargetName = displayName;
@@ -180,6 +192,31 @@ function cancelTransfer() {
 						{/if}
 					</div>
 				{/each}
+			</div>
+
+			<!-- Viewport Sync Controls -->
+			<div class="viewport-sync-controls">
+				{#if isHost}
+					<!-- Host: Broadcast toggle -->
+					<label class="sync-toggle">
+						<input
+							type="checkbox"
+							checked={isBroadcasting}
+							onchange={handleBroadcastToggle}
+						/>
+						<span class="toggle-label">Broadcast viewport</span>
+					</label>
+				{:else}
+					<!-- Viewer: Follow toggle -->
+					<label class="sync-toggle">
+						<input
+							type="checkbox"
+							checked={isFollowing}
+							onchange={handleFollowToggle}
+						/>
+						<span class="toggle-label">Follow host</span>
+					</label>
+				{/if}
 			</div>
 		{/if}
 	</div>
@@ -344,6 +381,37 @@ function cancelTransfer() {
 		background: #444;
 		color: #fff;
 		border-color: #4a9eff;
+	}
+
+	/* Viewport sync controls */
+	.viewport-sync-controls {
+		padding: 8px 12px;
+		border-top: 1px solid #333;
+		background: rgba(255, 255, 255, 0.02);
+	}
+
+	.sync-toggle {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		cursor: pointer;
+		user-select: none;
+	}
+
+	.sync-toggle input[type="checkbox"] {
+		width: 14px;
+		height: 14px;
+		accent-color: #4a9eff;
+		cursor: pointer;
+	}
+
+	.toggle-label {
+		font-size: 11px;
+		color: #aaa;
+	}
+
+	.sync-toggle:hover .toggle-label {
+		color: #ddd;
 	}
 
 	/* Dialog styles */

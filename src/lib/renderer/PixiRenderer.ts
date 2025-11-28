@@ -83,6 +83,15 @@ export class PixiRenderer {
 	// Input Controllers
 	private inputController!: InputController;
 
+	// Viewport change callback for collaboration sync
+	private onViewportChangedCallback: ((state: ViewportState) => void) | null = null;
+
+	// Callback for when viewport interaction is blocked (for showing toast)
+	private onViewportBlockedCallback: (() => void) | null = null;
+
+	// Flag to prevent viewport changes when following host
+	private isViewportLocked = false;
+
 	constructor() {
 		this.app = new Application();
 		this.mainContainer = new Container();
@@ -222,6 +231,7 @@ export class PixiRenderer {
 
 	/**
 	 * Handle zoom from input controllers
+	 * Returns false if viewport is locked (caller can show toast)
 	 */
 	private handleZoom(
 		zoomFactor: number,
@@ -229,7 +239,12 @@ export class PixiRenderer {
 		centerY: number,
 		_worldPosX: number,
 		_worldPosY: number,
-	): void {
+	): boolean {
+		if (this.isViewportLocked) {
+			this.onViewportBlockedCallback?.();
+			return false;
+		}
+
 		// Calculate world position at zoom center
 		const worldPos = {
 			x: (centerX - this.mainContainer.x) / this.mainContainer.scale.x,
@@ -258,18 +273,39 @@ export class PixiRenderer {
 		this.updateViewport();
 		this.updateGrid();
 		this.updateScaleBar();
+		this.notifyViewportChanged();
+
+		return true;
 	}
 
 	/**
 	 * Handle pan from input controllers
+	 * Returns false if viewport is locked (caller can show toast)
 	 */
-	private handlePan(dx: number, dy: number): void {
+	private handlePan(dx: number, dy: number): boolean {
+		if (this.isViewportLocked) {
+			this.onViewportBlockedCallback?.();
+			return false;
+		}
+
 		this.mainContainer.x += dx;
 		this.mainContainer.y += dy;
 
 		this.updateViewport();
 		this.updateGrid();
 		this.updateScaleBar();
+		this.notifyViewportChanged();
+
+		return true;
+	}
+
+	/**
+	 * Notify viewport change callback (for collaboration sync)
+	 */
+	private notifyViewportChanged(): void {
+		if (this.onViewportChangedCallback) {
+			this.onViewportChangedCallback(this.getViewportState());
+		}
 	}
 
 	/**
@@ -644,18 +680,24 @@ export class PixiRenderer {
 
 	/**
 	 * Fit viewport to show all geometry
+	 * Returns false if viewport is locked (caller can show toast)
 	 */
-	fitToView(): void {
+	fitToView(): boolean {
+		if (this.isViewportLocked) {
+			this.onViewportBlockedCallback?.();
+			return false;
+		}
+
 		if (!this.isInitialized || !this.app || !this.app.screen) {
 			console.warn("[PixiRenderer] Cannot fit to view - renderer not initialized");
-			return;
+			return true; // Not locked, just not ready
 		}
 
 		// Get local bounds (unscaled) to calculate proper fit
 		const bounds = this.mainContainer.getLocalBounds();
 
 		if (bounds.width === 0 || bounds.height === 0) {
-			return;
+			return true;
 		}
 
 		const scaleX = this.app.screen.width / bounds.width;
@@ -678,6 +720,9 @@ export class PixiRenderer {
 		this.performViewportUpdate();
 		this.performGridUpdate();
 		this.performScaleBarUpdate();
+		this.notifyViewportChanged();
+
+		return true;
 	}
 
 	/**
@@ -715,6 +760,47 @@ export class PixiRenderer {
 		this.mainContainer.y = state.y;
 		this.mainContainer.scale.set(state.scale, -state.scale);
 		this.updateViewport();
+		this.updateGrid();
+		this.updateScaleBar();
+	}
+
+	/**
+	 * Set callback for viewport changes (called on zoom/pan)
+	 * Used for collaboration sync
+	 */
+	setOnViewportChanged(callback: ((state: ViewportState) => void) | null): void {
+		this.onViewportChangedCallback = callback;
+	}
+
+	/**
+	 * Set callback for when viewport interaction is blocked (for showing toast)
+	 */
+	setOnViewportBlocked(callback: (() => void) | null): void {
+		this.onViewportBlockedCallback = callback;
+	}
+
+	/**
+	 * Lock/unlock viewport (prevent user pan/zoom when following host)
+	 */
+	setViewportLocked(locked: boolean): void {
+		this.isViewportLocked = locked;
+	}
+
+	/**
+	 * Check if viewport is currently locked
+	 */
+	isViewportLockedState(): boolean {
+		return this.isViewportLocked;
+	}
+
+	/**
+	 * Get screen dimensions
+	 */
+	getScreenDimensions(): { width: number; height: number } {
+		return {
+			width: this.app.screen.width,
+			height: this.app.screen.height,
+		};
 	}
 
 	/**

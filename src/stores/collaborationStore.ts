@@ -17,6 +17,10 @@ interface CollaborationState {
 	fileTransferProgress: number; // 0-100
 	fileTransferMessage: string;
 	isTransferring: boolean;
+	// Viewport sync state
+	isBroadcasting: boolean; // Host is broadcasting viewport
+	isFollowing: boolean; // Viewer is following host's viewport
+	showFollowToast: boolean; // Show "Host is controlling your view" toast
 }
 
 const initialState: CollaborationState = {
@@ -29,10 +33,18 @@ const initialState: CollaborationState = {
 	fileTransferProgress: 0,
 	fileTransferMessage: "",
 	isTransferring: false,
+	// Viewport sync state
+	isBroadcasting: false,
+	isFollowing: false,
+	showFollowToast: false,
 };
 
 function createCollaborationStore() {
 	const { subscribe, set, update } = writable<CollaborationState>(initialState);
+
+	// Toast auto-hide timeout
+	let toastTimeout: ReturnType<typeof setTimeout> | null = null;
+	const TOAST_DURATION = 2000; // 2 seconds
 
 	// Initialize session manager
 	const sessionManager = new SessionManager();
@@ -643,6 +655,211 @@ function createCollaborationStore() {
 				return state;
 			});
 			return candidates;
+		},
+
+		// ==========================================
+		// Viewport Sync Actions
+		// ==========================================
+
+		/**
+		 * Enable viewport broadcast (host only)
+		 */
+		enableBroadcast: () => {
+			update((state) => {
+				if (!state.sessionManager || !state.isHost) return state;
+
+				state.sessionManager.enableViewportBroadcast();
+
+				if (DEBUG) {
+					console.log("[collaborationStore] Viewport broadcast enabled");
+				}
+
+				return {
+					...state,
+					isBroadcasting: true,
+				};
+			});
+		},
+
+		/**
+		 * Disable viewport broadcast (host only)
+		 */
+		disableBroadcast: () => {
+			update((state) => {
+				if (!state.sessionManager || !state.isHost) return state;
+
+				state.sessionManager.disableViewportBroadcast();
+
+				if (DEBUG) {
+					console.log("[collaborationStore] Viewport broadcast disabled");
+				}
+
+				return {
+					...state,
+					isBroadcasting: false,
+				};
+			});
+		},
+
+		/**
+		 * Toggle viewport broadcast (host only)
+		 */
+		toggleBroadcast: () => {
+			update((state) => {
+				if (!state.sessionManager || !state.isHost) return state;
+
+				if (state.isBroadcasting) {
+					state.sessionManager.disableViewportBroadcast();
+				} else {
+					state.sessionManager.enableViewportBroadcast();
+				}
+
+				if (DEBUG) {
+					console.log("[collaborationStore] Viewport broadcast toggled:", !state.isBroadcasting);
+				}
+
+				return {
+					...state,
+					isBroadcasting: !state.isBroadcasting,
+				};
+			});
+		},
+
+		/**
+		 * Enable following host's viewport (viewer only)
+		 */
+		enableFollowing: () => {
+			update((state) => {
+				if (state.isHost) return state; // Host doesn't follow
+
+				if (DEBUG) {
+					console.log("[collaborationStore] Following enabled");
+				}
+
+				return {
+					...state,
+					isFollowing: true,
+					showFollowToast: true,
+				};
+			});
+		},
+
+		/**
+		 * Disable following host's viewport (viewer only)
+		 */
+		disableFollowing: () => {
+			update((state) => {
+				if (state.isHost) return state;
+
+				if (DEBUG) {
+					console.log("[collaborationStore] Following disabled");
+				}
+
+				return {
+					...state,
+					isFollowing: false,
+					showFollowToast: false,
+				};
+			});
+		},
+
+		/**
+		 * Toggle following host's viewport (viewer only)
+		 */
+		toggleFollowing: () => {
+			update((state) => {
+				if (state.isHost) return state;
+
+				const newFollowing = !state.isFollowing;
+
+				if (DEBUG) {
+					console.log("[collaborationStore] Following toggled:", newFollowing);
+				}
+
+				return {
+					...state,
+					isFollowing: newFollowing,
+					showFollowToast: newFollowing,
+				};
+			});
+		},
+
+		/**
+		 * Show follow toast (called when user tries to interact while following)
+		 * Auto-hides after TOAST_DURATION
+		 */
+		showFollowToast: () => {
+			// Clear any existing timeout
+			if (toastTimeout) {
+				clearTimeout(toastTimeout);
+			}
+
+			update((state) => ({
+				...state,
+				showFollowToast: true,
+			}));
+
+			// Auto-hide after duration
+			toastTimeout = setTimeout(() => {
+				update((state) => ({
+					...state,
+					showFollowToast: false,
+				}));
+				toastTimeout = null;
+			}, TOAST_DURATION);
+		},
+
+		/**
+		 * Hide follow toast
+		 */
+		hideFollowToast: () => {
+			if (toastTimeout) {
+				clearTimeout(toastTimeout);
+				toastTimeout = null;
+			}
+			update((state) => ({
+				...state,
+				showFollowToast: false,
+			}));
+		},
+
+		/**
+		 * Handle broadcast state change from Y.js
+		 * Called when host enables/disables broadcast
+		 */
+		handleBroadcastStateChanged: (enabled: boolean, _hostId: string | null) => {
+			update((state) => {
+				// If broadcast just enabled and we're a viewer, auto-follow
+				const shouldAutoFollow = enabled && !state.isHost && !state.isFollowing;
+				// If broadcast disabled and we're a viewer, stop following
+				const shouldStopFollowing = !enabled && !state.isHost && state.isFollowing;
+
+				if (DEBUG) {
+					console.log("[collaborationStore] Broadcast state changed:", {
+						enabled,
+						shouldAutoFollow,
+						shouldStopFollowing,
+					});
+				}
+
+				return {
+					...state,
+					isBroadcasting: state.isHost ? enabled : state.isBroadcasting,
+					isFollowing: shouldStopFollowing ? false : shouldAutoFollow ? true : state.isFollowing,
+					showFollowToast: shouldStopFollowing
+						? false
+						: shouldAutoFollow
+							? true
+							: state.showFollowToast,
+				};
+			});
+		},
+
+		/**
+		 * Check if broadcast is enabled
+		 */
+		isBroadcastEnabled: (): boolean => {
+			return sessionManager?.isViewportBroadcastEnabled() ?? false;
 		},
 	};
 }

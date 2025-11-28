@@ -55,9 +55,10 @@ export interface YjsParticipant {
 }
 
 /**
- * Viewport state for a user
+ * Viewport state for collaboration sync (via Awareness API)
+ * Named differently from PixiRenderer.ViewportState to avoid confusion
  */
-export interface ViewportState {
+export interface CollaborativeViewportState {
 	x: number; // Container x position
 	y: number; // Container y position
 	scale: number; // Zoom scale
@@ -87,7 +88,7 @@ export type CollaborationEvent =
 	| { type: "file-transfer-progress"; progress: number; message: string }
 	| { type: "file-transfer-complete" }
 	| { type: "layer-visibility-changed"; layerKey: string; visible: boolean }
-	| { type: "viewport-updated"; userId: string; viewport: ViewportState };
+	| { type: "viewport-updated"; userId: string; viewport: CollaborativeViewportState };
 
 /**
  * Collaboration event callback
