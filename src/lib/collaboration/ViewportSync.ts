@@ -14,7 +14,7 @@
  */
 
 import { DEBUG } from "../config";
-import type { CollaborativeViewportState } from "./types";
+import type { AwarenessState, CollaborativeViewportState, YjsSessionData } from "./types";
 import type { YjsProvider } from "./YjsProvider";
 
 // Throttle interval for viewport broadcasts (milliseconds)
@@ -150,10 +150,17 @@ export class ViewportSync {
 	}
 
 	/**
+	 * Get typed session map
+	 */
+	private getSessionMap() {
+		return this.yjsProvider.getMap<YjsSessionData[keyof YjsSessionData]>("session");
+	}
+
+	/**
 	 * Enable broadcast mode (host only)
 	 */
 	enableBroadcast(): void {
-		const sessionMap = this.yjsProvider.getMap<any>("session");
+		const sessionMap = this.getSessionMap();
 		this.yjsProvider.getDoc().transact(() => {
 			sessionMap.set("broadcastEnabled", true);
 			sessionMap.set("broadcastHostId", this.userId);
@@ -168,7 +175,7 @@ export class ViewportSync {
 	 * Disable broadcast mode
 	 */
 	disableBroadcast(): void {
-		const sessionMap = this.yjsProvider.getMap<any>("session");
+		const sessionMap = this.getSessionMap();
 		this.yjsProvider.getDoc().transact(() => {
 			sessionMap.set("broadcastEnabled", false);
 			sessionMap.delete("broadcastHostId");
@@ -185,7 +192,7 @@ export class ViewportSync {
 	 * Check if broadcast is currently enabled
 	 */
 	isBroadcastEnabled(): boolean {
-		const sessionMap = this.yjsProvider.getMap<any>("session");
+		const sessionMap = this.getSessionMap();
 		return sessionMap.get("broadcastEnabled") === true;
 	}
 
@@ -193,8 +200,9 @@ export class ViewportSync {
 	 * Get current broadcast host ID
 	 */
 	getBroadcastHostId(): string | null {
-		const sessionMap = this.yjsProvider.getMap<any>("session");
-		return sessionMap.get("broadcastHostId") ?? null;
+		const sessionMap = this.getSessionMap();
+		const hostId = sessionMap.get("broadcastHostId");
+		return typeof hostId === "string" ? hostId : null;
 	}
 
 	/**
@@ -208,8 +216,9 @@ export class ViewportSync {
 		const states = awareness.getStates();
 
 		for (const [, state] of states) {
-			if (state && (state as any).userId === broadcastHostId) {
-				return (state as any).viewport ?? null;
+			const awarenessState = state as AwarenessState | undefined;
+			if (awarenessState?.userId === broadcastHostId) {
+				return awarenessState.viewport ?? null;
 			}
 		}
 
@@ -240,7 +249,7 @@ export class ViewportSync {
 	 * Set up listener for session map changes (broadcast state)
 	 */
 	private setupSessionMapListener(): void {
-		const sessionMap = this.yjsProvider.getMap<any>("session");
+		const sessionMap = this.getSessionMap();
 
 		sessionMap.observe((event) => {
 			if (event.keysChanged.has("broadcastEnabled") || event.keysChanged.has("broadcastHostId")) {

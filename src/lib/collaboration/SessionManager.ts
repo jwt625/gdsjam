@@ -54,7 +54,6 @@ export class SessionManager {
 	private userId: string;
 	private sessionId: string | null = null;
 	private fileTransfer: FileTransfer | null = null;
-	private uploadedFileBuffer: ArrayBuffer | null = null; // Store file for sharing with peers
 	private pendingFile: PendingFile | null = null; // File uploaded before session creation
 	private hostCheckInterval: ReturnType<typeof setInterval> | null = null;
 	private viewportSync: ViewportSync | null = null;
@@ -169,7 +168,6 @@ export class SessionManager {
 				this.pendingFile.fileSize,
 			);
 
-			this.uploadedFileBuffer = this.pendingFile.arrayBuffer;
 			this.pendingFile = null;
 		}
 
@@ -538,9 +536,6 @@ export class SessionManager {
 			throw new Error("Not in a session");
 		}
 
-		// Store file buffer for potential re-sharing
-		this.uploadedFileBuffer = arrayBuffer;
-
 		// Create file transfer instance
 		this.fileTransfer = new FileTransfer(this.yjsProvider.getDoc(), onProgress, onEvent);
 
@@ -735,7 +730,6 @@ export class SessionManager {
 		this.hostManager.destroy();
 		this.participantManager.destroy();
 		this.yjsProvider.destroy();
-		this.uploadedFileBuffer = null;
 		this.fileTransfer = null;
 	}
 
