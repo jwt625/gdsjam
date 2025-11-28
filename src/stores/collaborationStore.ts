@@ -831,19 +831,26 @@ function createCollaborationStore() {
 			update((state) => {
 				// If broadcast just enabled and we're a viewer, auto-follow
 				const shouldAutoFollow = enabled && !state.isHost && !state.isFollowing;
+				// If broadcast disabled and we're a viewer, stop following
+				const shouldStopFollowing = !enabled && !state.isHost && state.isFollowing;
 
 				if (DEBUG) {
 					console.log("[collaborationStore] Broadcast state changed:", {
 						enabled,
 						shouldAutoFollow,
+						shouldStopFollowing,
 					});
 				}
 
 				return {
 					...state,
 					isBroadcasting: state.isHost ? enabled : state.isBroadcasting,
-					isFollowing: shouldAutoFollow ? true : state.isFollowing,
-					showFollowToast: shouldAutoFollow ? true : state.showFollowToast,
+					isFollowing: shouldStopFollowing ? false : shouldAutoFollow ? true : state.isFollowing,
+					showFollowToast: shouldStopFollowing
+						? false
+						: shouldAutoFollow
+							? true
+							: state.showFollowToast,
 				};
 			});
 		},

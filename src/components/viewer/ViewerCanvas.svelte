@@ -107,14 +107,17 @@ function setupViewportSync() {
 
 			// Calculate the center point in world coordinates from host's viewport
 			// Host's center in screen coords: (width/2, height/2)
-			// Host's center in world coords: ((width/2 - x) / scale, (height/2 - y) / scale)
+			// In PixiJS with Y-flip: scaleY = -scaleX, so:
+			//   worldX = (screenX - containerX) / scaleX
+			//   worldY = (screenY - containerY) / scaleY = (screenY - containerY) / (-scaleX)
 			const hostCenterWorldX = (viewport.width / 2 - viewport.x) / viewport.scale;
-			const hostCenterWorldY = (viewport.height / 2 - viewport.y) / Math.abs(viewport.scale);
+			const hostCenterWorldY = (viewport.height / 2 - viewport.y) / -viewport.scale;
 
 			// Apply same center point to our screen
-			// Our container position: x = ourWidth/2 - worldCenterX * scale
+			// containerX = screenCenterX - worldX * scaleX
+			// containerY = screenCenterY - worldY * scaleY = screenCenterY - worldY * (-scaleX)
 			const newX = ourScreen.width / 2 - hostCenterWorldX * viewport.scale;
-			const newY = ourScreen.height / 2 - hostCenterWorldY * Math.abs(viewport.scale);
+			const newY = ourScreen.height / 2 - hostCenterWorldY * -viewport.scale;
 
 			renderer.setViewportState({
 				x: newX,
