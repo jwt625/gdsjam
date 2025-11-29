@@ -293,6 +293,205 @@ describe("ViewportSync", () => {
 		});
 	});
 
+	describe("broadcastOwnViewport", () => {
+		it("should broadcast viewport via awareness", () => {
+			const sync = new ViewportSync(mockProvider as any, "user-123", callbacks);
+			sync.setScreenDimensions(1920, 1080);
+
+			sync.broadcastOwnViewport(100, 200, 1.5);
+
+			const state = mockProvider.getAwareness().getLocalState();
+			expect(state.viewport).toBeDefined();
+			expect((state.viewport as any).x).toBe(100);
+			expect((state.viewport as any).y).toBe(200);
+			expect((state.viewport as any).scale).toBe(1.5);
+			expect((state.viewport as any).width).toBe(1920);
+			expect((state.viewport as any).height).toBe(1080);
+		});
+
+		it("should throttle broadcasts to 200ms", () => {
+			const sync = new ViewportSync(mockProvider as any, "user-123", callbacks);
+			sync.setScreenDimensions(1920, 1080);
+
+			// First broadcast should go through immediately
+			sync.broadcastOwnViewport(100, 200, 1.5);
+			const state1 = mockProvider.getAwareness().getLocalState();
+			expect((state1.viewport as any).x).toBe(100);
+
+			// Second broadcast within 200ms should be pending
+			sync.broadcastOwnViewport(150, 250, 2.0);
+			const state2 = mockProvider.getAwareness().getLocalState();
+			expect((state2.viewport as any).x).toBe(100); // Still old value
+
+			// Advance time past throttle
+			vi.advanceTimersByTime(200);
+
+			const state3 = mockProvider.getAwareness().getLocalState();
+			expect((state3.viewport as any).x).toBe(150);
+			expect((state3.viewport as any).y).toBe(250);
+			expect((state3.viewport as any).scale).toBe(2.0);
+		});
+
+		it("should not require broadcast mode to be enabled", () => {
+			const sync = new ViewportSync(mockProvider as any, "user-123", callbacks);
+			sync.setScreenDimensions(1920, 1080);
+
+			// Don't enable broadcast mode
+			sync.broadcastOwnViewport(100, 200, 1.5);
+
+			const state = mockProvider.getAwareness().getLocalState();
+			expect(state.viewport).toBeDefined();
+			// broadcastEnabled should NOT be set
+			expect(state.broadcastEnabled).toBeUndefined();
+		});
+	});
+
+	describe("getParticipantViewports", () => {
+		it("should return empty array when no participants have viewports", () => {
+			const sync = new ViewportSync(mockProvider as any, "user-123", callbacks);
+			expect(sync.getParticipantViewports()).toEqual([]);
+		});
+
+		it("should exclude self from participant viewports", () => {
+			const sync = new ViewportSync(mockProvider as any, "user-123", callbacks);
+
+			// Add self to awareness
+			mockProvider._awarenessStates.set(1, {
+				userId: "user-123",
+				displayName: "Self User",
+				color: "#ff0000",
+				viewport: { x: 100, y: 200, scale: 1.5, width: 1920, height: 1080, updatedAt: Date.now() },
+			});
+
+			const viewports = sync.getParticipantViewports();
+			expect(viewports).toEqual([]);
+		});
+
+		it("should return other participants viewports", () => {
+			const sync = new ViewportSync(mockProvider as any, "user-123", callbacks);
+
+			// Add another participant
+			mockProvider._awarenessStates.set(2, {
+				userId: "other-user",
+				displayName: "Other User",
+				color: "#00ff00",
+				viewport: { x: 300, y: 400, scale: 2.0, width: 1920, height: 1080, updatedAt: Date.now() },
+			});
+
+			const viewports = sync.getParticipantViewports();
+			expect(viewports).toHaveLength(1);
+			expect(viewports[0].userId).toBe("other-user");
+			expect(viewports[0].displayName).toBe("Other User");
+			expect(viewports[0].color).toBe("#00ff00");
+			expect(viewports[0].viewport.x).toBe(300);
+		});
+
+		it("should mark followed user correctly", () => {
+			const sync = new ViewportSync(mockProvider as any, "viewer-user", callbacks);
+
+			// Set up broadcast host in session map (P0)
+			mockProvider._sessionMapData.set("broadcastEnabled", true);
+			mockProvider._sessionMapData.set("broadcastHostId", "host-user");
+
+			// Add host to awareness with isHost and broadcastEnabled (P2 heartbeat)
+			mockProvider._awarenessStates.set(1, {
+				userId: "host-user",
+				displayName: "Host User",
+				color: "#ff0000",
+				isHost: true, // Required for P2 heartbeat detection
+				broadcastEnabled: true, // P2 heartbeat
+				viewport: { x: 100, y: 200, scale: 1.5, width: 1920, height: 1080, updatedAt: Date.now() },
+			});
+
+			// Add another participant
+			mockProvider._awarenessStates.set(2, {
+				userId: "other-user",
+				displayName: "Other User",
+				color: "#00ff00",
+				viewport: { x: 300, y: 400, scale: 2.0, width: 1920, height: 1080, updatedAt: Date.now() },
+			});
+
+			const viewports = sync.getParticipantViewports();
+			expect(viewports).toHaveLength(2);
+
+			const hostViewport = viewports.find((v) => v.userId === "host-user");
+			const otherViewport = viewports.find((v) => v.userId === "other-user");
+
+			expect(hostViewport?.isFollowed).toBe(true);
+			expect(otherViewport?.isFollowed).toBe(false);
+		});
+
+		it("should use default values for missing displayName and color", () => {
+			const sync = new ViewportSync(mockProvider as any, "user-123", callbacks);
+
+			// Add participant with missing displayName and color
+			mockProvider._awarenessStates.set(2, {
+				userId: "other-user",
+				viewport: { x: 100, y: 200, scale: 1.0, width: 1920, height: 1080, updatedAt: Date.now() },
+			});
+
+			const viewports = sync.getParticipantViewports();
+			expect(viewports).toHaveLength(1);
+			expect(viewports[0].displayName).toBe("Unknown");
+			expect(viewports[0].color).toBe("#888888");
+		});
+
+		it("should skip participants without viewport data", () => {
+			const sync = new ViewportSync(mockProvider as any, "user-123", callbacks);
+
+			// Add participant without viewport
+			mockProvider._awarenessStates.set(2, {
+				userId: "other-user",
+				displayName: "Other User",
+				color: "#00ff00",
+				// No viewport
+			});
+
+			const viewports = sync.getParticipantViewports();
+			expect(viewports).toEqual([]);
+		});
+
+		it("should skip participants without userId", () => {
+			const sync = new ViewportSync(mockProvider as any, "user-123", callbacks);
+
+			// Add incomplete participant data
+			mockProvider._awarenessStates.set(2, {
+				viewport: { x: 100, y: 200, scale: 1.0, width: 1920, height: 1080, updatedAt: Date.now() },
+			});
+
+			const viewports = sync.getParticipantViewports();
+			expect(viewports).toEqual([]);
+		});
+	});
+
+	describe("onParticipantViewportsChanged callback", () => {
+		it("should call callback when awareness changes", () => {
+			const onParticipantViewportsChanged = vi.fn();
+			const callbacksWithParticipants = {
+				...callbacks,
+				onParticipantViewportsChanged,
+			};
+
+			new ViewportSync(mockProvider as any, "user-123", callbacksWithParticipants);
+
+			// Add a participant
+			mockProvider._awarenessStates.set(2, {
+				userId: "other-user",
+				displayName: "Other User",
+				color: "#00ff00",
+				viewport: { x: 100, y: 200, scale: 1.0, width: 1920, height: 1080, updatedAt: Date.now() },
+			});
+
+			// Trigger awareness change
+			mockProvider._triggerAwarenessChange();
+
+			expect(onParticipantViewportsChanged).toHaveBeenCalled();
+			const calledViewports = onParticipantViewportsChanged.mock.calls[0][0];
+			expect(calledViewports).toHaveLength(1);
+			expect(calledViewports[0].userId).toBe("other-user");
+		});
+	});
+
 	describe("P1 follow override", () => {
 		it("should start with undefined override", () => {
 			const sync = new ViewportSync(mockProvider as any, "viewer-user", callbacks);
