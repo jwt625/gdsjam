@@ -806,7 +806,16 @@ export class SessionManager {
 	transferHost(targetUserId: string): boolean {
 		const result = this.hostManager.transferHost(targetUserId);
 		if (result) {
+			// Disable broadcasts when transferring host
+			// The new host can re-enable if they want
+			this.viewportSync?.disableBroadcast();
+			this.layerSync?.disableBroadcast();
+
 			this.participantManager.setLocalAwarenessState({ isHost: false });
+
+			if (DEBUG) {
+				console.log("[SessionManager] Transferred host to:", targetUserId, "- broadcasts disabled");
+			}
 		}
 		return result;
 	}

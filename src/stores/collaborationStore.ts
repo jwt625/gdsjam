@@ -116,14 +116,33 @@ function createCollaborationStore() {
 
 	// Subscribe to host changes
 	sessionManager.onHostChanged((newHostId) => {
+		const isNowHost = newHostId === sessionManager.getUserId();
 		if (DEBUG) {
-			console.log("[collaborationStore] Host changed to:", newHostId);
+			console.log("[collaborationStore] Host changed to:", newHostId, "isNowHost:", isNowHost);
 		}
-		update((state) => ({
-			...state,
-			isHost: newHostId === sessionManager.getUserId(),
-			connectedUsers: state.sessionManager?.getConnectedUsers() ?? [],
-		}));
+		update((state) => {
+			// When becoming host, reset broadcast states to start fresh
+			// When losing host, also reset broadcast states (old host)
+			const newState: CollaborationState = {
+				...state,
+				isHost: isNowHost,
+				connectedUsers: state.sessionManager?.getConnectedUsers() ?? [],
+			};
+
+			// Reset broadcast states on host change
+			// New host starts with broadcasts disabled, old host loses broadcast rights
+			if (isNowHost !== state.isHost) {
+				newState.isBroadcasting = false;
+				newState.isLayerBroadcasting = false;
+				// Reset follow states when becoming host
+				if (isNowHost) {
+					newState.isFollowing = false;
+					newState.isLayerFollowing = false;
+				}
+			}
+
+			return newState;
+		});
 	});
 
 	return {
@@ -631,6 +650,9 @@ function createCollaborationStore() {
 					return {
 						...state,
 						isHost: false,
+						// Reset broadcast state when no longer host
+						isBroadcasting: false,
+						isLayerBroadcasting: false,
 						connectedUsers: state.sessionManager.getConnectedUsers(),
 					};
 				}
