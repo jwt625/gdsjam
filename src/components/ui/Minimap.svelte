@@ -38,7 +38,8 @@ let resizeStart = $state({ width: 0, height: 0, x: 0, y: 0 });
 // Canvas and renderer
 let canvasElement: HTMLCanvasElement | null = $state(null);
 let minimapRenderer: MinimapRenderer | null = $state(null);
-let lastLayerVersion = 0;
+// Cached colors from initial document load (not reactive to layer store changes)
+let cachedColors: Map<string, number> = new Map();
 
 // Constants
 const MIN_SIZE = 100;
@@ -272,19 +273,20 @@ async function initRenderer() {
 }
 
 // Render minimap
+// Note: Layer visibility and color sync is DISABLED for performance optimization.
+// Minimap always shows all layers visible with colors cached at document load.
 async function renderMinimap() {
 	if (!minimapRenderer || !document) {
 		if (DEBUG) console.log("[Minimap] Skipping render - no renderer or document");
 		return;
 	}
 
-	const visibility = layerStore.getVisibilityMap($layerStore);
-	const colors = layerStore.getColorsMap($layerStore);
+	// Pass empty visibility map - all layers default to visible
+	const visibility = new Map<string, boolean>();
 
-	if (DEBUG) console.log("[Minimap] Rendering with", visibility.size, "layers");
+	if (DEBUG) console.log("[Minimap] Rendering with all layers visible, using cached colors");
 
-	await minimapRenderer.render(document, visibility, colors);
-	lastLayerVersion = $layerStore.updateVersion;
+	await minimapRenderer.render(document, visibility, cachedColors);
 }
 
 // Update viewport outline (this is cheap, runs on every viewport change)
@@ -307,20 +309,23 @@ $effect(() => {
 // Track document identity for re-render
 let lastDocumentName: string | null = null;
 
-// Re-render on layer changes only (not continuously)
-$effect(() => {
-	const version = $layerStore.updateVersion;
-	if (version !== lastLayerVersion && minimapRenderer && document) {
-		lastLayerVersion = version;
-		renderMinimap();
-	}
-});
+// Layer visibility sync is DISABLED for minimap (performance optimization)
+// Minimap always shows all layers visible and doesn't re-render on layer changes
+// $effect(() => {
+// 	const version = $layerStore.updateVersion;
+// 	if (version !== lastLayerVersion && minimapRenderer && document) {
+// 		lastLayerVersion = version;
+// 		renderMinimap();
+// 	}
+// });
 
 // Re-render on document change (only when document actually changes)
 $effect(() => {
 	const docName = document?.name ?? null;
 	if (docName !== lastDocumentName && document && minimapRenderer) {
 		lastDocumentName = docName;
+		// Cache colors at document load time (not reactive to subsequent layer changes)
+		cachedColors = layerStore.getColorsMap($layerStore);
 		renderMinimap();
 	}
 });
