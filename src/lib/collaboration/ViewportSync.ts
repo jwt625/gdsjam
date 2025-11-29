@@ -449,15 +449,24 @@ export class ViewportSync {
 
 	/**
 	 * Get host's broadcastEnabled from awareness (P2 heartbeat)
+	 * Uses broadcastHostId from Y.js session map to identify the host,
+	 * rather than a separate awareness.isHost flag (avoids duplicate state)
 	 */
 	private getHostBroadcastEnabledFromAwareness(): boolean | undefined {
+		// Use broadcastHostId from Y.js to identify who the broadcasting host is
+		const broadcastHostId = this.getBroadcastHostId();
+		if (!broadcastHostId) return undefined;
+
 		const awareness = this.yjsProvider.getAwareness();
 		const states = awareness.getStates();
 
-		// Look for any host with broadcastEnabled set
+		// Find the broadcasting host's awareness state
 		for (const [, state] of states) {
 			const awarenessState = state as AwarenessState | undefined;
-			if (awarenessState?.isHost && awarenessState.broadcastEnabled !== undefined) {
+			if (
+				awarenessState?.userId === broadcastHostId &&
+				awarenessState.broadcastEnabled !== undefined
+			) {
 				return awarenessState.broadcastEnabled;
 			}
 		}
