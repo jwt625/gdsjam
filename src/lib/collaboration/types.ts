@@ -45,6 +45,10 @@ export interface YjsSessionData {
 	// Viewport broadcast (Phase 1)
 	broadcastEnabled?: boolean;
 	broadcastHostId?: string;
+
+	// Layer visibility broadcast (Issue #16)
+	layerBroadcastEnabled?: boolean;
+	layerBroadcastHostId?: string;
 }
 
 /**
@@ -85,6 +89,14 @@ export interface ParticipantViewport {
 }
 
 /**
+ * Layer visibility state for collaboration sync
+ */
+export interface CollaborativeLayerVisibility {
+	visibility: { [layerKey: string]: boolean };
+	updatedAt: number;
+}
+
+/**
  * Awareness state structure for a participant
  * This is what each user stores in their awareness local state
  */
@@ -96,6 +108,9 @@ export interface AwarenessState {
 	viewport?: CollaborativeViewportState | null;
 	/** Host includes this in awareness for P2 (heartbeat) sync */
 	broadcastEnabled?: boolean;
+	/** Host includes layer visibility in awareness for P2 sync */
+	layerBroadcastEnabled?: boolean;
+	layerVisibility?: CollaborativeLayerVisibility | null;
 }
 
 /**

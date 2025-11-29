@@ -21,6 +21,9 @@ interface CollaborationState {
 	isBroadcasting: boolean; // Host is broadcasting viewport
 	isFollowing: boolean; // Viewer is following host's viewport
 	showFollowToast: boolean; // Show "Host is controlling your view" toast
+	// Layer sync state
+	isLayerBroadcasting: boolean;
+	isLayerFollowing: boolean;
 }
 
 const initialState: CollaborationState = {
@@ -37,6 +40,9 @@ const initialState: CollaborationState = {
 	isBroadcasting: false,
 	isFollowing: false,
 	showFollowToast: false,
+	// Layer sync state
+	isLayerBroadcasting: false,
+	isLayerFollowing: false,
 };
 
 function createCollaborationStore() {
@@ -869,6 +875,64 @@ function createCollaborationStore() {
 		 */
 		isBroadcastEnabled: (): boolean => {
 			return sessionManager?.isViewportBroadcastEnabled() ?? false;
+		},
+
+		// ==========================================
+		// Layer Sync Actions
+		// ==========================================
+
+		enableLayerBroadcast: () => {
+			update((state) => {
+				if (!state.sessionManager || !state.isHost) return state;
+				state.sessionManager.enableLayerBroadcast();
+				if (DEBUG) console.log("[collaborationStore] Layer broadcast enabled");
+				return { ...state, isLayerBroadcasting: true };
+			});
+		},
+
+		disableLayerBroadcast: () => {
+			update((state) => {
+				if (!state.sessionManager || !state.isHost) return state;
+				state.sessionManager.disableLayerBroadcast();
+				if (DEBUG) console.log("[collaborationStore] Layer broadcast disabled");
+				return { ...state, isLayerBroadcasting: false };
+			});
+		},
+
+		toggleLayerBroadcast: () => {
+			update((state) => {
+				if (!state.sessionManager || !state.isHost) return state;
+				if (state.isLayerBroadcasting) {
+					state.sessionManager.disableLayerBroadcast();
+				} else {
+					state.sessionManager.enableLayerBroadcast();
+				}
+				if (DEBUG)
+					console.log("[collaborationStore] Layer broadcast toggled:", !state.isLayerBroadcasting);
+				return { ...state, isLayerBroadcasting: !state.isLayerBroadcasting };
+			});
+		},
+
+		toggleLayerFollowing: () => {
+			update((state) => {
+				if (state.isHost) return state;
+				const newFollowing = !state.isLayerFollowing;
+				state.sessionManager?.getLayerSync()?.setFollowOverride(newFollowing);
+				if (DEBUG) console.log("[collaborationStore] Layer following toggled:", newFollowing);
+				return { ...state, isLayerFollowing: newFollowing };
+			});
+		},
+
+		handleLayerBroadcastStateChanged: (enabled: boolean) => {
+			update((state) => {
+				if (state.isHost) return { ...state, isLayerBroadcasting: enabled };
+				if (DEBUG) console.log("[collaborationStore] Layer broadcast state changed:", enabled);
+				return { ...state, isLayerFollowing: enabled };
+			});
+		},
+
+		isLayerBroadcastEnabled: (): boolean => {
+			return sessionManager?.isLayerBroadcastEnabled() ?? false;
 		},
 	};
 }

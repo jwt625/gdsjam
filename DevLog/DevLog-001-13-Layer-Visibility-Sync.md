@@ -1,7 +1,7 @@
 # Layer Visibility Sync
 
 **Date:** 2025-11-29
-**Status:** Planning
+**Status:** Implemented
 **Issue:** https://github.com/jwt625/gdsjam/issues/16
 
 ## Problem Statement
@@ -116,10 +116,28 @@ interface LayerSyncCallbacks {
 
 ## Implementation Notes
 
-- Throttle layer broadcasts (100-200ms) to avoid excessive network traffic
-- Use `gdsStore.setAllLayersVisibility()` and `gdsStore.toggleLayerVisibility()` for applying changes
+- Throttle layer broadcasts (200ms) to avoid excessive network traffic
+- Use `gdsStore.toggleLayerVisibility()` for applying changes
 - Dispatch `layer-visibility-changed` event after applying remote changes for renderer update
 - Late joiners receive layer state via P2 awareness heartbeat (same as viewport sync)
+
+## Implementation Summary
+
+### Created Files
+
+1. **`src/lib/collaboration/LayerSync.ts`** (166 lines)
+   - P0/P1/P2 priority system matching ViewportSync
+   - 200ms throttled broadcasts
+   - Awareness and session map listeners
+
+### Modified Files
+
+1. **`src/lib/collaboration/types.ts`** - Added `CollaborativeLayerVisibility`, layer fields to `AwarenessState` and `YjsSessionData`
+2. **`src/lib/collaboration/SessionManager.ts`** - Added LayerSync integration and facade methods
+3. **`src/stores/collaborationStore.ts`** - Added `isLayerBroadcasting`, `isLayerFollowing` state and actions
+4. **`src/stores/layerStore.ts`** - Added `applyRemoteVisibility()` method
+5. **`src/components/ui/LayerPanel.svelte`** - Connected to collaboration sync
+6. **`src/components/viewer/ViewerCanvas.svelte`** - Set up layer sync callbacks
 
 ## Success Criteria
 

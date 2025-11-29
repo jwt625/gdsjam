@@ -210,6 +210,30 @@ function setupViewportSync() {
 	const screen = renderer.getScreenDimensions();
 	sessionManager.getViewportSync()?.setScreenDimensions(screen.width, screen.height);
 
+	// Set up layer sync callbacks
+	sessionManager.setLayerSyncCallbacks({
+		onHostLayerVisibilityChanged: (visibility: { [key: string]: boolean }) => {
+			if (DEBUG) console.log("[ViewerCanvas] Applying host layer visibility");
+			// Apply to gdsStore (source of truth)
+			for (const [key, visible] of Object.entries(visibility)) {
+				const doc = $gdsStore.document;
+				if (doc?.layers.has(key)) {
+					const layer = doc.layers.get(key)!;
+					if (layer.visible !== visible) {
+						gdsStore.toggleLayerVisibility(key);
+					}
+				}
+			}
+			// Apply to layerStore (UI state)
+			layerStore.applyRemoteVisibility(visibility);
+			// Notify renderer
+			window.dispatchEvent(new CustomEvent("layer-visibility-changed", { detail: { visibility } }));
+		},
+		onBroadcastStateChanged: (enabled: boolean, _hostId: string | null) => {
+			collaborationStore.handleLayerBroadcastStateChanged(enabled);
+		},
+	});
+
 	if (DEBUG) {
 		console.log("[ViewerCanvas] Viewport sync set up");
 	}

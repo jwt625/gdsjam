@@ -1,5 +1,6 @@
 <script lang="ts">
 import { DEBUG } from "../../lib/config";
+import { collaborationStore } from "../../stores/collaborationStore";
 import { gdsStore } from "../../stores/gdsStore";
 import { layerStore } from "../../stores/layerStore";
 import type { FileStatistics } from "../../types/gds";
@@ -14,6 +15,9 @@ const { statistics, visible = true }: Props = $props();
 const storeState = $derived($layerStore);
 const layerVisibility = $derived(storeState.visibility);
 const syncEnabled = $derived(storeState.syncEnabled);
+const isInSession = $derived($collaborationStore.isInSession);
+const isHost = $derived($collaborationStore.isHost);
+const isLayerBroadcasting = $derived($collaborationStore.isLayerBroadcasting);
 
 function toggleLayer(key: string) {
 	// Update gdsStore first (source of truth for document state)
@@ -49,20 +53,25 @@ function onLayerVisibilityChange(visibility: { [key: string]: boolean }) {
 		}),
 	);
 
-	// If sync enabled, broadcast to Y.js (Week 2 - collaboration)
-	if (syncEnabled) {
-		// TODO: Sync with Y.js shared state
-		if (DEBUG) {
-			console.log("[LayerPanel] Sync enabled - would broadcast to Y.js");
-		}
+	// Broadcast to Y.js if host and broadcasting layers
+	if (isInSession && isHost && isLayerBroadcasting) {
+		const sessionManager = collaborationStore.getSessionManager();
+		sessionManager?.broadcastLayerVisibility(visibility);
+		if (DEBUG) console.log("[LayerPanel] Broadcast layer visibility");
 	}
 }
 
 function toggleSyncMode() {
 	layerStore.toggleSync();
-	if (DEBUG) {
-		console.log(`[LayerPanel] Layer sync ${!syncEnabled ? "enabled" : "disabled"}`);
+	// If in session, toggle broadcast (host) or following (viewer)
+	if (isInSession) {
+		if (isHost) {
+			collaborationStore.toggleLayerBroadcast();
+		} else {
+			collaborationStore.toggleLayerFollowing();
+		}
 	}
+	if (DEBUG) console.log(`[LayerPanel] Layer sync ${!syncEnabled ? "enabled" : "disabled"}`);
 }
 
 function getLayerColor(layer: number, datatype: number): string {
