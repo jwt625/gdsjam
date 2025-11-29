@@ -72,6 +72,17 @@ export class SessionManager {
 		this.hostManager = new HostManager(this.yjsProvider, this.userId);
 		this.participantManager = new ParticipantManager(this.yjsProvider, this.userId);
 
+		// When host changes, update awareness state so other participants can detect host
+		// This is critical for P2 heartbeat sync in ViewportSync.getHostBroadcastEnabledFromAwareness()
+		this.hostManager.onHostChanged((newHostId) => {
+			const isNowHost = newHostId === this.userId;
+			// Update awareness with isHost status so P2 heartbeat works correctly
+			this.participantManager.setLocalAwarenessState({ isHost: isNowHost });
+			if (DEBUG) {
+				console.log("[SessionManager] Updated awareness isHost:", isNowHost);
+			}
+		});
+
 		if (DEBUG) {
 			console.log("[SessionManager] Initialized with user ID:", this.userId);
 		}
