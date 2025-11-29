@@ -14,7 +14,12 @@
  */
 
 import { DEBUG } from "../config";
-import type { AwarenessState, CollaborativeViewportState, YjsSessionData } from "./types";
+import type {
+	AwarenessState,
+	CollaborativeViewportState,
+	ParticipantViewport,
+	YjsSessionData,
+} from "./types";
 import type { YjsProvider } from "./YjsProvider";
 
 // Throttle interval for viewport broadcasts (milliseconds)
@@ -25,6 +30,8 @@ export interface ViewportSyncCallbacks {
 	onHostViewportChanged?: (viewport: CollaborativeViewportState) => void;
 	/** Called when broadcast state changes (P0 or P2 triggered) */
 	onBroadcastStateChanged?: (enabled: boolean, hostId: string | null) => void;
+	/** Called when participant viewports change (for minimap display) */
+	onParticipantViewportsChanged?: (viewports: ParticipantViewport[]) => void;
 }
 
 /**
@@ -38,10 +45,15 @@ export class ViewportSync {
 	private userId: string;
 	private callbacks: ViewportSyncCallbacks;
 
-	// Throttle state
+	// Throttle state for host broadcast
 	private lastBroadcastTime: number = 0;
 	private pendingViewport: CollaborativeViewportState | null = null;
 	private throttleTimeout: ReturnType<typeof setTimeout> | null = null;
+
+	// Throttle state for own viewport broadcast (all users)
+	private lastOwnBroadcastTime: number = 0;
+	private pendingOwnViewport: CollaborativeViewportState | null = null;
+	private ownThrottleTimeout: ReturnType<typeof setTimeout> | null = null;
 
 	// Screen dimensions (needed to construct CollaborativeViewportState)
 	private screenWidth: number = 0;
@@ -290,6 +302,105 @@ export class ViewportSync {
 	}
 
 	/**
+	 * Broadcast own viewport state (throttled) - for all users
+	 * This is separate from host broadcast mode; all users share their viewport for minimap display
+	 * Called when local viewport changes
+	 */
+	broadcastOwnViewport(x: number, y: number, scale: number): void {
+		const viewport: CollaborativeViewportState = {
+			x,
+			y,
+			scale,
+			width: this.screenWidth,
+			height: this.screenHeight,
+			updatedAt: Date.now(),
+		};
+
+		const now = Date.now();
+		const timeSinceLastBroadcast = now - this.lastOwnBroadcastTime;
+
+		if (timeSinceLastBroadcast >= VIEWPORT_BROADCAST_THROTTLE) {
+			// Can broadcast immediately
+			this.doOwnBroadcast(viewport);
+		} else {
+			// Throttle: store pending and schedule
+			this.pendingOwnViewport = viewport;
+			if (!this.ownThrottleTimeout) {
+				const delay = VIEWPORT_BROADCAST_THROTTLE - timeSinceLastBroadcast;
+				this.ownThrottleTimeout = setTimeout(() => {
+					if (this.pendingOwnViewport) {
+						this.doOwnBroadcast(this.pendingOwnViewport);
+						this.pendingOwnViewport = null;
+					}
+					this.ownThrottleTimeout = null;
+				}, delay);
+			}
+		}
+	}
+
+	/**
+	 * Actually broadcast own viewport via Awareness
+	 * Does NOT set broadcastEnabled (that's only for host broadcast mode)
+	 */
+	private doOwnBroadcast(viewport: CollaborativeViewportState): void {
+		try {
+			const awareness = this.yjsProvider.getAwareness();
+			const currentState = awareness.getLocalState() || {};
+
+			awareness.setLocalState({
+				...currentState,
+				viewport,
+			});
+
+			this.lastOwnBroadcastTime = Date.now();
+
+			if (DEBUG) {
+				console.log("[ViewportSync] Own viewport broadcast:", viewport);
+			}
+		} catch (error) {
+			console.error("[ViewportSync] Failed to broadcast own viewport:", error);
+		}
+	}
+
+	/**
+	 * Get all participants' viewports for minimap display (Phase 3)
+	 * Returns array of ParticipantViewport with user info and viewport data
+	 */
+	getParticipantViewports(): ParticipantViewport[] {
+		const awareness = this.yjsProvider.getAwareness();
+		const states = awareness.getStates();
+		const broadcastHostId = this.getBroadcastHostId();
+		const isFollowing = this.shouldFollowHost();
+
+		const viewports: ParticipantViewport[] = [];
+
+		for (const [, state] of states) {
+			const awarenessState = state as AwarenessState | undefined;
+			if (!awarenessState?.userId || !awarenessState.viewport) {
+				continue;
+			}
+
+			// Exclude self from the list - we already have our own viewport outline
+			const isSelf = awarenessState.userId === this.userId;
+			if (isSelf) {
+				continue;
+			}
+
+			const isFollowed = isFollowing && awarenessState.userId === broadcastHostId;
+
+			viewports.push({
+				userId: awarenessState.userId,
+				displayName: awarenessState.displayName || "Unknown",
+				color: awarenessState.color || "#888888",
+				viewport: awarenessState.viewport,
+				isFollowed,
+			});
+		}
+
+		return viewports;
+	}
+
+	/**
 	 * Set up listener for awareness changes (to detect host viewport updates)
 	 * Also handles P2 heartbeat sync for broadcast state
 	 */
@@ -297,7 +408,13 @@ export class ViewportSync {
 		const awareness = this.yjsProvider.getAwareness();
 
 		awareness.on("change", () => {
-			// Host doesn't need to listen to awareness for viewport
+			// Always notify participant viewports changed (for minimap)
+			if (this.callbacks.onParticipantViewportsChanged) {
+				const viewports = this.getParticipantViewports();
+				this.callbacks.onParticipantViewportsChanged(viewports);
+			}
+
+			// Host doesn't need to listen to awareness for viewport sync
 			const isHost = this.getBroadcastHostId() === this.userId;
 			if (isHost) return;
 
@@ -427,6 +544,10 @@ export class ViewportSync {
 		if (this.throttleTimeout) {
 			clearTimeout(this.throttleTimeout);
 			this.throttleTimeout = null;
+		}
+		if (this.ownThrottleTimeout) {
+			clearTimeout(this.ownThrottleTimeout);
+			this.ownThrottleTimeout = null;
 		}
 
 		if (DEBUG) {

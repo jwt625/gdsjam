@@ -1,6 +1,6 @@
 <script lang="ts">
 import { onDestroy, onMount } from "svelte";
-import type { CollaborativeViewportState } from "../../lib/collaboration/types";
+import type { CollaborativeViewportState, ParticipantViewport } from "../../lib/collaboration/types";
 import { DEBUG } from "../../lib/config";
 import { KeyboardShortcutManager } from "../../lib/keyboard/KeyboardShortcutManager";
 import { PixiRenderer } from "../../lib/renderer/PixiRenderer";
@@ -27,6 +27,7 @@ let layerStoreInitialized = false;
 
 // Minimap state
 let viewportBounds = $state<BoundingBox | null>(null);
+let participantViewports = $state<ParticipantViewport[]>([]);
 
 // Viewport sync state
 const isHost = $derived($collaborationStore.isHost);
@@ -97,10 +98,18 @@ onMount(() => {
 				// Update minimap viewport bounds
 				viewportBounds = renderer?.getPublicViewportBounds() ?? null;
 
-				// Broadcast to session if host
-				if (!isInSession || !isHost || !isBroadcasting) return;
+				// Skip session-related broadcasts if not in session
+				if (!isInSession) return;
 				const sessionManager = collaborationStore.getSessionManager();
-				sessionManager?.broadcastViewport(viewportState.x, viewportState.y, viewportState.scale);
+				if (!sessionManager) return;
+
+				// Broadcast own viewport for minimap display (all users in session)
+				sessionManager.broadcastOwnViewport(viewportState.x, viewportState.y, viewportState.scale);
+
+				// Broadcast to followers if host and broadcasting
+				if (isHost && isBroadcasting) {
+					sessionManager.broadcastViewport(viewportState.x, viewportState.y, viewportState.scale);
+				}
 			});
 
 			// Set up viewport sync callbacks
@@ -178,6 +187,11 @@ function setupViewportSync() {
 		// When broadcast state changes
 		onBroadcastStateChanged: (enabled: boolean, hostId: string | null) => {
 			collaborationStore.handleBroadcastStateChanged(enabled, hostId);
+		},
+
+		// When participant viewports change (for minimap)
+		onParticipantViewportsChanged: (viewports: ParticipantViewport[]) => {
+			participantViewports = viewports;
 		},
 	});
 
@@ -261,9 +275,16 @@ $effect(() => {
 });
 
 // Handle minimap navigation (click-to-navigate)
-function handleMinimapNavigate(worldX: number, worldY: number) {
+// When scale is provided (clicking on participant viewport), apply exact view
+function handleMinimapNavigate(worldX: number, worldY: number, scale?: number) {
 	if (!renderer) return;
-	renderer.setViewportCenter(worldX, worldY);
+	if (scale !== undefined) {
+		// Navigate to exact view (participant viewport click)
+		renderer.setViewportCenterAndScale(worldX, worldY, scale);
+	} else {
+		// Regular click - just center on position
+		renderer.setViewportCenter(worldX, worldY);
+	}
 }
 
 // Toggle minimap visibility
@@ -280,6 +301,7 @@ function toggleMinimap() {
 		visible={minimapVisible}
 		document={$gdsStore.document}
 		{viewportBounds}
+		{participantViewports}
 		onNavigate={handleMinimapNavigate}
 	/>
 	<MobileControls

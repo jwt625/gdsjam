@@ -1,5 +1,6 @@
 <script lang="ts">
 import { onDestroy, onMount } from "svelte";
+import type { ParticipantViewport } from "../../lib/collaboration/types";
 import { DEBUG } from "../../lib/config";
 import { MinimapRenderer } from "../../lib/renderer/MinimapRenderer";
 import { layerStore } from "../../stores/layerStore";
@@ -10,10 +11,11 @@ interface Props {
 	visible?: boolean;
 	document: GDSDocument | null;
 	viewportBounds: BoundingBox | null;
-	onNavigate?: (worldX: number, worldY: number) => void;
+	participantViewports?: ParticipantViewport[];
+	onNavigate?: (worldX: number, worldY: number, scale?: number) => void;
 }
 
-const { visible = true, document, viewportBounds, onNavigate }: Props = $props();
+const { visible = true, document, viewportBounds, participantViewports = [], onNavigate }: Props = $props();
 
 // Z-index for this panel
 const zIndex = getPanelZIndex("minimap");
@@ -237,8 +239,8 @@ async function initRenderer() {
 
 	const newRenderer = new MinimapRenderer();
 	await newRenderer.init(canvasElement);
-	newRenderer.setOnNavigate((worldX, worldY) => {
-		onNavigate?.(worldX, worldY);
+	newRenderer.setOnNavigate((worldX, worldY, scale) => {
+		onNavigate?.(worldX, worldY, scale);
 	});
 
 	// Resize to match current panel size
@@ -255,6 +257,11 @@ async function initRenderer() {
 	// Update viewport outline with current bounds
 	if (viewportBounds) {
 		minimapRenderer.updateViewportOutline(viewportBounds);
+	}
+
+	// Update participant viewports if available
+	if (participantViewports.length > 0) {
+		minimapRenderer.updateParticipantViewports(participantViewports);
 	}
 }
 
@@ -309,6 +316,15 @@ $effect(() => {
 	if (docName !== lastDocumentName && document && minimapRenderer) {
 		lastDocumentName = docName;
 		renderMinimap();
+	}
+});
+
+// Update participant viewports when they change
+$effect(() => {
+	// Read participantViewports at top level to track as dependency
+	const viewports = participantViewports;
+	if (minimapRenderer && viewports) {
+		minimapRenderer.updateParticipantViewports(viewports);
 	}
 });
 

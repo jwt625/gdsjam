@@ -869,6 +869,35 @@ export class PixiRenderer {
 	}
 
 	/**
+	 * Set viewport center and scale (for navigating to participant viewport)
+	 * Instantly centers the viewport on the given world coordinates with specified scale
+	 */
+	setViewportCenterAndScale(worldX: number, worldY: number, scale: number): void {
+		if (this.isViewportLocked) {
+			this.onViewportBlockedCallback?.();
+			return;
+		}
+
+		const screenWidth = this.app.screen.width;
+		const screenHeight = this.app.screen.height;
+
+		// Set scale first (Y is inverted)
+		this.mainContainer.scale.set(scale, -scale);
+
+		// Calculate new container position to center on world coordinates
+		this.mainContainer.x = screenWidth / 2 - worldX * scale;
+		this.mainContainer.y = screenHeight / 2 - worldY * -scale;
+
+		// Trigger viewport update
+		this.updateViewport();
+		this.updateGrid();
+		this.updateScaleBar();
+
+		// Notify callback
+		this.notifyViewportChanged();
+	}
+
+	/**
 	 * Get performance metrics for display (returns cached values)
 	 */
 	getPerformanceMetrics() {
