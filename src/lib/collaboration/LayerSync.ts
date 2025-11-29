@@ -127,9 +127,16 @@ export class LayerSync {
 	}
 
 	private getHostBroadcastFromAwareness(): boolean | undefined {
+		// Use layerBroadcastHostId from Y.js to identify the host,
+		// rather than a separate awareness.isHost flag (avoids duplicate state)
+		const broadcastHostId = this.getBroadcastHostId();
+		if (!broadcastHostId) return undefined;
+
 		for (const [, state] of this.yjsProvider.getAwareness().getStates()) {
 			const s = state as AwarenessState | undefined;
-			if (s?.isHost && s.layerBroadcastEnabled !== undefined) return s.layerBroadcastEnabled;
+			if (s?.userId === broadcastHostId && s.layerBroadcastEnabled !== undefined) {
+				return s.layerBroadcastEnabled;
+			}
 		}
 		return undefined;
 	}
