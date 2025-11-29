@@ -1,6 +1,7 @@
 <script lang="ts">
 import { onDestroy, onMount } from "svelte";
 import type { PixiRenderer } from "../../lib/renderer/PixiRenderer";
+import { getPanelZIndex, panelZIndexStore } from "../../stores/panelZIndexStore";
 import type { FileStatistics } from "../../types/gds";
 
 interface Props {
@@ -11,6 +12,110 @@ interface Props {
 
 // biome-ignore lint/correctness/noUnusedVariables: statistics is used in template
 const { renderer, visible, statistics }: Props = $props();
+
+const zIndex = getPanelZIndex("performance");
+const STORAGE_KEY = "performance-panel-state";
+
+// Panel state
+let isCollapsed = $state(false);
+let panelPosition = $state({ x: -1, y: -1 });
+let isDragging = $state(false);
+let dragStart = $state({ x: 0, y: 0 });
+let mouseDownTime = $state(0);
+let mouseDownPos = $state({ x: 0, y: 0 });
+const CLICK_THRESHOLD_MS = 200;
+const DRAG_THRESHOLD_PX = 5;
+
+function loadState() {
+	try {
+		const saved = localStorage.getItem(STORAGE_KEY);
+		if (saved) {
+			const state = JSON.parse(saved);
+			if (state.position) panelPosition = state.position;
+			if (state.collapsed !== undefined) isCollapsed = state.collapsed;
+		}
+	} catch (_e) {
+		/* ignore */
+	}
+}
+
+function saveState() {
+	try {
+		localStorage.setItem(
+			STORAGE_KEY,
+			JSON.stringify({ position: panelPosition, collapsed: isCollapsed }),
+		);
+	} catch (_e) {
+		/* ignore */
+	}
+}
+
+function initDefaultPosition() {
+	if (panelPosition.x === -1 || panelPosition.y === -1) {
+		panelPosition = { x: window.innerWidth - 300, y: 35 };
+	}
+}
+
+// Drag handlers
+function handlePointerStart(clientX: number, clientY: number) {
+	mouseDownTime = Date.now();
+	mouseDownPos = { x: clientX, y: clientY };
+	dragStart = { x: clientX - panelPosition.x, y: clientY - panelPosition.y };
+}
+
+function handlePointerMove(clientX: number, clientY: number) {
+	const dx = Math.abs(clientX - mouseDownPos.x);
+	const dy = Math.abs(clientY - mouseDownPos.y);
+	if (!isDragging && (dx > DRAG_THRESHOLD_PX || dy > DRAG_THRESHOLD_PX)) isDragging = true;
+	if (isDragging) panelPosition = { x: clientX - dragStart.x, y: clientY - dragStart.y };
+}
+
+function handlePointerEnd(clientX: number, clientY: number) {
+	const elapsed = Date.now() - mouseDownTime;
+	const dx = Math.abs(clientX - mouseDownPos.x);
+	const dy = Math.abs(clientY - mouseDownPos.y);
+	if (elapsed < CLICK_THRESHOLD_MS && dx < DRAG_THRESHOLD_PX && dy < DRAG_THRESHOLD_PX) {
+		isCollapsed = !isCollapsed;
+	}
+	isDragging = false;
+	saveState();
+}
+
+function handleHeaderMouseDown(e: MouseEvent) {
+	handlePointerStart(e.clientX, e.clientY);
+	window.addEventListener("mousemove", handleMouseMove);
+	window.addEventListener("mouseup", handleMouseUp);
+}
+function handleMouseMove(e: MouseEvent) {
+	handlePointerMove(e.clientX, e.clientY);
+}
+function handleMouseUp(e: MouseEvent) {
+	window.removeEventListener("mousemove", handleMouseMove);
+	window.removeEventListener("mouseup", handleMouseUp);
+	handlePointerEnd(e.clientX, e.clientY);
+}
+
+function handleHeaderTouchStart(e: TouchEvent) {
+	if (e.touches.length !== 1) return;
+	e.preventDefault();
+	const touch = e.touches[0]!;
+	handlePointerStart(touch.clientX, touch.clientY);
+	window.addEventListener("touchmove", handleTouchMove, { passive: false });
+	window.addEventListener("touchend", handleTouchEnd);
+	window.addEventListener("touchcancel", handleTouchEnd);
+}
+function handleTouchMove(e: TouchEvent) {
+	if (e.touches.length !== 1) return;
+	e.preventDefault();
+	handlePointerMove(e.touches[0]!.clientX, e.touches[0]!.clientY);
+}
+function handleTouchEnd(e: TouchEvent) {
+	e.preventDefault();
+	window.removeEventListener("touchmove", handleTouchMove);
+	window.removeEventListener("touchend", handleTouchEnd);
+	window.removeEventListener("touchcancel", handleTouchEnd);
+	handlePointerEnd(e.changedTouches[0]!.clientX, e.changedTouches[0]!.clientY);
+}
 
 // biome-ignore lint/correctness/noUnusedVariables: metrics is used in template
 let metrics = $state({
@@ -37,6 +142,8 @@ let metrics = $state({
 let updateInterval: number | null = null;
 
 onMount(() => {
+	loadState();
+	initDefaultPosition();
 	updateInterval = window.setInterval(() => {
 		if (renderer && visible) {
 			metrics = renderer.getPerformanceMetrics();
@@ -100,13 +207,31 @@ function formatDimension(um: number): string {
 }
 </script>
 
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 {#if visible}
-	<div class="performance-panel">
-		<div class="panel-header">
+	<div
+		class="performance-panel"
+		class:collapsed={isCollapsed}
+		class:dragging={isDragging}
+		style="left: {panelPosition.x}px; top: {panelPosition.y}px; z-index: {$zIndex};"
+		onmousedown={() => panelZIndexStore.bringToFront("performance")}
+	>
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div
+			class="panel-header"
+			onmousedown={handleHeaderMouseDown}
+			ontouchstart={handleHeaderTouchStart}
+			role="button"
+			tabindex="0"
+			aria-expanded={!isCollapsed}
+		>
 			<h3>Performance & File Info</h3>
-			<span class="hint">Press 'P' to toggle</span>
+			<svg class="chevron-icon" class:rotated={isCollapsed} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<polyline points="6 9 12 15 18 9"></polyline>
+			</svg>
 		</div>
 
+		{#if !isCollapsed}
 		<!-- Performance Metrics Section -->
 		<div class="section-title">Performance</div>
 		<div class="metrics-grid">
@@ -240,14 +365,13 @@ function formatDimension(um: number): string {
 				</div>
 			</div>
 		{/if}
+		{/if}
 	</div>
 {/if}
 
 <style>
 	.performance-panel {
 		position: fixed;
-		top: 35px;
-		right: 10px;
 		background: rgba(0, 0, 0, 0.85);
 		border: 1px solid #444;
 		border-radius: 4px;
@@ -260,9 +384,12 @@ function formatDimension(um: number): string {
 		overflow-y: auto;
 		-webkit-overflow-scrolling: touch;
 		overscroll-behavior: contain;
-		z-index: 1000;
 		backdrop-filter: blur(4px);
+		user-select: none;
 	}
+
+	.performance-panel.collapsed { max-height: 50px; overflow: hidden; }
+	.performance-panel.dragging { cursor: grabbing; opacity: 0.9; }
 
 	/* Mobile responsive adjustments */
 	@media (max-width: 1023px) {
@@ -280,7 +407,11 @@ function formatDimension(um: number): string {
 		margin-bottom: 10px;
 		padding-bottom: 8px;
 		border-bottom: 1px solid #444;
+		cursor: grab;
 	}
+
+	.performance-panel.dragging .panel-header { cursor: grabbing; }
+	.panel-header:hover { background: rgba(255, 255, 255, 0.05); }
 
 	h3 {
 		margin: 0;
@@ -289,10 +420,14 @@ function formatDimension(um: number): string {
 		color: #4a9eff;
 	}
 
-	.hint {
-		font-size: 9px;
+	.chevron-icon {
+		width: 16px;
+		height: 16px;
 		color: #888;
+		transition: transform 0.2s ease-out;
+		flex-shrink: 0;
 	}
+	.chevron-icon.rotated { transform: rotate(-90deg); }
 
 	.metrics-grid {
 		display: grid;

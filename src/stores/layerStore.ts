@@ -138,6 +138,18 @@ function createLayerStore() {
 		},
 
 		/**
+		 * Apply remote visibility state (from collaboration sync)
+		 * Does not trigger re-broadcast (prevents loops)
+		 */
+		applyRemoteVisibility: (visibility: { [key: string]: boolean }) => {
+			update((state) => ({
+				...state,
+				visibility: { ...state.visibility, ...visibility },
+				updateVersion: state.updateVersion + 1,
+			}));
+		},
+
+		/**
 		 * Reset store to initial state
 		 */
 		reset: () => {

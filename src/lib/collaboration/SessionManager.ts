@@ -13,6 +13,7 @@ import { DEBUG } from "../config";
 import { generateUUID } from "../utils/uuid";
 import { FileTransfer } from "./FileTransfer";
 import { HostManager } from "./HostManager";
+import { LayerSync, type LayerSyncCallbacks } from "./LayerSync";
 import { ParticipantManager } from "./ParticipantManager";
 import type {
 	CollaborationEvent,
@@ -59,6 +60,8 @@ export class SessionManager {
 	private hostCheckInterval: ReturnType<typeof setInterval> | null = null;
 	private viewportSync: ViewportSync | null = null;
 	private viewportSyncCallbacks: ViewportSyncCallbacks = {};
+	private layerSync: LayerSync | null = null;
+	private layerSyncCallbacks: LayerSyncCallbacks = {};
 
 	constructor() {
 		// Get or create user ID
@@ -153,8 +156,9 @@ export class SessionManager {
 		this.hostManager.initialize(sessionId);
 		this.participantManager.initialize(sessionId);
 
-		// Initialize viewport sync
+		// Initialize viewport and layer sync
 		this.initializeViewportSync();
+		this.initializeLayerSync();
 
 		// Enable auto-promotion: oldest viewer becomes host when host leaves
 		this.setupAutoPromotion();
@@ -300,8 +304,9 @@ export class SessionManager {
 		this.hostManager.initialize(sessionId);
 		this.participantManager.initialize(sessionId);
 
-		// Initialize viewport sync (after managers, before auto-promotion)
+		// Initialize viewport and layer sync (after managers, before auto-promotion)
 		this.initializeViewportSync();
+		this.initializeLayerSync();
 
 		// Enable auto-promotion: oldest viewer becomes host when host leaves
 		this.setupAutoPromotion();
@@ -1052,5 +1057,48 @@ export class SessionManager {
 	 */
 	getViewportSync(): ViewportSync | null {
 		return this.viewportSync;
+	}
+
+	// ==========================================
+	// Layer Sync Facade Methods
+	// ==========================================
+
+	private initializeLayerSync(): void {
+		if (this.layerSync) this.layerSync.destroy();
+		this.layerSync = new LayerSync(this.yjsProvider, this.userId, this.layerSyncCallbacks);
+		if (DEBUG) console.log("[SessionManager] LayerSync initialized");
+	}
+
+	setLayerSyncCallbacks(callbacks: LayerSyncCallbacks): void {
+		this.layerSyncCallbacks = callbacks;
+		if (this.layerSync) this.layerSync.setCallbacks(callbacks);
+	}
+
+	enableLayerBroadcast(): void {
+		if (!this.hostManager.getIsHost()) {
+			console.warn("[SessionManager] Only host can enable layer broadcast");
+			return;
+		}
+		this.layerSync?.enableBroadcast();
+	}
+
+	disableLayerBroadcast(): void {
+		if (!this.hostManager.getIsHost()) {
+			console.warn("[SessionManager] Only host can disable layer broadcast");
+			return;
+		}
+		this.layerSync?.disableBroadcast();
+	}
+
+	isLayerBroadcastEnabled(): boolean {
+		return this.layerSync?.isBroadcastEnabled() ?? false;
+	}
+
+	broadcastLayerVisibility(visibility: { [key: string]: boolean }): void {
+		this.layerSync?.broadcastLayerVisibility(visibility);
+	}
+
+	getLayerSync(): LayerSync | null {
+		return this.layerSync;
 	}
 }
