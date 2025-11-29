@@ -101,6 +101,24 @@ export const EXAMPLES: Example[] = [
 	},
 
 	// ============================================
+	// ASIC EXAMPLES (from Symbiotic EDA)
+	// ============================================
+	{
+		id: "asicone-sg13g2",
+		name: "ASICONE SG13G2 (cell)",
+		description: "Standard cells for IHP SG13G2 process",
+		category: "digital",
+		source: "symbioticeda",
+		attribution: "Ckristian Duran / Symbiotic EDA",
+		sourceUrl: "https://gitlab.symbioticeda.com/ckdur.iso/asicone_sg13g2",
+		license: "GPL-3.0",
+		url: "https://huggingface.co/datasets/jwt625/gdsii/resolve/main/sg13g2.gds",
+		fileSizeMB: 1.5,
+		isCompressed: false,
+		previewOverviewUrl: `${PREVIEWS_BASE_URL}/asicone-sg13g2.png`,
+	},
+
+	// ============================================
 	// DEMO / OTHER EXAMPLES
 	// ============================================
 	{

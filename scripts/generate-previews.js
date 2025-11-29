@@ -44,6 +44,10 @@ const EXAMPLES = [
 		url: "https://raw.githubusercontent.com/TinyTapeout/tinytapeout-02/tt02/gds/gregdavill_clock_top.gds.gz",
 	},
 	{
+		id: "asicone-sg13g2",
+		url: "https://huggingface.co/datasets/jwt625/gdsii/resolve/main/sg13g2.gds",
+	},
+	{
 		id: "superconducting-antennas",
 		url: "https://huggingface.co/datasets/jwt625/gdsii/resolve/main/NTNAR04B_100nm_20210714.gds",
 	},

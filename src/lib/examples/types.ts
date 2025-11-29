@@ -3,7 +3,7 @@
  */
 
 export type ExampleCategory = "photonics" | "digital" | "mixed" | "demo";
-export type ExampleSource = "gdsfactory" | "tinytapeout" | "other";
+export type ExampleSource = "gdsfactory" | "tinytapeout" | "symbioticeda" | "other";
 
 /**
  * Configuration for an example GDS file

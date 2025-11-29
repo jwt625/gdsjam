@@ -77,6 +77,28 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 
 ---
 
+### Symbiotic EDA / ASICONE
+
+**Repository**: https://gitlab.symbioticeda.com/ckdur.iso/asicone_sg13g2
+**License**: GPL-3.0
+**Description**: ASICONE chip for IHP SG13G2 process, featuring custom standard cells, SAR ADC, ring oscillators, and SPI core.
+
+#### Files Used:
+- `sg13g2.gds` - Custom standard cell library for IHP SG13G2
+
+```
+GNU General Public License v3.0
+
+Copyright (c) 2025 Ckristian Duran, Symbiotic EDA
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+```
+
+---
+
 ### jwt625/gdsii Dataset
 
 **Repository**: https://huggingface.co/datasets/jwt625/gdsii
