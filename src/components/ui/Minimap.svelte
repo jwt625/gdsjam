@@ -272,19 +272,21 @@ async function initRenderer() {
 }
 
 // Render minimap
+// Note: Layer visibility sync is DISABLED for performance optimization.
+// Minimap always shows all layers visible.
 async function renderMinimap() {
 	if (!minimapRenderer || !document) {
 		if (DEBUG) console.log("[Minimap] Skipping render - no renderer or document");
 		return;
 	}
 
-	const visibility = layerStore.getVisibilityMap($layerStore);
+	// Pass empty visibility map - all layers default to visible
+	const visibility = new Map<string, boolean>();
 	const colors = layerStore.getColorsMap($layerStore);
 
-	if (DEBUG) console.log("[Minimap] Rendering with", visibility.size, "layers");
+	if (DEBUG) console.log("[Minimap] Rendering with all layers visible");
 
 	await minimapRenderer.render(document, visibility, colors);
-	lastLayerVersion = $layerStore.updateVersion;
 }
 
 // Update viewport outline (this is cheap, runs on every viewport change)
@@ -307,14 +309,15 @@ $effect(() => {
 // Track document identity for re-render
 let lastDocumentName: string | null = null;
 
-// Re-render on layer changes only (not continuously)
-$effect(() => {
-	const version = $layerStore.updateVersion;
-	if (version !== lastLayerVersion && minimapRenderer && document) {
-		lastLayerVersion = version;
-		renderMinimap();
-	}
-});
+// Layer visibility sync is DISABLED for minimap (performance optimization)
+// Minimap always shows all layers visible and doesn't re-render on layer changes
+// $effect(() => {
+// 	const version = $layerStore.updateVersion;
+// 	if (version !== lastLayerVersion && minimapRenderer && document) {
+// 		lastLayerVersion = version;
+// 		renderMinimap();
+// 	}
+// });
 
 // Re-render on document change (only when document actually changes)
 $effect(() => {
