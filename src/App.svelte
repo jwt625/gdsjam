@@ -1,5 +1,5 @@
 <script lang="ts">
-import { onMount } from "svelte";
+import { onDestroy, onMount } from "svelte";
 import ErrorToast from "./components/ui/ErrorToast.svelte";
 import FileUpload from "./components/ui/FileUpload.svelte";
 import HeaderBar from "./components/ui/HeaderBar.svelte";
@@ -7,10 +7,13 @@ import LoadingOverlay from "./components/ui/LoadingOverlay.svelte";
 import ParticipantList from "./components/ui/ParticipantList.svelte";
 import ViewerCanvas from "./components/viewer/ViewerCanvas.svelte";
 import { DEBUG } from "./lib/config";
+import { KeyboardShortcutManager } from "./lib/keyboard/KeyboardShortcutManager";
 import { loadGDSIIFromBuffer } from "./lib/utils/gdsLoader";
 import { fetchGDSIIFromURL } from "./lib/utils/urlLoader";
 import { collaborationStore } from "./stores/collaborationStore";
 import { gdsStore } from "./stores/gdsStore";
+
+const KEYBOARD_OWNER = "App";
 
 // Hidden file input for keyboard shortcut
 let globalFileInput: HTMLInputElement;
@@ -86,29 +89,36 @@ async function handleGlobalFileInput(event: Event) {
 }
 
 /**
- * Handle keyboard shortcut for opening files (Ctrl/Cmd+O)
+ * Register keyboard shortcuts for app-level controls
  */
-function handleKeyDown(event: KeyboardEvent) {
-	// Check for Ctrl+O (Windows/Linux) or Cmd+O (Mac)
-	if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "o") {
-		event.preventDefault(); // Prevent browser's default "Open File" dialog
-
-		// Block file upload for clients in a session (only host can upload)
-		if ($collaborationStore.isInSession && !$collaborationStore.isHost) {
-			if (DEBUG) {
-				console.log("[App] Blocking Ctrl+O for non-host client in session");
+function registerKeyboardShortcuts(): void {
+	KeyboardShortcutManager.register(KEYBOARD_OWNER, {
+		id: "open-file",
+		key: "KeyO",
+		modifiers: { ctrl: true },
+		context: () => {
+			// Block file upload for clients in a session (only host can upload)
+			if ($collaborationStore.isInSession && !$collaborationStore.isHost) {
+				if (DEBUG) {
+					console.log("[App] Blocking Ctrl+O for non-host client in session");
+				}
+				return false;
 			}
-			return;
-		}
-
-		globalFileInput?.click();
-	}
+			return true;
+		},
+		callback: () => {
+			globalFileInput?.click();
+		},
+		description: "Open file (Ctrl/Cmd+O)",
+	});
 }
 
 /**
  * Check for URL parameters and handle file loading or session joining
  */
 onMount(async () => {
+	// Register keyboard shortcuts
+	registerKeyboardShortcuts();
 	// Parse URL parameters
 	const urlParams = new URLSearchParams(window.location.search);
 	const fileUrl = urlParams.get("url");
@@ -289,9 +299,12 @@ onMount(async () => {
 		}
 	}
 });
-</script>
 
-<svelte:window onkeydown={handleKeyDown} />
+onDestroy(() => {
+	// Unregister keyboard shortcuts on app unmount
+	KeyboardShortcutManager.unregisterByOwner(KEYBOARD_OWNER);
+});
+</script>
 
 <!-- Hidden file input for Ctrl/Cmd+O keyboard shortcut -->
 <input

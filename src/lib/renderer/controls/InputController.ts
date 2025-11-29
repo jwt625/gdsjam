@@ -2,7 +2,8 @@
  * InputController - Coordinates mouse, keyboard, and touch input controllers
  *
  * Responsibilities:
- * - Instantiate and manage MouseController, KeyboardController, and TouchController
+ * - Instantiate and manage MouseController and TouchController
+ * - Register renderer-related keyboard shortcuts via KeyboardShortcutManager
  * - Provide unified callback interface for all input types
  * - Ensure proper cleanup of event listeners on destroy
  *
@@ -12,7 +13,7 @@
  * - Touch: One-finger pan, two-finger pinch zoom
  */
 
-import { KeyboardController } from "./KeyboardController";
+import { KeyboardShortcutManager } from "../../keyboard/KeyboardShortcutManager";
 import { MouseController } from "./MouseController";
 import { TouchController } from "./TouchController";
 
@@ -31,9 +32,10 @@ export interface InputControllerCallbacks {
 	getScreenCenter: () => { x: number; y: number };
 }
 
+const OWNER_ID = "InputController";
+
 export class InputController {
 	private mouseController: MouseController;
-	private keyboardController: KeyboardController;
 	private touchController: TouchController;
 
 	constructor(canvas: HTMLCanvasElement, callbacks: InputControllerCallbacks) {
@@ -44,26 +46,90 @@ export class InputController {
 			onCoordinatesUpdate: callbacks.onCoordinatesUpdate,
 		});
 
-		// Create keyboard controller
-		this.keyboardController = new KeyboardController({
-			onPan: callbacks.onPan,
-			onZoom: callbacks.onZoom,
-			onFitToView: callbacks.onFitToView,
-			onToggleGrid: callbacks.onToggleGrid,
-			getScreenCenter: callbacks.getScreenCenter,
-		});
-
 		// Create touch controller
 		this.touchController = new TouchController(canvas, {
 			onPan: callbacks.onPan,
 			onZoom: callbacks.onZoom,
 			onCoordinatesUpdate: callbacks.onCoordinatesUpdate,
 		});
+
+		// Register keyboard shortcuts via centralized manager
+		this.registerKeyboardShortcuts(callbacks);
+	}
+
+	/**
+	 * Register renderer-related keyboard shortcuts
+	 */
+	private registerKeyboardShortcuts(callbacks: InputControllerCallbacks): void {
+		const panStep = 50; // pixels
+
+		KeyboardShortcutManager.registerMany(OWNER_ID, [
+			// Arrow keys for panning
+			{
+				id: "pan-up",
+				key: "ArrowUp",
+				callback: () => callbacks.onPan(0, panStep),
+				description: "Pan up",
+			},
+			{
+				id: "pan-down",
+				key: "ArrowDown",
+				callback: () => callbacks.onPan(0, -panStep),
+				description: "Pan down",
+			},
+			{
+				id: "pan-left",
+				key: "ArrowLeft",
+				callback: () => callbacks.onPan(panStep, 0),
+				description: "Pan left",
+			},
+			{
+				id: "pan-right",
+				key: "ArrowRight",
+				callback: () => callbacks.onPan(-panStep, 0),
+				description: "Pan right",
+			},
+			// Enter for zoom in
+			{
+				id: "zoom-in",
+				key: "Enter",
+				callback: () => {
+					const center = callbacks.getScreenCenter();
+					callbacks.onZoom(1.1, center.x, center.y, 0, 0);
+				},
+				description: "Zoom in",
+			},
+			// Shift+Enter for zoom out
+			{
+				id: "zoom-out",
+				key: "Enter",
+				modifiers: { shift: true },
+				callback: () => {
+					const center = callbacks.getScreenCenter();
+					callbacks.onZoom(0.9, center.x, center.y, 0, 0);
+				},
+				description: "Zoom out",
+			},
+			// F key for fit to view
+			{
+				id: "fit-to-view",
+				key: "KeyF",
+				callback: () => callbacks.onFitToView(),
+				description: "Fit to view",
+			},
+			// G key for grid toggle
+			{
+				id: "toggle-grid",
+				key: "KeyG",
+				callback: () => callbacks.onToggleGrid(),
+				description: "Toggle grid",
+			},
+		]);
 	}
 
 	destroy(): void {
 		this.mouseController.destroy();
-		this.keyboardController.destroy();
 		this.touchController.destroy();
+		KeyboardShortcutManager.unregisterByOwner(OWNER_ID);
 	}
 }
