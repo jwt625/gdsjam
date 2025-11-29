@@ -275,9 +275,18 @@ function getLayerColor(layer: number, datatype: number): string {
 
 			<div class="layer-list">
 				{#each Array.from(statistics.layerStats.entries()).sort((a, b) => a[1].layer - b[1].layer) as [key, layerStat]}
-					<!-- svelte-ignore a11y_click_events_have_key_events -->
-					<div class="layer-item" role="button" tabindex="0" onclick={() => toggleLayer(key)}>
-						<input type="checkbox" checked={layerVisibility[key] ?? true} onclick={(e) => e.stopPropagation()} onchange={() => toggleLayer(key)} />
+					<div
+						class="layer-item"
+						role="button"
+						tabindex="0"
+						onclick={() => toggleLayer(key)}
+						onkeydown={(e) => {
+							if (e.key === " " || e.key === "Enter") { e.preventDefault(); e.stopPropagation(); toggleLayer(key); }
+							else if (e.key === "ArrowDown") { e.preventDefault(); e.stopPropagation(); (e.currentTarget.nextElementSibling as HTMLElement)?.focus(); }
+							else if (e.key === "ArrowUp") { e.preventDefault(); e.stopPropagation(); (e.currentTarget.previousElementSibling as HTMLElement)?.focus(); }
+						}}
+					>
+						<input type="checkbox" checked={layerVisibility[key] ?? true} tabindex="-1" onclick={(e) => e.stopPropagation()} onchange={() => toggleLayer(key)} />
 						<div class="layer-color" style="background-color: {getLayerColor(layerStat.layer, layerStat.datatype)}"></div>
 						<span class="layer-name">{layerStat.layer}:{layerStat.datatype}</span>
 						<span class="layer-count">{layerStat.polygonCount.toLocaleString()}</span>
