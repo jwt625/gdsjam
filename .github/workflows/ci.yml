@@ -30,7 +30,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run Biome linter
-        run: pnpm biome check ./src
+        run: pnpm biome check ./src --files-ignore-unknown=true --no-errors-on-unmatched
 
       - name: Run TypeScript type checking
         run: pnpm svelte-check --tsconfig ./tsconfig.json
