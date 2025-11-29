@@ -1,12 +1,51 @@
 <script lang="ts">
 import { DEBUG } from "../../lib/config";
+import { EXAMPLES, loadExample } from "../../lib/examples";
+import type { Example } from "../../lib/examples";
 import { loadGDSIIFromBuffer } from "../../lib/utils/gdsLoader";
 import { collaborationStore } from "../../stores/collaborationStore";
 import { gdsStore } from "../../stores/gdsStore";
 
 // biome-ignore lint/correctness/noUnusedVariables: Used in Svelte class binding
-let isDragging = false;
+let isDragging = $state(false);
 let fileInputElement: HTMLInputElement;
+let loadingExampleId: string | null = $state(null);
+
+/**
+ * Handle example click
+ */
+async function handleExampleClick(example: Example, event: Event) {
+	event.stopPropagation();
+
+	if (loadingExampleId) {
+		return; // Already loading an example
+	}
+
+	if (DEBUG) {
+		console.log(`[FileUpload] Loading example: ${example.name}`);
+	}
+
+	loadingExampleId = example.id;
+
+	try {
+		gdsStore.setLoading(true, `Loading ${example.name}...`, 0);
+
+		await loadExample(example, (progress, message) => {
+			gdsStore.updateProgress(progress, message);
+		});
+
+		if (DEBUG) {
+			console.log(`[FileUpload] Example loaded: ${example.name}`);
+		}
+	} catch (error) {
+		console.error("[FileUpload] Failed to load example:", error);
+		gdsStore.setError(
+			`Failed to load example: ${error instanceof Error ? error.message : String(error)}`,
+		);
+	} finally {
+		loadingExampleId = null;
+	}
+}
 
 /**
  * Handle file selection
@@ -146,36 +185,85 @@ function triggerFileInput() {
 	</div>
 {:else}
 	<!-- Normal file upload UI -->
-	<div
-		class="file-upload"
-		class:dragging={isDragging}
-		on:dragover={handleDragOver}
-		on:dragleave={handleDragLeave}
-		on:drop={handleDrop}
-		role="button"
-		tabindex="0"
-		on:click={triggerFileInput}
-		on:keydown={(e) => e.key === 'Enter' && triggerFileInput()}
-	>
-		<input
-			type="file"
-			accept=".gds,.gdsii,.dxf"
-			bind:this={fileInputElement}
-			on:change={handleFileInput}
-			style="display: none;"
-		/>
+	<div class="file-upload-container">
+		<div
+			class="file-upload"
+			class:dragging={isDragging}
+			ondragover={handleDragOver}
+			ondragleave={handleDragLeave}
+			ondrop={handleDrop}
+			role="button"
+			tabindex="0"
+			onclick={triggerFileInput}
+			onkeydown={(e) => e.key === 'Enter' && triggerFileInput()}
+		>
+			<input
+				type="file"
+				accept=".gds,.gdsii,.dxf"
+				bind:this={fileInputElement}
+				onchange={handleFileInput}
+				style="display: none;"
+			/>
 
-		<div class="upload-content">
-			<svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-				<path
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					stroke-width="2"
-					d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-				/>
-			</svg>
-			<p class="upload-text">Drop GDSII or DXF file here or click to browse</p>
-			<p class="upload-hint">Supports .gds, .gdsii, and .dxf files</p>
+			<div class="upload-content">
+				<svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+					/>
+				</svg>
+				<p class="upload-text">Drop GDSII or DXF file here or click to browse</p>
+				<p class="upload-hint">Supports .gds, .gdsii, and .dxf files</p>
+			</div>
+		</div>
+
+		<!-- Examples section -->
+		<div class="examples-section">
+			<h3 class="examples-title">Or try an example:</h3>
+			<div class="examples-grid">
+				{#each EXAMPLES as example (example.id)}
+					<button
+						class="example-card"
+						class:loading={loadingExampleId === example.id}
+						disabled={loadingExampleId !== null}
+						onclick={(e) => handleExampleClick(example, e)}
+					>
+						<div class="example-icon">
+							{#if example.category === 'photonics'}
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+									<circle cx="12" cy="12" r="3" stroke-width="2"/>
+									<path stroke-width="2" d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
+								</svg>
+							{:else if example.category === 'digital'}
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+									<rect x="4" y="4" width="16" height="16" rx="2" stroke-width="2"/>
+									<path stroke-width="2" d="M9 9h6M9 12h6M9 15h4"/>
+								</svg>
+							{:else}
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+									<rect x="3" y="3" width="18" height="18" rx="2" stroke-width="2"/>
+									<path stroke-width="2" d="M3 9h18M9 21V9"/>
+								</svg>
+							{/if}
+						</div>
+						<div class="example-info">
+							<span class="example-name">{example.name}</span>
+							<span class="example-desc">{example.description}</span>
+							<span class="example-meta">
+								{example.fileSizeMB < 1 ? `${Math.round(example.fileSizeMB * 1000)} KB` : `${example.fileSizeMB.toFixed(1)} MB`}
+								· {example.source}
+							</span>
+						</div>
+						{#if loadingExampleId === example.id}
+							<div class="example-loading">
+								<div class="loading-spinner"></div>
+							</div>
+						{/if}
+					</button>
+				{/each}
+			</div>
 		</div>
 	</div>
 {/if}
@@ -249,5 +337,145 @@ function triggerFileInput() {
 		margin: 0;
 		font-size: 0.875rem;
 		color: #666;
+	}
+
+	/* Container for upload and examples */
+	.file-upload-container {
+		display: flex;
+		flex-direction: column;
+		gap: 1.5rem;
+		max-width: 600px;
+		width: 100%;
+	}
+
+	/* Examples section */
+	.examples-section {
+		text-align: left;
+	}
+
+	.examples-title {
+		margin: 0 0 0.75rem 0;
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: #888;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	.examples-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+		gap: 0.75rem;
+	}
+
+	.example-card {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.75rem;
+		padding: 0.75rem;
+		background: #1a1a1a;
+		border: 1px solid #333;
+		border-radius: 8px;
+		cursor: pointer;
+		text-align: left;
+		position: relative;
+		overflow: hidden;
+	}
+
+	.example-card:hover:not(:disabled) {
+		background: #222;
+		border-color: #4a9eff;
+	}
+
+	.example-card:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	.example-card.loading {
+		border-color: #4a9eff;
+	}
+
+	.example-icon {
+		flex-shrink: 0;
+		width: 32px;
+		height: 32px;
+		color: #4a9eff;
+	}
+
+	.example-icon svg {
+		width: 100%;
+		height: 100%;
+	}
+
+	.example-info {
+		display: flex;
+		flex-direction: column;
+		gap: 0.125rem;
+		min-width: 0;
+	}
+
+	.example-name {
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: #eee;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.example-desc {
+		font-size: 0.75rem;
+		color: #888;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.example-meta {
+		font-size: 0.625rem;
+		color: #666;
+		text-transform: uppercase;
+		letter-spacing: 0.02em;
+	}
+
+	.example-loading {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: rgba(26, 26, 26, 0.8);
+	}
+
+	.loading-spinner {
+		width: 24px;
+		height: 24px;
+		border: 2px solid #333;
+		border-top-color: #4a9eff;
+		border-radius: 50%;
+		animation: spin 0.8s linear infinite;
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
+
+	/* Mobile-first responsive adjustments */
+	@media (max-width: 480px) {
+		.examples-grid {
+			grid-template-columns: 1fr;
+		}
+
+		.example-card {
+			padding: 0.625rem;
+		}
+
+		.example-icon {
+			width: 28px;
+			height: 28px;
+		}
 	}
 </style>

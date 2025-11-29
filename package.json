@@ -21,6 +21,7 @@
     "@tailwindcss/postcss": "^4.1.17",
     "@tsconfig/svelte": "^5.0.5",
     "@types/node": "^24.10.0",
+    "@types/pako": "^2.0.4",
     "@types/qrcode": "^1.5.6",
     "@types/rbush": "^4.0.0",
     "@vitest/ui": "4.0.10",
@@ -39,6 +40,7 @@
   "dependencies": {
     "dxf-parser": "^1.1.2",
     "gdsii": "^0.1.0",
+    "pako": "^2.1.0",
     "pixi.js": "^8.14.1",
     "qrcode": "^1.5.4",
     "rbush": "^4.0.1",
