@@ -35,13 +35,20 @@ function loadState() {
 			if (state.position) panelPosition = state.position;
 			if (state.collapsed !== undefined) isCollapsed = state.collapsed;
 		}
-	} catch (_e) { /* ignore */ }
+	} catch (_e) {
+		/* ignore */
+	}
 }
 
 function saveState() {
 	try {
-		localStorage.setItem(STORAGE_KEY, JSON.stringify({ position: panelPosition, collapsed: isCollapsed }));
-	} catch (_e) { /* ignore */ }
+		localStorage.setItem(
+			STORAGE_KEY,
+			JSON.stringify({ position: panelPosition, collapsed: isCollapsed }),
+		);
+	} catch (_e) {
+		/* ignore */
+	}
 }
 
 function initDefaultPosition() {
@@ -80,7 +87,9 @@ function handleHeaderMouseDown(e: MouseEvent) {
 	window.addEventListener("mousemove", handleMouseMove);
 	window.addEventListener("mouseup", handleMouseUp);
 }
-function handleMouseMove(e: MouseEvent) { handlePointerMove(e.clientX, e.clientY); }
+function handleMouseMove(e: MouseEvent) {
+	handlePointerMove(e.clientX, e.clientY);
+}
 function handleMouseUp(e: MouseEvent) {
 	window.removeEventListener("mousemove", handleMouseMove);
 	window.removeEventListener("mouseup", handleMouseUp);
@@ -109,7 +118,10 @@ function handleTouchEnd(e: TouchEvent) {
 	handlePointerEnd(e.changedTouches[0]!.clientX, e.changedTouches[0]!.clientY);
 }
 
-onMount(() => { loadState(); initDefaultPosition(); });
+onMount(() => {
+	loadState();
+	initDefaultPosition();
+});
 
 const storeState = $derived($layerStore);
 const layerVisibility = $derived(storeState.visibility);
