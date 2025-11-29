@@ -72,6 +72,19 @@ export interface CollaborativeViewportState {
 }
 
 /**
+ * Participant viewport data for minimap rendering (Phase 3)
+ * Aggregates viewport + user info for display
+ * Note: Self is excluded from this list (we have our own viewport outline)
+ */
+export interface ParticipantViewport {
+	userId: string;
+	displayName: string;
+	color: string; // Assigned participant color
+	viewport: CollaborativeViewportState;
+	isFollowed: boolean; // True if this is the user we're following
+}
+
+/**
  * Awareness state structure for a participant
  * This is what each user stores in their awareness local state
  */

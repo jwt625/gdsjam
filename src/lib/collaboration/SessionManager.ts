@@ -1011,9 +1011,18 @@ export class SessionManager {
 
 	/**
 	 * Broadcast current viewport state (called by renderer on viewport change)
+	 * This is for host broadcast to followers
 	 */
 	broadcastViewport(x: number, y: number, scale: number): void {
 		this.viewportSync?.broadcastViewport(x, y, scale);
+	}
+
+	/**
+	 * Broadcast own viewport state (for minimap display)
+	 * All users in session broadcast their viewport for minimap visualization
+	 */
+	broadcastOwnViewport(x: number, y: number, scale: number): void {
+		this.viewportSync?.broadcastOwnViewport(x, y, scale);
 	}
 
 	/**

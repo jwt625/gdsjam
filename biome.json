@@ -39,7 +39,7 @@
 	},
 	"overrides": [
 		{
-			"includes": ["*.svelte"],
+			"includes": ["**/*.svelte"],
 			"linter": {
 				"enabled": false
 			}

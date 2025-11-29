@@ -1,7 +1,7 @@
 # View Box Sharing
 
-**Date:** 2025-11-27 (Phase 1), 2025-11-28 (Phase 2)
-**Status:** Phase 2 Complete
+**Date:** 2025-11-27 (Phase 1), 2025-11-28 (Phase 2), 2025-11-29 (Phase 3)
+**Status:** Phase 3 Complete
 **Issue:** https://github.com/jwt625/gdsjam/issues/15
 **PR:** https://github.com/jwt625/gdsjam/pull/25 (Phase 1)
 
@@ -328,25 +328,100 @@ Display all participants' viewports on minimap with interaction.
 
 **Scope:**
 - Show all participants' viewports as colored rectangles on minimap
-- Label with participant name
-- Click viewport to snap main view to that position
+- Label with participant name (top-left corner, similar to object detection labels)
+- Click viewport to snap main view to that exact position and zoom
 - Respect "not sharing" preference (hide those viewports)
-- Highlight followed user's viewport differently
+- Highlight followed user's viewport with subtle glow effect
+
+**Design Decisions (2025-11-29):**
+
+| Aspect | Decision | Rationale |
+|--------|----------|-----------|
+| Default sharing | All users share viewport by default on join | Opt-out toggle deferred for later (potential paid feature) |
+| Own viewport | Remain visible on minimap | User sees their own rectangle alongside others |
+| Multi-participant | Show all, no limit | Performance acceptable for typical session sizes |
+| Label position | Top-left corner of rectangle | Follows object detection label convention |
+| Label visibility | Always visible | Toggle for hiding labels deferred for later |
+| Click action | Jump to exact view (center + zoom) | Match host broadcast follow behavior |
+| Followed highlight | Subtle glow effect | Not too obvious, just subtle difference |
+| Overlap click | Pick topmost (last rendered) | Viewport is cheap, not critical |
+| Share toggle location | Deferred | Will decide UI placement later |
 
 **Files to Modify:**
-- `src/components/ui/Minimap.svelte` - Render participant viewports
-- `src/lib/collaboration/ViewportSync.ts` - Provide all participants' viewport state
-- `src/lib/collaboration/ParticipantManager.ts` - Add viewport sharing preference
+- `src/lib/collaboration/types.ts` - Add `ParticipantViewport` interface
+- `src/lib/collaboration/ViewportSync.ts` - Add `getParticipantViewports()`, extend broadcasting to all users
+- `src/lib/renderer/MinimapRenderer.ts` - Render participant viewports, labels, click detection
+- `src/components/ui/Minimap.svelte` - Accept and pass participant viewport data
+- `src/components/viewer/ViewerCanvas.svelte` - Wire up participant viewports from ViewportSync
 
-**TODO:**
-- [ ] Subscribe to all awareness states in ViewportSync
-- [ ] Add getParticipantViewports() method returning userId, viewport, color, name
-- [ ] Render participant viewports on minimap with assigned colors
-- [ ] Add name labels to viewport rectangles
-- [ ] Implement click-on-viewport to snap main view
-- [ ] Add "share my viewport" toggle to settings
-- [ ] Filter out non-sharing participants
-- [ ] Highlight currently followed user's viewport (if in follow mode)
+**Implementation Plan:**
+
+1. **Update Types**
+   - Add `ParticipantViewport` interface to `types.ts`: `{ userId, displayName, color, viewport, isFollowed }`
+
+2. **Extend ViewportSync for All Users**
+   - Modify `doBroadcast()` to allow any user (not just host) to broadcast their viewport
+   - All users broadcast by default when in session
+   - Add throttled `broadcastOwnViewport()` that runs on every local viewport change
+
+3. **Add getParticipantViewports() Method**
+   - Iterate all awareness states
+   - Filter out self (current user)
+   - Extract userId, displayName, color, viewport from each
+   - Mark `isFollowed: true` for the user being followed (if any)
+   - Return array of `ParticipantViewport`
+
+4. **Render Participant Viewports in MinimapRenderer**
+   - Create new Graphics layer for participant rectangles (separate from own viewport outline)
+   - Add `updateParticipantViewports(viewports: ParticipantViewport[])` method
+   - Draw colored rectangle stroke for each participant using their assigned color
+   - Apply subtle glow filter to followed user's rectangle
+
+5. **Add Name Labels**
+   - Use PixiJS Text objects for labels
+   - Position at top-left corner of each rectangle
+   - Add semi-transparent background for readability
+   - Pool/reuse Text objects to avoid allocation churn
+
+6. **Implement Click-on-Viewport Navigation**
+   - Track participant viewport bounds in screen coordinates
+   - On minimap click, check if click falls inside any participant rectangle
+   - If hit, calculate world center and scale from that participant's viewport
+   - Call `onNavigate` callback with exact center and zoom (not just center)
+
+7. **Wire Up ViewerCanvas**
+   - Get ViewportSync instance from SessionManager
+   - Subscribe to awareness changes
+   - On each change, call `getParticipantViewports()` and pass to Minimap
+   - Pass followed user ID to MinimapRenderer for highlight
+
+8. **Update Minimap Component**
+   - Add `participantViewports` prop
+   - Pass to MinimapRenderer on each update
+   - Update `onNavigate` callback signature to include optional zoom
+
+**TODO:** (Completed 2025-11-29)
+- [x] Add `ParticipantViewport` interface to types.ts
+- [x] Extend ViewportSync to broadcast all users' viewports
+- [x] Add `getParticipantViewports()` method to ViewportSync
+- [x] Add participant viewport rendering to MinimapRenderer
+- [x] Add name labels (top-left, with background)
+- [x] Add glow effect for followed user's viewport
+- [x] Implement click-on-viewport detection and navigation
+- [x] Wire up ViewerCanvas to pass participant viewports to Minimap
+- [x] Update Minimap component to accept and forward participant data
+
+**Implementation Notes:**
+- Self viewport excluded from participant list (own viewport already shown as white outline)
+- Viewport coordinate conversion uses same logic as `ViewportManager.getViewportBounds()` to ensure alignment
+- Added `setViewportCenterAndScale()` to PixiRenderer for click-to-navigate with exact zoom
+- Added `broadcastOwnViewport()` to SessionManager/ViewportSync for all users to share position
+- Label pool pattern used in MinimapRenderer for efficient text rendering
+
+**Deferred:**
+- [ ] "Share my viewport" toggle in settings UI
+- [ ] Toggle to hide/show participant name labels
+- [ ] Limit on rendered viewports (if performance becomes issue)
 
 ## Risk Analysis
 
@@ -476,7 +551,11 @@ This approach:
 - LOD culling correctly skips small polygons (< 1% of layout extent)
 
 ### Phase 3
-- All participant viewports visible on minimap with correct colors
-- Click participant viewport snaps to their view instantly
-- Non-sharing participants not visible on minimap
+- All participant viewports visible on minimap with correct assigned colors
+- Own viewport visible alongside other participants
+- Name labels displayed at top-left corner of each viewport rectangle
+- Click participant viewport snaps to their exact view (center + zoom) instantly
+- Followed user's viewport shows subtle glow highlight
+- All users broadcast viewport by default on session join
+- Non-sharing participants not visible on minimap (when opt-out is implemented)
 

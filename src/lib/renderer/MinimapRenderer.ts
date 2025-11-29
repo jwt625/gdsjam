@@ -9,9 +9,23 @@
  * - Only re-renders on document load or layer visibility/color changes
  */
 
-import { Application, Container, Graphics } from "pixi.js";
+import { Application, Container, Graphics, Text, TextStyle } from "pixi.js";
 import type { BoundingBox, Cell, GDSDocument } from "../../types/gds";
+import type { ParticipantViewport } from "../collaboration/types";
 import { DEBUG } from "../config";
+
+/** Screen-space bounds for a participant viewport (used for click detection) */
+interface ParticipantViewportScreenBounds {
+	userId: string;
+	left: number;
+	top: number;
+	width: number;
+	height: number;
+	// For navigation: exact view center and scale
+	worldCenterX: number;
+	worldCenterY: number;
+	scale: number;
+}
 
 export interface MinimapRenderStats {
 	polygonCount: number;
@@ -23,12 +37,18 @@ export class MinimapRenderer {
 	private app: Application | null = null;
 	private mainContainer: Container | null = null;
 	private viewportOutline: Graphics | null = null;
+	private participantViewportsContainer: Container | null = null;
 	private isInitialized = false;
 
 	// Document state
 	private documentBounds: BoundingBox | null = null;
 	private lastViewportBounds: BoundingBox | null = null;
 	private canvas: HTMLCanvasElement | null = null;
+
+	// Participant viewports for click detection
+	private participantViewportBounds: ParticipantViewportScreenBounds[] = [];
+	// Text objects pool for participant labels (reuse to avoid allocation)
+	private labelPool: Text[] = [];
 
 	// Render stats
 	private stats: MinimapRenderStats = {
@@ -37,8 +57,9 @@ export class MinimapRenderer {
 		lastRenderTimeMs: 0,
 	};
 
-	// Callback for click-to-navigate
-	private onNavigateCallback: ((worldX: number, worldY: number) => void) | null = null;
+	// Callback for click-to-navigate (extended to support exact view with scale)
+	private onNavigateCallback: ((worldX: number, worldY: number, scale?: number) => void) | null =
+		null;
 
 	/**
 	 * Initialize the minimap renderer with a canvas element
@@ -64,7 +85,11 @@ export class MinimapRenderer {
 		this.mainContainer = new Container();
 		this.app.stage.addChild(this.mainContainer);
 
-		// Viewport outline (drawn on top)
+		// Participant viewports container (between layout and own viewport)
+		this.participantViewportsContainer = new Container();
+		this.app.stage.addChild(this.participantViewportsContainer);
+
+		// Viewport outline (drawn on top of everything)
 		this.viewportOutline = new Graphics();
 		this.app.stage.addChild(this.viewportOutline);
 
@@ -82,13 +107,14 @@ export class MinimapRenderer {
 
 	/**
 	 * Set callback for click-to-navigate
+	 * @param callback - Called with world coordinates and optional scale (for participant viewport clicks)
 	 */
-	setOnNavigate(callback: ((worldX: number, worldY: number) => void) | null): void {
+	setOnNavigate(callback: ((worldX: number, worldY: number, scale?: number) => void) | null): void {
 		this.onNavigateCallback = callback;
 	}
 
 	/**
-	 * Handle click on minimap - convert to world coordinates and navigate
+	 * Handle click on minimap - check participant viewports first, then navigate to world coordinates
 	 */
 	private handleClick(event: { global: { x: number; y: number } }): void {
 		if (!this.documentBounds || !this.mainContainer || !this.app) {
@@ -98,7 +124,28 @@ export class MinimapRenderer {
 		const screenX = event.global.x;
 		const screenY = event.global.y;
 
-		// Convert screen coordinates to world coordinates
+		// Check if click is on a participant viewport (check in reverse order - topmost first)
+		for (let i = this.participantViewportBounds.length - 1; i >= 0; i--) {
+			const bounds = this.participantViewportBounds[i];
+			if (!bounds) continue;
+			if (
+				screenX >= bounds.left &&
+				screenX <= bounds.left + bounds.width &&
+				screenY >= bounds.top &&
+				screenY <= bounds.top + bounds.height
+			) {
+				// Clicked on a participant viewport - navigate to their exact view
+				if (DEBUG) {
+					console.log(
+						`[MinimapRenderer] Clicked on participant ${bounds.userId} viewport, navigating to their view`,
+					);
+				}
+				this.onNavigateCallback?.(bounds.worldCenterX, bounds.worldCenterY, bounds.scale);
+				return;
+			}
+		}
+
+		// No participant viewport hit - convert to world coordinates for regular navigation
 		const worldX = (screenX - this.mainContainer.x) / this.mainContainer.scale.x;
 		const worldY = (screenY - this.mainContainer.y) / this.mainContainer.scale.y;
 
@@ -481,6 +528,158 @@ export class MinimapRenderer {
 	}
 
 	/**
+	 * Update participant viewports display on minimap (Phase 3)
+	 * Draws colored rectangles with labels for each participant's viewport
+	 */
+	updateParticipantViewports(viewports: ParticipantViewport[]): void {
+		if (!this.participantViewportsContainer || !this.mainContainer || !this.app) {
+			return;
+		}
+
+		// Clear previous participant viewports
+		this.participantViewportsContainer.removeChildren();
+		this.participantViewportBounds = [];
+
+		// Hide unused labels from pool
+		for (const label of this.labelPool) {
+			label.visible = false;
+		}
+
+		const scale = this.mainContainer.scale.x;
+		const offsetX = this.mainContainer.x;
+		const offsetY = this.mainContainer.y;
+
+		let labelIndex = 0;
+
+		for (const participant of viewports) {
+			const vp = participant.viewport;
+
+			// Calculate viewport bounds in world coordinates
+			// Use same logic as ViewportManager.getViewportBounds()
+			// container.scale.y is -scale (Y flipped), so scaleY = -vp.scale
+			const scaleY = -vp.scale;
+
+			// World coordinates of viewport top-left corner
+			const worldX = -vp.x / vp.scale;
+			const worldY = -vp.y / scaleY;
+
+			// Width and height in world units
+			const worldWidth = vp.width / vp.scale;
+			const worldHeight = vp.height / Math.abs(scaleY);
+
+			// With scaleY < 0, the world Y range is [worldY - height, worldY]
+			const worldMinX = worldX;
+			const worldMaxX = worldX + worldWidth;
+			const worldMinY = worldY - worldHeight;
+			const worldMaxY = worldY;
+
+			// Calculate world center for click navigation
+			const worldCenterX = (worldMinX + worldMaxX) / 2;
+			const worldCenterY = (worldMinY + worldMaxY) / 2;
+
+			// Convert to screen coordinates
+			const x1 = worldMinX * scale + offsetX;
+			const x2 = worldMaxX * scale + offsetX;
+			const y1 = worldMinY * -scale + offsetY;
+			const y2 = worldMaxY * -scale + offsetY;
+
+			const left = Math.min(x1, x2);
+			const top = Math.min(y1, y2);
+			const width = Math.abs(x2 - x1);
+			const height = Math.abs(y2 - y1);
+
+			// Skip if too small to see
+			if (width < 4 || height < 4) continue;
+
+			// Store bounds for click detection
+			this.participantViewportBounds.push({
+				userId: participant.userId,
+				left,
+				top,
+				width,
+				height,
+				worldCenterX,
+				worldCenterY,
+				scale: vp.scale,
+			});
+
+			// Parse hex color to number
+			const colorNum = this.parseColor(participant.color);
+
+			// Draw rectangle
+			const graphics = new Graphics();
+
+			if (participant.isFollowed) {
+				// Followed user: thicker border with subtle glow (larger outer stroke)
+				graphics.rect(left - 2, top - 2, width + 4, height + 4);
+				graphics.stroke({ color: colorNum, width: 4, alpha: 0.3 });
+			}
+
+			graphics.rect(left, top, width, height);
+			graphics.stroke({ color: colorNum, width: 2, alpha: 0.9 });
+
+			// Subtle fill for participant viewports
+			graphics.rect(left, top, width, height);
+			graphics.fill({ color: colorNum, alpha: 0.1 });
+
+			this.participantViewportsContainer.addChild(graphics);
+
+			// Add label at top-left corner
+			const label = this.getOrCreateLabel(labelIndex);
+			label.text = participant.displayName;
+			label.style = new TextStyle({
+				fontFamily: "Arial, sans-serif",
+				fontSize: 10,
+				fill: colorNum,
+				fontWeight: participant.isFollowed ? "bold" : "normal",
+			});
+			label.x = left + 2;
+			label.y = top + 2;
+			label.visible = true;
+
+			// Add background for readability
+			const labelBg = new Graphics();
+			const labelWidth = label.width + 4;
+			const labelHeight = label.height + 2;
+			labelBg.rect(left, top, labelWidth, labelHeight);
+			labelBg.fill({ color: 0x1a1a1a, alpha: 0.7 });
+
+			this.participantViewportsContainer.addChild(labelBg);
+			this.participantViewportsContainer.addChild(label);
+
+			labelIndex++;
+		}
+
+		if (DEBUG) {
+			console.log(`[MinimapRenderer] Updated ${viewports.length} participant viewports`);
+		}
+	}
+
+	/**
+	 * Get or create a label from the pool
+	 */
+	private getOrCreateLabel(index: number): Text {
+		const existing = this.labelPool[index];
+		if (existing) {
+			return existing;
+		}
+		const label = new Text({ text: "" });
+		this.labelPool.push(label);
+		return label;
+	}
+
+	/**
+	 * Parse color string (hex or named) to number
+	 */
+	private parseColor(color: string): number {
+		if (color.startsWith("#")) {
+			return Number.parseInt(color.slice(1), 16);
+		}
+		// Default fallback
+		return 0x888888;
+	}
+
+	/**
 	 * Get render statistics
 	 */
 	getStats(): MinimapRenderStats {
@@ -534,6 +733,9 @@ export class MinimapRenderer {
 		}
 		this.mainContainer = null;
 		this.viewportOutline = null;
+		this.participantViewportsContainer = null;
+		this.participantViewportBounds = [];
+		this.labelPool = [];
 		this.documentBounds = null;
 		this.lastViewportBounds = null;
 		this.isInitialized = false;
