@@ -52,7 +52,7 @@ function saveState() {
 
 function initDefaultPosition() {
 	if (panelPosition.x === -1 || panelPosition.y === -1) {
-		panelPosition = { x: window.innerWidth - 300, y: 35 };
+		panelPosition = { x: window.innerWidth - 300, y: 150 };
 	}
 }
 
