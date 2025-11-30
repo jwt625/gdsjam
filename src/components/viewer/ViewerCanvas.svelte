@@ -53,6 +53,20 @@ const isFollowing = $derived($collaborationStore.isFollowing);
 const isBroadcasting = $derived($collaborationStore.isBroadcasting);
 const isInSession = $derived($collaborationStore.isInSession);
 
+// Trigger renderer resize when fullscreen mode changes
+// The layout changes when header/footer are hidden, so canvas needs to resize
+$effect(() => {
+	// Access fullscreenMode to track it
+	const _fullscreen = fullscreenMode;
+	// Schedule resize after DOM updates
+	if (renderer) {
+		// Use requestAnimationFrame to wait for DOM layout to update
+		requestAnimationFrame(() => {
+			renderer?.triggerResize();
+		});
+	}
+});
+
 const KEYBOARD_OWNER = "ViewerCanvas";
 
 /**
