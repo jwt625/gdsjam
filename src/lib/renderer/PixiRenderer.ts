@@ -660,7 +660,9 @@ export class PixiRenderer {
 			this.currentRenderDepth = isHierarchical ? 3 : 0; // Start at depth 3 for hierarchical files
 
 			if (DEBUG && isHierarchical) {
-				console.log(`[Render] Hierarchical file detected (${totalTopCellInstances} instances, ${totalTopCellPolygons} polygons in top cells), starting at depth 3`);
+				console.log(
+					`[Render] Hierarchical file detected (${totalTopCellInstances} instances, ${totalTopCellPolygons} polygons in top cells), starting at depth 3`,
+				);
 			}
 		}
 
