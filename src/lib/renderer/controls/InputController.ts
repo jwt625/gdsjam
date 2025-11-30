@@ -9,7 +9,8 @@
  *
  * Supported Input:
  * - Mouse: Wheel zoom, middle-button pan, Space+drag pan, coordinate tracking
- * - Keyboard: Arrow keys pan, Enter/Shift+Enter zoom, F fit-to-view, G grid toggle
+ * - Keyboard: Arrow keys pan, Enter/Shift+Enter zoom, G grid toggle
+ *   (F key is handled in ViewerCanvas for hold detection: short press = fit view, hold = fullscreen)
  * - Touch: One-finger pan, two-finger pinch zoom
  */
 
@@ -110,14 +111,8 @@ export class InputController {
 				},
 				description: "Zoom out",
 			},
-			// F key for fit to view
-			{
-				id: "fit-to-view",
-				key: "KeyF",
-				callback: () => callbacks.onFitToView(),
-				description: "Fit to view",
-			},
 			// G key for grid toggle
+			// Note: F key is handled in ViewerCanvas with hold detection for fullscreen
 			{
 				id: "toggle-grid",
 				key: "KeyG",

@@ -6,9 +6,11 @@ interface Props {
 	onTogglePerformance: () => void;
 	onToggleLayers: () => void;
 	onToggleMinimap?: () => void;
+	onToggleFullscreen?: (enabled: boolean) => void;
 	performanceVisible: boolean;
 	layersVisible: boolean;
 	minimapVisible?: boolean;
+	fullscreenMode?: boolean;
 }
 
 const {
@@ -16,9 +18,11 @@ const {
 	onTogglePerformance,
 	onToggleLayers,
 	onToggleMinimap,
+	onToggleFullscreen,
 	performanceVisible,
 	layersVisible,
 	minimapVisible = true,
+	fullscreenMode = false,
 }: Props = $props();
 
 let menuOpen = $state(false);
@@ -54,6 +58,11 @@ function handleToggleLayers() {
 
 function handleToggleMinimap() {
 	onToggleMinimap?.();
+	menuOpen = false;
+}
+
+function handleToggleFullscreen() {
+	onToggleFullscreen?.(!fullscreenMode);
 	menuOpen = false;
 }
 </script>
@@ -119,6 +128,29 @@ function handleToggleMinimap() {
 					<rect x="13" y="13" width="6" height="6" rx="1"/>
 				</svg>
 				<span>Minimap</span>
+			</button>
+
+			<!-- Fullscreen Toggle -->
+			<button class="menu-item" onclick={handleToggleFullscreen} class:active={fullscreenMode} title="Toggle Fullscreen">
+				{#if fullscreenMode}
+					<!-- Exit fullscreen icon (compress) -->
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path d="M4 14h6v6"/>
+						<path d="M20 10h-6V4"/>
+						<path d="M14 10l7-7"/>
+						<path d="M3 21l7-7"/>
+					</svg>
+					<span>Exit Fullscreen</span>
+				{:else}
+					<!-- Enter fullscreen icon (expand) -->
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path d="M15 3h6v6"/>
+						<path d="M9 21H3v-6"/>
+						<path d="M21 3l-7 7"/>
+						<path d="M3 21l7-7"/>
+					</svg>
+					<span>Fullscreen</span>
+				{/if}
 			</button>
 		</div>
 	{/if}

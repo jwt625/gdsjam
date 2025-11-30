@@ -18,6 +18,19 @@ const KEYBOARD_OWNER = "App";
 // Hidden file input for keyboard shortcut
 let globalFileInput: HTMLInputElement;
 
+// Fullscreen mode state (hides header and footer)
+let fullscreenMode = $state(false);
+
+/**
+ * Toggle fullscreen mode (hide/show header and footer)
+ */
+function handleToggleFullscreen(enabled: boolean): void {
+	fullscreenMode = enabled;
+	if (DEBUG) {
+		console.log(`[App] Fullscreen mode: ${enabled ? "enabled" : "disabled"}`);
+	}
+}
+
 /**
  * Handle file selection from the global file input (Ctrl/Cmd+O shortcut)
  */
@@ -93,25 +106,36 @@ async function handleGlobalFileInput(event: Event) {
  * Register keyboard shortcuts for app-level controls
  */
 function registerKeyboardShortcuts(): void {
-	KeyboardShortcutManager.register(KEYBOARD_OWNER, {
-		id: "open-file",
-		key: "KeyO",
-		modifiers: { ctrl: true },
-		context: () => {
-			// Block file upload for clients in a session (only host can upload)
-			if ($collaborationStore.isInSession && !$collaborationStore.isHost) {
-				if (DEBUG) {
-					console.log("[App] Blocking Ctrl+O for non-host client in session");
+	KeyboardShortcutManager.registerMany(KEYBOARD_OWNER, [
+		{
+			id: "open-file",
+			key: "KeyO",
+			modifiers: { ctrl: true },
+			context: () => {
+				// Block file upload for clients in a session (only host can upload)
+				if ($collaborationStore.isInSession && !$collaborationStore.isHost) {
+					if (DEBUG) {
+						console.log("[App] Blocking Ctrl+O for non-host client in session");
+					}
+					return false;
 				}
-				return false;
-			}
-			return true;
+				return true;
+			},
+			callback: () => {
+				globalFileInput?.click();
+			},
+			description: "Open file (Ctrl/Cmd+O)",
 		},
-		callback: () => {
-			globalFileInput?.click();
+		{
+			id: "exit-fullscreen",
+			key: "Escape",
+			context: () => fullscreenMode, // Only active when in fullscreen mode
+			callback: () => {
+				handleToggleFullscreen(false);
+			},
+			description: "Exit fullscreen mode",
 		},
-		description: "Open file (Ctrl/Cmd+O)",
-	});
+	]);
 }
 
 /**
@@ -317,7 +341,9 @@ onDestroy(() => {
 />
 
 <main class="app-main">
-	<HeaderBar />
+	{#if !fullscreenMode}
+		<HeaderBar />
+	{/if}
 
 	<div class="viewer-wrapper">
 		{#if !$gdsStore.document && !$gdsStore.isLoading}
@@ -332,7 +358,7 @@ onDestroy(() => {
 		{/if}
 
 		{#if $gdsStore.document}
-			<ViewerCanvas />
+			<ViewerCanvas {fullscreenMode} onToggleFullscreen={handleToggleFullscreen} />
 		{/if}
 
 		<!-- Participant List overlay (only shown in session) -->
@@ -345,14 +371,16 @@ onDestroy(() => {
 		{/if}
 	</div>
 
-	<div class="controls-info">
-		<p class="text-sm text-gray-400 keyboard-shortcuts">
-			Controls: Ctrl/Cmd+O to open file | Mouse wheel to zoom | Middle mouse or Space+Drag to pan | Arrow keys to move | Enter to zoom in | Shift+Enter to zoom out | F to fit view | G to toggle grid | O to toggle fill/outline | P to toggle info panel | L to toggle layer panel | M to toggle minimap | Touch: One finger to pan, two fingers to zoom
-		</p>
-		<p class="text-sm text-gray-400 footer-note">
-			When not using sessions, this webapp is client-side only - your GDS file is not uploaded anywhere. Created by <a href="https://outside5sigma.com/" target="_blank" rel="noopener noreferrer" class="creator-link">Wentao</a>. Read or Contribute to source code on <a href="https://github.com/jwt625/gdsjam" target="_blank" rel="noopener noreferrer" class="creator-link">GitHub</a>.
-		</p>
-	</div>
+	{#if !fullscreenMode}
+		<div class="controls-info">
+			<p class="text-sm text-gray-400 keyboard-shortcuts">
+				Controls: Ctrl/Cmd+O to open file | Mouse wheel to zoom | Middle mouse or Space+Drag to pan | Arrow keys to move | Enter to zoom in | Shift+Enter to zoom out | F to fit view (hold for fullscreen) | Esc to exit fullscreen | G to toggle grid | O to toggle fill/outline | P to toggle info panel | L to toggle layer panel | M to toggle minimap | Touch: One finger to pan, two fingers to zoom
+			</p>
+			<p class="text-sm text-gray-400 footer-note">
+				When not using sessions, this webapp is client-side only - your GDS file is not uploaded anywhere. Created by <a href="https://outside5sigma.com/" target="_blank" rel="noopener noreferrer" class="creator-link">Wentao</a>. Read or Contribute to source code on <a href="https://github.com/jwt625/gdsjam" target="_blank" rel="noopener noreferrer" class="creator-link">GitHub</a>.
+			</p>
+		</div>
+	{/if}
 </main>
 
 <style>

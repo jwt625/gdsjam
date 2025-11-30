@@ -952,4 +952,24 @@ export class PixiRenderer {
 		this.app.renderer.resize(width, height);
 		this.fpsText.x = width - 80;
 	}
+
+	/**
+	 * Trigger a resize to fit the parent element
+	 * Useful when parent size changes due to sibling elements being hidden/shown
+	 */
+	triggerResize(): void {
+		// The PixiJS app has a resizer that tracks the parent element
+		// Force it to recalculate by triggering the resize method
+		if (this.app.resizeTo) {
+			const parent = this.app.resizeTo as HTMLElement;
+			const width = parent.clientWidth;
+			const height = parent.clientHeight;
+			this.app.renderer.resize(width, height);
+			this.fpsCounter.updatePosition(width);
+			this.coordinatesDisplay.updatePosition(width, height);
+			if (DEBUG) {
+				console.log(`[PixiRenderer] Triggered resize to ${width}x${height}`);
+			}
+		}
+	}
 }
