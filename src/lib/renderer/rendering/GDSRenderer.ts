@@ -75,7 +75,10 @@ export class GDSRenderer {
 		);
 
 		if (DEBUG) {
-			console.log(`[GDSRenderer] Found ${topCells.length} top-level cells:`, topCells.map(c => `${c.name} (${c.polygons.length}p, ${c.instances.length}i)`).join(', '));
+			console.log(
+				`[GDSRenderer] Found ${topCells.length} top-level cells:`,
+				topCells.map((c) => `${c.name} (${c.polygons.length}p, ${c.instances.length}i)`).join(", "),
+			);
 		}
 
 		// Calculate total polygon count for progress tracking
@@ -429,6 +432,7 @@ export class GDSRenderer {
 
 	/**
 	 * Transform a single point by position, rotation, mirror, and magnification
+	 * GDS transformation order: mirror → rotate → magnify → translate
 	 */
 	private transformPoint(
 		px: number,
@@ -439,16 +443,23 @@ export class GDSRenderer {
 		mirror: boolean,
 		magnification: number,
 	): { x: number; y: number } {
+		// Step 1: Mirror (flip Y-axis if mirror=true)
+		const mx = mirror ? px : px;
+		const my = mirror ? -py : py;
+
+		// Step 2: Rotate
 		const rad = (rotation * Math.PI) / 180;
 		const cos = Math.cos(rad);
 		const sin = Math.sin(rad);
-		const mx = mirror ? -1 : 1;
+		const rx = mx * cos - my * sin;
+		const ry = mx * sin + my * cos;
 
-		// Apply transformation: mirror, rotate, scale, translate
-		const rx = (px * cos * mx - py * sin) * magnification + x;
-		const ry = (px * sin * mx + py * cos) * magnification + y;
+		// Step 3: Magnify
+		const sx = rx * magnification;
+		const sy = ry * magnification;
 
-		return { x: rx, y: ry };
+		// Step 4: Translate
+		return { x: sx + x, y: sy + y };
 	}
 
 	/**

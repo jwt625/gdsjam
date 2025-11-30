@@ -323,7 +323,9 @@ export class MinimapRenderer {
 		startDepth = isHierarchical ? 3 : 0; // Start at depth 3 for hierarchical files
 
 		if (DEBUG && isHierarchical) {
-			console.log(`[MinimapRenderer] Hierarchical file detected (${totalTopCellInstances} instances, ${totalTopCellPolygons} polygons in top cells), starting at depth ${startDepth}`);
+			console.log(
+				`[MinimapRenderer] Hierarchical file detected (${totalTopCellInstances} instances, ${totalTopCellPolygons} polygons in top cells), starting at depth ${startDepth}`,
+			);
 		}
 
 		for (const cell of topCells) {
@@ -445,30 +447,14 @@ export class MinimapRenderer {
 				if (!refCell) continue;
 
 				// Calculate transformed position
-				// GDS transformation order: mirror → rotate → magnify → translate
-
-				// Step 1: Mirror instance position
-				let instX = mirror ? -instance.x : instance.x;
-				let instY = instance.y;
-
-				// Step 2: Rotate instance position
 				const rad = (rotation * Math.PI) / 180;
 				const cos = Math.cos(rad);
 				const sin = Math.sin(rad);
-				const rotX = instX * cos - instY * sin;
-				const rotY = instX * sin + instY * cos;
+				const mx = mirror ? -1 : 1;
 
-				// Step 3: Magnify
-				const magX = rotX * magnification;
-				const magY = rotY * magnification;
-
-				// Step 4: Translate
-				const newX = x + magX;
-				const newY = y + magY;
-
-				// Combine rotations and mirrors
-				// When parent is mirrored, child rotation is negated
-				const newRotation = mirror ? rotation - instance.rotation : rotation + instance.rotation;
+				const newX = x + (instance.x * cos * mx - instance.y * sin) * magnification;
+				const newY = y + (instance.x * sin * mx + instance.y * cos) * magnification;
+				const newRotation = rotation + instance.rotation;
 				const newMirror = mirror !== instance.mirror;
 				const newMagnification = magnification * instance.magnification;
 
@@ -502,23 +488,23 @@ export class MinimapRenderer {
 		mirror: boolean,
 		magnification: number,
 	): { x: number; y: number } {
-		// Step 1: Mirror (flip X-axis if mirror=true)
-		let tx = mirror ? -px : px;
-		let ty = py;
+		// Step 1: Mirror (flip Y-axis if mirror=true)
+		const mx = mirror ? px : px;
+		const my = mirror ? -py : py;
 
 		// Step 2: Rotate
 		const rad = (rotation * Math.PI) / 180;
 		const cos = Math.cos(rad);
 		const sin = Math.sin(rad);
-		const rx = tx * cos - ty * sin;
-		const ry = tx * sin + ty * cos;
+		const rx = mx * cos - my * sin;
+		const ry = mx * sin + my * cos;
 
 		// Step 3: Magnify
-		const mx = rx * magnification;
-		const my = ry * magnification;
+		const sx = rx * magnification;
+		const sy = ry * magnification;
 
 		// Step 4: Translate
-		return { x: mx + x, y: my + y };
+		return { x: sx + x, y: sy + y };
 	}
 
 	/**

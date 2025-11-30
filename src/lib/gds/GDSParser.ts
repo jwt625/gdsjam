@@ -668,8 +668,10 @@ async function buildGDSDocument(
 
 			for (const corner of corners) {
 				// Apply transformation: mirror, rotate, scale, translate
-				const transformedX = (corner.x * cos * mx - corner.y * sin) * instance.magnification + instance.x;
-				const transformedY = (corner.x * sin * mx + corner.y * cos) * instance.magnification + instance.y;
+				const transformedX =
+					(corner.x * cos * mx - corner.y * sin) * instance.magnification + instance.x;
+				const transformedY =
+					(corner.x * sin * mx + corner.y * cos) * instance.magnification + instance.y;
 
 				minX = Math.min(minX, transformedX);
 				minY = Math.min(minY, transformedY);
@@ -721,7 +723,7 @@ async function buildGDSDocument(
 	}
 
 	// Calculate skipInMinimap for each cell (1% threshold of layout extent)
-	// Cells smaller than 1% of the layout in either dimension are skipped in minimap
+	// Cells smaller than 1% of the layout in BOTH dimensions are skipped in minimap
 	const layoutExtentX = globalMaxX - globalMinX;
 	const layoutExtentY = globalMaxY - globalMinY;
 	const MINIMAP_SKIP_THRESHOLD = 0.01; // 1% of layout extent
@@ -731,7 +733,7 @@ async function buildGDSDocument(
 			const cellWidth = cell.boundingBox.maxX - cell.boundingBox.minX;
 			const cellHeight = cell.boundingBox.maxY - cell.boundingBox.minY;
 			cell.skipInMinimap =
-				cellWidth < MINIMAP_SKIP_THRESHOLD * layoutExtentX ||
+				cellWidth < MINIMAP_SKIP_THRESHOLD * layoutExtentX &&
 				cellHeight < MINIMAP_SKIP_THRESHOLD * layoutExtentY;
 		}
 

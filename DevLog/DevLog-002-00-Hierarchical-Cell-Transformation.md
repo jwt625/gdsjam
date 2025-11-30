@@ -456,10 +456,77 @@ This formula correctly positions all cells but one bend has wrong rotation.
 - One bend instance has incorrect rotation (180 degrees off)
 - Need to investigate rotation/mirror transformation logic
 
-## Next Steps
+### Rotation Issue Analysis
 
-1. Identify which specific bend instance has wrong rotation
-2. Compare expected vs actual rotation values
-3. Investigate how rotation and mirror interact in GDS spec
-4. Test rotation transformation with simple cases
+**Problem:** Two bend instances at (0, 0), one is correct and one is 180 degrees off:
+- Instance 0: rot=180, mir=true (wrong orientation)
+- Instance 6: rot=0, mir=false (correct orientation)
+
+**GDS Mirror Specification:**
+- Mirror (x_reflection) only mirrors across the X-axis
+- It flips the Y coordinate: (x, y) becomes (x, -y)
+- Mirror is NOT the same as rotating 180 degrees
+- Mirror + rotation is different from just rotation
+
+**Root Cause:**
+The transformation formula was applying mirror DURING rotation instead of BEFORE rotation:
+
+```typescript
+// WRONG: Applies mirror during rotation
+const mx = mirror ? -1 : 1;
+const rx = (px * cos * mx - py * sin) * magnification + x;
+const ry = (px * sin * mx + py * cos) * magnification + y;
+```
+
+The GDS spec requires transformations in this order: mirror → rotate → magnify → translate
+
+**The Fix:**
+Separated the transformation steps to apply mirror before rotation:
+
+```typescript
+// CORRECT: Apply mirror first, then rotate
+// Step 1: Mirror (flip Y-axis if mirror=true)
+const mx = mirror ? px : px;
+const my = mirror ? -py : py;
+
+// Step 2: Rotate
+const rad = (rotation * Math.PI) / 180;
+const cos = Math.cos(rad);
+const sin = Math.sin(rad);
+const rx = mx * cos - my * sin;
+const ry = mx * sin + my * cos;
+
+// Step 3: Magnify
+const sx = rx * magnification;
+const sy = ry * magnification;
+
+// Step 4: Translate
+return { x: sx + x, y: sy + y };
+```
+
+This fix was applied to both:
+- `GDSRenderer.transformPoint()` - for main viewport polygon rendering
+- `MinimapRenderer.transformPoint()` - for minimap polygon rendering
+
+## Final Status
+
+**All Issues Resolved:**
+
+1. **XY record parsing** - Fixed by changing condition from `data.length >= 2` to `data.length >= 1` to handle nested array format `[[x, y]]`
+
+2. **Minimap skipInMinimap logic** - Fixed by changing from OR to AND (skip only if small in BOTH dimensions)
+
+3. **Rotation with mirror** - Fixed by applying mirror BEFORE rotation instead of during rotation
+
+**Test Results:**
+- All cell instances are positioned correctly
+- All cell instances have correct rotation and orientation
+- Minimap shows all segments correctly
+- Both main viewport and minimap render identically to KLayout
+
+## Files Modified
+
+- `src/lib/gds/GDSParser.ts`: XY record parsing fix, skipInMinimap logic fix
+- `src/lib/renderer/rendering/GDSRenderer.ts`: transformPoint method fix
+- `src/lib/renderer/MinimapRenderer.ts`: transformPoint method fix
 
