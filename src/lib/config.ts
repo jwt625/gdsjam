@@ -74,3 +74,11 @@ export const POLYGON_FILL_MODE = true; // true = filled polygons, false = outlin
  */
 export const MIN_ZOOM_SCALE_BAR_MICROMETERS = 1_000_000; // 1 m = 1,000,000 µm (max zoom out)
 export const MAX_ZOOM_SCALE_BAR_MICROMETERS = 0.001; // 1 nm = 0.001 µm (max zoom in)
+
+/**
+ * Hierarchical File Detection Configuration
+ * A GDS file is considered hierarchical if top cells have instances but very few polygons.
+ * This threshold determines "very few" - if top cells have fewer than this many polygons
+ * but have instances, we start rendering at a higher depth to show content immediately.
+ */
+export const HIERARCHICAL_POLYGON_THRESHOLD = 10;

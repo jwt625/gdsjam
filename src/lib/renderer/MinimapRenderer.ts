@@ -12,7 +12,7 @@
 import { Application, Container, Graphics, Text, TextStyle } from "pixi.js";
 import type { BoundingBox, Cell, GDSDocument } from "../../types/gds";
 import type { ParticipantViewport } from "../collaboration/types";
-import { DEBUG } from "../config";
+import { DEBUG, HIERARCHICAL_POLYGON_THRESHOLD } from "../config";
 
 /** Screen-space bounds for a participant viewport (used for click detection) */
 interface ParticipantViewportScreenBounds {
@@ -319,7 +319,8 @@ export class MinimapRenderer {
 		}
 
 		// If top cells have instances but very few polygons, it's hierarchical
-		const isHierarchical = totalTopCellInstances > 0 && totalTopCellPolygons < 10;
+		const isHierarchical =
+			totalTopCellInstances > 0 && totalTopCellPolygons < HIERARCHICAL_POLYGON_THRESHOLD;
 		startDepth = isHierarchical ? 3 : 0; // Start at depth 3 for hierarchical files
 
 		if (DEBUG && isHierarchical) {

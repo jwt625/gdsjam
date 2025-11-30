@@ -623,6 +623,7 @@ async function buildGDSDocument(
 	// Calculate bounding boxes for cells recursively (bottom-up)
 	// We need to process cells in dependency order: leaf cells first, then parents
 	const cellBBoxCalculated = new Set<string>();
+	const cellBBoxInProgress = new Set<string>(); // Guard against circular references
 
 	function calculateCellBoundingBox(cellName: string): BoundingBox {
 		// Return cached result if already calculated
@@ -634,6 +635,14 @@ async function buildGDSDocument(
 		if (cellBBoxCalculated.has(cellName)) {
 			return cell.boundingBox;
 		}
+
+		// Detect circular references
+		if (cellBBoxInProgress.has(cellName)) {
+			console.warn(`[GDSParser] Circular cell reference detected: ${cellName}`);
+			return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+		}
+
+		cellBBoxInProgress.add(cellName);
 
 		let minX = Number.POSITIVE_INFINITY;
 		let minY = Number.POSITIVE_INFINITY;
@@ -661,17 +670,28 @@ async function buildGDSDocument(
 				{ x: refBBox.maxX, y: refBBox.maxY },
 			];
 
+			// Pre-calculate rotation values outside loop
 			const rad = (instance.rotation * Math.PI) / 180;
 			const cos = Math.cos(rad);
 			const sin = Math.sin(rad);
-			const mx = instance.mirror ? -1 : 1;
 
 			for (const corner of corners) {
-				// Apply transformation: mirror, rotate, scale, translate
-				const transformedX =
-					(corner.x * cos * mx - corner.y * sin) * instance.magnification + instance.x;
-				const transformedY =
-					(corner.x * sin * mx + corner.y * cos) * instance.magnification + instance.y;
+				// Apply transformation in correct order: mirror → rotate → magnify → translate
+				// Step 1: Mirror (flip Y-axis if mirror=true)
+				const mx = instance.mirror ? corner.x : corner.x;
+				const my = instance.mirror ? -corner.y : corner.y;
+
+				// Step 2: Rotate
+				const rx = mx * cos - my * sin;
+				const ry = mx * sin + my * cos;
+
+				// Step 3: Magnify
+				const sx = rx * instance.magnification;
+				const sy = ry * instance.magnification;
+
+				// Step 4: Translate
+				const transformedX = sx + instance.x;
+				const transformedY = sy + instance.y;
 
 				minX = Math.min(minX, transformedX);
 				minY = Math.min(minY, transformedY);
@@ -687,6 +707,7 @@ async function buildGDSDocument(
 			maxY: maxY === Number.NEGATIVE_INFINITY ? 0 : maxY,
 		};
 
+		cellBBoxInProgress.delete(cellName);
 		cellBBoxCalculated.add(cellName);
 		return cell.boundingBox;
 	}

@@ -21,7 +21,13 @@
 
 import { Application, Container, type Graphics, Text } from "pixi.js";
 import type { BoundingBox, GDSDocument } from "../../types/gds";
-import { DEBUG, FPS_UPDATE_INTERVAL, MAX_POLYGONS_PER_RENDER, POLYGON_FILL_MODE } from "../config";
+import {
+	DEBUG,
+	FPS_UPDATE_INTERVAL,
+	HIERARCHICAL_POLYGON_THRESHOLD,
+	MAX_POLYGONS_PER_RENDER,
+	POLYGON_FILL_MODE,
+} from "../config";
 import { type RTreeItem, SpatialIndex } from "../spatial/RTree";
 import { InputController } from "./controls/InputController";
 import { LODManager } from "./lod/LODManager";
@@ -655,7 +661,8 @@ export class PixiRenderer {
 
 			// If top cells have instances but very few polygons, it's hierarchical
 			// (Ignore context info cells which are typically small)
-			isHierarchical = totalTopCellInstances > 0 && totalTopCellPolygons < 10;
+			isHierarchical =
+				totalTopCellInstances > 0 && totalTopCellPolygons < HIERARCHICAL_POLYGON_THRESHOLD;
 
 			this.currentRenderDepth = isHierarchical ? 3 : 0; // Start at depth 3 for hierarchical files
 
