@@ -20,7 +20,29 @@ let unwatchFn: (() => void) | null = null;
 
 // Derived state
 const isDesktop = isTauri();
-const hasFile = $derived(currentFilePath !== null);
+// Show watch/refresh buttons if we have a file path OR if any file is loaded
+const hasFile = $derived(currentFilePath !== null || $gdsStore.fileName !== null);
+const canWatch = $derived(currentFilePath !== null); // Can only watch if we have a file path
+
+// Debug logging - always log on mount to help diagnose
+console.log("[DesktopFileControls] Component mounted:", {
+	isDesktop,
+	hasTauriGlobal: typeof window !== "undefined" && "__TAURI__" in window,
+	windowTauri: typeof window !== "undefined" ? (window as any).__TAURI__ : undefined
+});
+
+$effect(() => {
+	if (DEBUG) {
+		console.log("[DesktopFileControls] State:", {
+			isDesktop,
+			hasFile,
+			canWatch,
+			currentFilePath,
+			gdsFileName: $gdsStore.fileName,
+			isWatching
+		});
+	}
+});
 
 /**
  * Open file dialog and load the selected file
@@ -156,24 +178,34 @@ $effect(() => {
 		</button>
 
 		{#if hasFile}
-			<button class="control-button" onclick={handleRefresh} title="Refresh File (Cmd/Ctrl+R)">
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-				</svg>
-				<span>Refresh</span>
-			</button>
+			{#if canWatch}
+				<button class="control-button" onclick={handleRefresh} title="Refresh File (Cmd/Ctrl+R)">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+					</svg>
+					<span>Refresh</span>
+				</button>
 
-			<button 
-				class="control-button {isWatching ? 'active' : ''}" 
-				onclick={handleToggleWatch}
-				title="Auto-refresh when file changes"
-			>
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-				</svg>
-				<span>{isWatching ? "Watching" : "Watch"}</span>
-			</button>
+				<button
+					class="control-button {isWatching ? 'active' : ''}"
+					onclick={handleToggleWatch}
+					title="Auto-refresh when file changes"
+				>
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+					</svg>
+					<span>{isWatching ? "Watching" : "Watch"}</span>
+				</button>
+			{:else}
+				<!-- File loaded via upload, not from disk -->
+				<div class="info-message" title="Use 'Open' button to enable file watching">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+					</svg>
+					<span>Use "Open" for auto-refresh</span>
+				</div>
+			{/if}
 		{/if}
 	</div>
 {/if}
@@ -212,6 +244,25 @@ $effect(() => {
 	.control-button svg {
 		width: 1rem;
 		height: 1rem;
+	}
+
+	.info-message {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+		padding: 0.5rem 0.75rem;
+		background-color: #1e293b;
+		border: 1px solid #475569;
+		border-radius: 0.375rem;
+		color: #94a3b8;
+		font-size: 0.875rem;
+		font-style: italic;
+	}
+
+	.info-message svg {
+		width: 1rem;
+		height: 1rem;
+		flex-shrink: 0;
 	}
 </style>
 

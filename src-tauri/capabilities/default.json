@@ -8,8 +8,22 @@
   "permissions": [
     "core:default",
     "dialog:allow-open",
-    "fs:allow-read-file",
-    "fs:allow-read-text-file",
+    {
+      "identifier": "fs:allow-read-file",
+      "allow": [
+        {
+          "path": "**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-read-text-file",
+      "allow": [
+        {
+          "path": "**"
+        }
+      ]
+    },
     "fs:allow-write-file",
     "fs:allow-write-text-file",
     "fs:allow-exists",
