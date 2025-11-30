@@ -1,33 +1,31 @@
 {
-  "$schema": "../gen/schemas/desktop-schema.json",
-  "identifier": "default",
-  "description": "enables the default permissions",
-  "windows": [
-    "main"
-  ],
-  "permissions": [
-    "core:default",
-    "dialog:allow-open",
-    {
-      "identifier": "fs:allow-read-file",
-      "allow": [
-        {
-          "path": "**"
-        }
-      ]
-    },
-    {
-      "identifier": "fs:allow-read-text-file",
-      "allow": [
-        {
-          "path": "**"
-        }
-      ]
-    },
-    "fs:allow-write-file",
-    "fs:allow-write-text-file",
-    "fs:allow-exists",
-    "fs:allow-create",
-    "fs:allow-mkdir"
-  ]
+	"$schema": "../gen/schemas/desktop-schema.json",
+	"identifier": "default",
+	"description": "enables the default permissions",
+	"windows": ["main"],
+	"permissions": [
+		"core:default",
+		"dialog:allow-open",
+		{
+			"identifier": "fs:allow-read-file",
+			"allow": [
+				{
+					"path": "**"
+				}
+			]
+		},
+		{
+			"identifier": "fs:allow-read-text-file",
+			"allow": [
+				{
+					"path": "**"
+				}
+			]
+		},
+		"fs:allow-write-file",
+		"fs:allow-write-text-file",
+		"fs:allow-exists",
+		"fs:allow-create",
+		"fs:allow-mkdir"
+	]
 }

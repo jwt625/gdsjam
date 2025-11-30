@@ -1,7 +1,7 @@
 <script lang="ts">
 /**
  * Desktop File Controls
- * 
+ *
  * Provides desktop-specific file operations:
  * - Open file dialog
  * - Refresh current file
@@ -9,7 +9,7 @@
  */
 
 import { DEBUG } from "../../lib/config";
-import { isTauri, openFileDialog, watchFile, readFile, saveLastFilePath } from "../../lib/tauri";
+import { isTauri, openFileDialog, readFile, saveLastFilePath, watchFile } from "../../lib/tauri";
 import { loadGDSIIFromBuffer } from "../../lib/utils/gdsLoader";
 import { gdsStore } from "../../stores/gdsStore";
 
@@ -28,7 +28,7 @@ const canWatch = $derived(currentFilePath !== null); // Can only watch if we hav
 console.log("[DesktopFileControls] Component mounted:", {
 	isDesktop,
 	hasTauriGlobal: typeof window !== "undefined" && "__TAURI__" in window,
-	windowTauri: typeof window !== "undefined" ? (window as any).__TAURI__ : undefined
+	windowTauri: typeof window !== "undefined" ? (window as any).__TAURI__ : undefined,
 });
 
 $effect(() => {
@@ -39,7 +39,7 @@ $effect(() => {
 			canWatch,
 			currentFilePath,
 			gdsFileName: $gdsStore.fileName,
-			isWatching
+			isWatching,
 		});
 	}
 });
@@ -76,7 +76,7 @@ async function loadFileFromPath(filePath: string) {
 
 		// Read file from disk
 		const arrayBuffer = await readFile(filePath);
-		
+
 		// Extract file name from path
 		const fileName = filePath.split(/[\\/]/).pop() || "unknown.gds";
 

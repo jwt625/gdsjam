@@ -1,29 +1,29 @@
 {
-  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "gdsjam",
-  "version": "0.1.0",
-  "identifier": "com.gdsjam.app",
-  "build": {
-    "frontendDist": "../dist",
-    "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "pnpm dev",
-    "beforeBuildCommand": "pnpm build"
-  },
-  "app": {
-    "withGlobalTauri": true,
-    "windows": [
-      {
-        "title": "gdsjam",
-        "width": 1400,
-        "height": 900,
-        "resizable": true,
-        "fullscreen": false,
-        "minWidth": 800,
-        "minHeight": 600
-      }
-    ],
-    "security": {
-      "csp": null
-    }
-  }
+	"$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+	"productName": "gdsjam",
+	"version": "0.1.0",
+	"identifier": "com.gdsjam.app",
+	"build": {
+		"frontendDist": "../dist",
+		"devUrl": "http://localhost:5173",
+		"beforeDevCommand": "pnpm dev",
+		"beforeBuildCommand": "pnpm build"
+	},
+	"app": {
+		"withGlobalTauri": true,
+		"windows": [
+			{
+				"title": "gdsjam",
+				"width": 1400,
+				"height": 900,
+				"resizable": true,
+				"fullscreen": false,
+				"minWidth": 800,
+				"minHeight": 600
+			}
+		],
+		"security": {
+			"csp": null
+		}
+	}
 }
