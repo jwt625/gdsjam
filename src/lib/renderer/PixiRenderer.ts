@@ -21,7 +21,13 @@
 
 import { Application, Container, type Graphics, Text } from "pixi.js";
 import type { BoundingBox, GDSDocument } from "../../types/gds";
-import { DEBUG, FPS_UPDATE_INTERVAL, MAX_POLYGONS_PER_RENDER, POLYGON_FILL_MODE } from "../config";
+import {
+	DEBUG,
+	FPS_UPDATE_INTERVAL,
+	HIERARCHICAL_POLYGON_THRESHOLD,
+	MAX_POLYGONS_PER_RENDER,
+	POLYGON_FILL_MODE,
+} from "../config";
 import { type RTreeItem, SpatialIndex } from "../spatial/RTree";
 import { InputController } from "./controls/InputController";
 import { LODManager } from "./lod/LODManager";
@@ -639,7 +645,32 @@ export class PixiRenderer {
 		const startTime = performance.now();
 		// Only reset depth to 0 on initial render, not on incremental re-renders
 		if (!this.isRerendering) {
-			this.currentRenderDepth = 0;
+			// For hierarchical files (top cells have instances but few/no polygons), start with higher depth
+			// Otherwise we render nothing and LOD never increases
+			let isHierarchical = false;
+			let totalTopCellPolygons = 0;
+			let totalTopCellInstances = 0;
+
+			for (const topCellName of document.topCells) {
+				const cell = document.cells.get(topCellName);
+				if (cell) {
+					totalTopCellPolygons += cell.polygons.length;
+					totalTopCellInstances += cell.instances.length;
+				}
+			}
+
+			// If top cells have instances but very few polygons, it's hierarchical
+			// (Ignore context info cells which are typically small)
+			isHierarchical =
+				totalTopCellInstances > 0 && totalTopCellPolygons < HIERARCHICAL_POLYGON_THRESHOLD;
+
+			this.currentRenderDepth = isHierarchical ? 3 : 0; // Start at depth 3 for hierarchical files
+
+			if (DEBUG && isHierarchical) {
+				console.log(
+					`[Render] Hierarchical file detected (${totalTopCellInstances} instances, ${totalTopCellPolygons} polygons in top cells), starting at depth 3`,
+				);
+			}
 		}
 
 		// Get scaled budget from LOD manager

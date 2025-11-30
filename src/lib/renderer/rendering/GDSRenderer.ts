@@ -75,7 +75,10 @@ export class GDSRenderer {
 		);
 
 		if (DEBUG) {
-			console.log(`[GDSRenderer] Found ${topCells.length} top-level cells`);
+			console.log(
+				`[GDSRenderer] Found ${topCells.length} top-level cells:`,
+				topCells.map((c) => `${c.name} (${c.polygons.length}p, ${c.instances.length}i)`).join(", "),
+			);
 		}
 
 		// Calculate total polygon count for progress tracking
@@ -184,12 +187,9 @@ export class GDSRenderer {
 		}
 
 		// Create container for this cell
+		// Note: We don't apply position/rotation/scale/mirror to the container because we're
+		// flattening the hierarchy and transforming each polygon directly to world coordinates.
 		const cellContainer = new Container();
-		cellContainer.x = x;
-		cellContainer.y = y;
-		cellContainer.rotation = (rotation * Math.PI) / 180;
-		cellContainer.scale.x = magnification * (mirror ? -1 : 1);
-		cellContainer.scale.y = magnification;
 
 		// Calculate stroke width for outline mode
 		const currentScale = overrideScale ?? this.mainContainer.scale.x;
@@ -200,11 +200,7 @@ export class GDSRenderer {
 			strokeWidthDB = minStrokeWidthDB;
 		}
 
-		if (DEBUG) {
-			console.log(
-				`[GDSRenderer] Cell ${cell.name}: strokeWidthDB=${strokeWidthDB.toExponential(2)} DB units, scale=${currentScale.toExponential(3)}`,
-			);
-		}
+		// Removed excessive per-cell logging
 
 		// Batch polygons by layer and spatial tile
 		const tileGraphics = new Map<string, Graphics>();
@@ -218,11 +214,6 @@ export class GDSRenderer {
 		// Render direct polygons
 		for (let i = 0; i < totalPolygonsInCell; i++) {
 			if (renderedPolygons >= directPolygonBudget) {
-				if (DEBUG) {
-					console.log(
-						`[GDSRenderer] Cell ${cell.name}: Budget exhausted (${renderedPolygons}/${totalPolygonsInCell} rendered)`,
-					);
-				}
 				break;
 			}
 
@@ -237,9 +228,19 @@ export class GDSRenderer {
 			const isVisible = layerVisibility.get(layerKey) ?? true;
 			if (!isVisible) continue;
 
-			// Calculate tile coordinates
-			const centerX = (polygon.boundingBox.minX + polygon.boundingBox.maxX) / 2;
-			const centerY = (polygon.boundingBox.minY + polygon.boundingBox.maxY) / 2;
+			// Transform the polygon's bounding box to get the actual position
+			const transformedBBox = this.transformBoundingBox(
+				polygon.boundingBox,
+				x,
+				y,
+				rotation,
+				mirror,
+				magnification,
+			);
+
+			// Calculate tile coordinates from transformed bounding box
+			const centerX = (transformedBBox.minX + transformedBBox.maxX) / 2;
+			const centerY = (transformedBBox.minY + transformedBBox.maxY) / 2;
 			const tileX = Math.floor(centerX / SPATIAL_TILE_SIZE);
 			const tileY = Math.floor(centerY / SPATIAL_TILE_SIZE);
 			const tileKey = `${layerKey}:${tileX}:${tileY}`;
@@ -260,19 +261,31 @@ export class GDSRenderer {
 				tilePolygonCounts.set(tileKey, 0);
 			}
 
-			// Add polygon to graphics
-			this.addPolygonToGraphics(graphics, polygon, layer.color, strokeWidthDB, fillMode);
+			// Add polygon to graphics with transformation
+			this.addPolygonToGraphics(
+				graphics,
+				polygon,
+				layer.color,
+				strokeWidthDB,
+				fillMode,
+				x,
+				y,
+				rotation,
+				mirror,
+				magnification,
+			);
 			renderedPolygons++;
 
 			// Update tile stats
 			const currentCount = tilePolygonCounts.get(tileKey) || 0;
 			tilePolygonCounts.set(tileKey, currentCount + 1);
 
+			// Update bounds with transformed bounding box
 			const bounds = tileBounds.get(tileKey)!;
-			bounds.minX = Math.min(bounds.minX, polygon.boundingBox.minX);
-			bounds.minY = Math.min(bounds.minY, polygon.boundingBox.minY);
-			bounds.maxX = Math.max(bounds.maxX, polygon.boundingBox.maxX);
-			bounds.maxY = Math.max(bounds.maxY, polygon.boundingBox.maxY);
+			bounds.minX = Math.min(bounds.minX, transformedBBox.minX);
+			bounds.minY = Math.min(bounds.minY, transformedBBox.minY);
+			bounds.maxX = Math.max(bounds.maxX, transformedBBox.maxX);
+			bounds.maxY = Math.max(bounds.maxY, transformedBBox.maxY);
 		}
 
 		this.mainContainer.addChild(cellContainer);
@@ -286,11 +299,12 @@ export class GDSRenderer {
 			const datatype = Number.parseInt(datatypeStr || "0", 10);
 			const polygonCount = tilePolygonCounts.get(tileKey) || 0;
 
+			// Bounds are already in world coordinates (transformation is baked in)
 			const item: RTreeItem = {
-				minX: bounds.minX + x,
-				minY: bounds.minY + y,
-				maxX: bounds.maxX + x,
-				maxY: bounds.maxY + y,
+				minX: bounds.minX,
+				minY: bounds.minY,
+				maxX: bounds.maxX,
+				maxY: bounds.maxY,
 				id: `${cell.name}_${tileKey}_${x}_${y}`,
 				type: "tile",
 				data: graphics,
@@ -306,26 +320,42 @@ export class GDSRenderer {
 		let totalPolygons = renderedPolygons;
 		let remainingBudget = polygonBudget - renderedPolygons;
 
-		if (maxDepth > 0 && remainingBudget > 0) {
-			if (DEBUG) {
-				console.log(
-					`[GDSRenderer] Cell ${cell.name}: Rendering ${cell.instances.length} instances at depth ${maxDepth}`,
-				);
-			}
+		// Skip rendering instances for context info cells (they're just library references)
+		const isContextCell = cell.name.includes("CONTEXT_INFO");
 
+		if (DEBUG && isContextCell) {
+			console.log(
+				`[GDSRenderer] SKIPPING context cell: ${cell.name} (${cell.instances.length} instances)`,
+			);
+		}
+
+		if (maxDepth > 0 && remainingBudget > 0 && !isContextCell) {
 			for (const instance of cell.instances) {
 				if (remainingBudget <= 0) break;
 
 				const refCell = document.cells.get(instance.cellRef);
 				if (refCell) {
+					// Calculate transformed position
+					// Apply parent's rotation, mirror, and magnification to instance position
+					const rad = (rotation * Math.PI) / 180;
+					const cos = Math.cos(rad);
+					const sin = Math.sin(rad);
+					const mx = mirror ? -1 : 1;
+
+					const newX = x + (instance.x * cos * mx - instance.y * sin) * magnification;
+					const newY = y + (instance.x * sin * mx + instance.y * cos) * magnification;
+					const newRotation = rotation + instance.rotation;
+					const newMirror = mirror !== instance.mirror;
+					const newMagnification = magnification * instance.magnification;
+
 					const result = await this.renderCell(
 						refCell,
 						document,
-						x + instance.x,
-						y + instance.y,
-						rotation + instance.rotation,
-						mirror !== instance.mirror,
-						magnification * instance.magnification,
+						newX,
+						newY,
+						newRotation,
+						newMirror,
+						newMagnification,
 						maxDepth - 1,
 						remainingBudget,
 						fillMode,
@@ -348,7 +378,7 @@ export class GDSRenderer {
 	}
 
 	/**
-	 * Add polygon to Graphics object
+	 * Add polygon to Graphics object with transformation
 	 */
 	private addPolygonToGraphics(
 		graphics: Graphics,
@@ -356,6 +386,11 @@ export class GDSRenderer {
 		colorHex: string,
 		strokeWidthDB: number,
 		fillMode: boolean,
+		x: number,
+		y: number,
+		rotation: number,
+		mirror: boolean,
+		magnification: number,
 	): void {
 		let color = Number.parseInt(colorHex.replace("#", ""), 16);
 
@@ -365,11 +400,24 @@ export class GDSRenderer {
 		}
 
 		if (polygon.points.length > 0 && polygon.points[0]) {
-			graphics.moveTo(polygon.points[0].x, polygon.points[0].y);
+			// Transform first point
+			const firstPt = this.transformPoint(
+				polygon.points[0].x,
+				polygon.points[0].y,
+				x,
+				y,
+				rotation,
+				mirror,
+				magnification,
+			);
+			graphics.moveTo(firstPt.x, firstPt.y);
+
+			// Transform and draw remaining points
 			for (let i = 1; i < polygon.points.length; i++) {
 				const point = polygon.points[i];
 				if (point) {
-					graphics.lineTo(point.x, point.y);
+					const pt = this.transformPoint(point.x, point.y, x, y, rotation, mirror, magnification);
+					graphics.lineTo(pt.x, pt.y);
 				}
 			}
 			graphics.closePath();
@@ -380,5 +428,72 @@ export class GDSRenderer {
 				graphics.stroke({ color, width: strokeWidthDB, alpha: 1.0 });
 			}
 		}
+	}
+
+	/**
+	 * Transform a single point by position, rotation, mirror, and magnification
+	 * GDS transformation order: mirror → rotate → magnify → translate
+	 */
+	private transformPoint(
+		px: number,
+		py: number,
+		x: number,
+		y: number,
+		rotation: number,
+		mirror: boolean,
+		magnification: number,
+	): { x: number; y: number } {
+		// Step 1: Mirror (flip Y-axis if mirror=true)
+		const mx = mirror ? px : px;
+		const my = mirror ? -py : py;
+
+		// Step 2: Rotate
+		const rad = (rotation * Math.PI) / 180;
+		const cos = Math.cos(rad);
+		const sin = Math.sin(rad);
+		const rx = mx * cos - my * sin;
+		const ry = mx * sin + my * cos;
+
+		// Step 3: Magnify
+		const sx = rx * magnification;
+		const sy = ry * magnification;
+
+		// Step 4: Translate
+		return { x: sx + x, y: sy + y };
+	}
+
+	/**
+	 * Transform a bounding box by transforming all 4 corners and finding the new bounds
+	 */
+	private transformBoundingBox(
+		bbox: BoundingBox,
+		x: number,
+		y: number,
+		rotation: number,
+		mirror: boolean,
+		magnification: number,
+	): BoundingBox {
+		// Transform all 4 corners
+		const corners = [
+			this.transformPoint(bbox.minX, bbox.minY, x, y, rotation, mirror, magnification),
+			this.transformPoint(bbox.maxX, bbox.minY, x, y, rotation, mirror, magnification),
+			this.transformPoint(bbox.minX, bbox.maxY, x, y, rotation, mirror, magnification),
+			this.transformPoint(bbox.maxX, bbox.maxY, x, y, rotation, mirror, magnification),
+		];
+
+		// Find the new bounding box
+		let minX = Number.POSITIVE_INFINITY;
+		let minY = Number.POSITIVE_INFINITY;
+		let maxX = Number.NEGATIVE_INFINITY;
+		let maxY = Number.NEGATIVE_INFINITY;
+
+		for (const corner of corners) {
+			minX = Math.min(minX, corner.x);
+			minY = Math.min(minY, corner.y);
+			maxX = Math.max(maxX, corner.x);
+			maxY = Math.max(maxY, corner.y);
+		}
+
+		return { minX, minY, maxX, maxY };
 	}
 }
