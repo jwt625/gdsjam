@@ -146,7 +146,10 @@ function handleFKeyDown(event: KeyboardEvent): void {
 		fKeyTriggeredFullscreen = true;
 		if (onToggleFullscreen) {
 			onToggleFullscreen(!fullscreenMode);
-			if (DEBUG) console.log(`[ViewerCanvas] F key hold detected - ${fullscreenMode ? "exiting" : "entering"} fullscreen`);
+			if (DEBUG)
+				console.log(
+					`[ViewerCanvas] F key hold detected - ${fullscreenMode ? "exiting" : "entering"} fullscreen`,
+				);
 		}
 	}, FULLSCREEN_HOLD_DURATION_MS);
 }
