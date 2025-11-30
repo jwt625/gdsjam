@@ -322,14 +322,37 @@ Desktop app launches successfully in development mode with:
    - Warning: `fileInputElement` not declared with `$state(...)`
    - Does not affect functionality
 
-### Phase 4: Testing & Polish (Pending)
+### Phase 4: Testing & Polish (In Progress)
 
-Manual testing required:
+Completed:
+1. Updated root README.md with desktop app information
+   - Added desktop app overview
+   - Added desktop features to feature list
+   - Added Tauri to technology stack
+   - Added desktop development commands
+   - Referenced src-tauri/README.md for details
+
+2. Created src-tauri/README.md
+   - Comprehensive desktop app documentation
+   - Architecture overview
+   - Dependencies listing (Rust and frontend)
+   - Development workflow
+   - Tauri commands reference
+   - Configuration details
+   - Build instructions
+   - Troubleshooting guide
+
+3. Replaced default Tauri icons with gdsjam branding
+   - Generated 2048x2048 PNG from SVG at high density (-density 2400 -background none)
+   - Scaled down to all required sizes (16x16 through 1024x1024)
+   - Created platform-specific bundles: icon.icns (macOS), icon.ico (Windows)
+   - All icons have transparent backgrounds and crisp edges
+
+Pending manual testing:
 1. Test file dialog opening
 2. Test file loading from dialog
 3. Test file watching (modify file externally, verify auto-reload)
 4. Test path persistence (close/reopen app)
 5. Verify web version still works without regressions
 6. Production build testing with `pnpm tauri:build`
-7. Update README with desktop app usage instructions
 

@@ -16,7 +16,11 @@
 
 ## Overview
 
-GDSJam is a client-side web application for viewing GDSII and DXF files directly in the browser. Built for academics, chip design newcomers, and the photonics community to promote open-source EDA culture.
+GDSJam is a GDSII and DXF file viewer available as both a web application and desktop app. Built for academics, chip design newcomers, and the photonics community to promote open-source EDA culture.
+
+**Web Version:** Client-side processing in the browser - your files never leave your device.
+
+**Desktop App:** Native application with file watching and auto-reload capabilities for local development workflows.
 
 
 ## Screenshots
@@ -36,6 +40,7 @@ GDSJam is a client-side web application for viewing GDSII and DXF files directly
 - **P2P collaboration** via WebRTC + Y.js (shareable sessions, host/viewer model, viewport sync)
 - **Interactive minimap** showing all participants' viewports
 - **Mobile-friendly** with touch controls
+- **Desktop app** with file watching and auto-reload (macOS, Windows, Linux)
 
 ## Technology Stack
 
@@ -43,10 +48,13 @@ GDSJam is a client-side web application for viewing GDSII and DXF files directly
 - **Rendering**: [Pixi.js](https://pixijs.com/) v8 (WebGL2)
 - **GDSII Parsing**: [gdsii](https://github.com/TinyTapeout/gdsii) by TinyTapeout
 - **Spatial Indexing**: [rbush](https://github.com/mourner/rbush) (R-tree for viewport culling)
+- **Desktop**: [Tauri](https://tauri.app/) v2 (Rust + system WebView)
 - **Styling**: Tailwind CSS v4
 - **Tooling**: Biome, Vitest, Husky
 
 ## Development
+
+### Web Version
 
 ```bash
 # Install dependencies
@@ -64,6 +72,28 @@ pnpm lint
 # Run tests
 pnpm test
 ```
+
+### Desktop App
+
+**Prerequisites:**
+- [Rust](https://www.rust-lang.org/tools/install) (for Tauri backend)
+- All web dependencies (pnpm install)
+
+```bash
+# Run desktop app in development mode (with hot reload)
+pnpm tauri:dev
+
+# Build production desktop app
+pnpm tauri:build
+```
+
+**Desktop Features:**
+- Native file picker with GDS/DXF filters
+- File watching with auto-reload (500ms debounce)
+- Path persistence across app restarts
+- All web features included
+
+See [src-tauri/README.md](src-tauri/README.md) for detailed desktop app documentation.
 
 ## Architecture
 
