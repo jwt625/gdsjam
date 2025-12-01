@@ -3,7 +3,7 @@
 
   # GDSJam
 
-  Web-based GDSII viewer for semiconductor layout visualization.
+  Web-based live collaborative GDSII viewer for semiconductor layout visualization.
 
   [https://gdsjam.com](https://gdsjam.com)
 
