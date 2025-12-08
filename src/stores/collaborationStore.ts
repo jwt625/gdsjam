@@ -704,11 +704,10 @@ function createCollaborationStore() {
 			update((state) => {
 				if (!state.sessionManager || !state.isHost) return state;
 
+				// enableViewportBroadcast() also enables layer broadcast (Issue #46)
 				state.sessionManager.enableViewportBroadcast();
 				// Auto-enable fullscreen when broadcast starts
 				state.sessionManager.enableFullscreen();
-				// Auto-enable layer broadcast when broadcast starts (Issue #46)
-				state.sessionManager.enableLayerBroadcast();
 
 				if (DEBUG) {
 					console.log(
@@ -733,11 +732,10 @@ function createCollaborationStore() {
 			update((state) => {
 				if (!state.sessionManager || !state.isHost) return state;
 
+				// disableViewportBroadcast() also disables layer broadcast
 				state.sessionManager.disableViewportBroadcast();
 				// Disable fullscreen when broadcast stops
 				state.sessionManager.disableFullscreen();
-				// Disable layer broadcast when broadcast stops
-				state.sessionManager.disableLayerBroadcast();
 
 				if (DEBUG) {
 					console.log(
@@ -763,13 +761,13 @@ function createCollaborationStore() {
 				if (!state.sessionManager || !state.isHost) return state;
 
 				if (state.isBroadcasting) {
+					// disable methods also handle layer broadcast
 					state.sessionManager.disableViewportBroadcast();
 					state.sessionManager.disableFullscreen();
-					state.sessionManager.disableLayerBroadcast();
 				} else {
+					// enable methods also handle layer broadcast
 					state.sessionManager.enableViewportBroadcast();
 					state.sessionManager.enableFullscreen();
-					state.sessionManager.enableLayerBroadcast();
 				}
 
 				if (DEBUG) {

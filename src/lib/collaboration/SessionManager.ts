@@ -1019,6 +1019,7 @@ export class SessionManager {
 
 	/**
 	 * Enable viewport broadcast (host only)
+	 * Also auto-enables layer broadcast (Issue #46)
 	 */
 	enableViewportBroadcast(): void {
 		if (!this.hostManager.getIsHost()) {
@@ -1026,10 +1027,16 @@ export class SessionManager {
 			return;
 		}
 		this.viewportSync?.enableBroadcast();
+		// Auto-enable layer broadcast when viewport broadcast is enabled
+		this.layerSync?.enableBroadcast();
+		if (DEBUG) {
+			console.log("[SessionManager] Viewport broadcast enabled (with layer sync)");
+		}
 	}
 
 	/**
 	 * Disable viewport broadcast (host only)
+	 * Also disables layer broadcast
 	 */
 	disableViewportBroadcast(): void {
 		if (!this.hostManager.getIsHost()) {
@@ -1037,6 +1044,11 @@ export class SessionManager {
 			return;
 		}
 		this.viewportSync?.disableBroadcast();
+		// Disable layer broadcast when viewport broadcast is disabled
+		this.layerSync?.disableBroadcast();
+		if (DEBUG) {
+			console.log("[SessionManager] Viewport broadcast disabled (with layer sync)");
+		}
 	}
 
 	/**
