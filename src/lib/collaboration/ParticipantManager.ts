@@ -28,68 +28,84 @@ const USER_COLOR_PALETTE = [
 ];
 
 // Word lists for display name generation
-// Literary adjectives from Shakespeare, Borges, Dostoevsky, classic sci-fi, and other authors
+// Short adjectives (<10 chars) - literary, sci-fi, and industrial themes
 const ADJECTIVES = [
-	"Eldritch", // Lovecraftian/Gothic
-	"Melancholy", // Dostoevsky
-	"Quixotic", // Cervantes
-	"Ineffable", // Borges
-	"Erstwhile", // Shakespearean
-	"Penumbral", // Borges
-	"Woebegone", // Gothic
-	"Mercurial", // Shakespeare
-	"Labyrinthine", // Borges
-	"Forsooth", // Shakespearean
-	"Ethereal", // Romantic
-	"Phantasmal", // Poe
-	"Tempestuous", // Shakespeare
-	"Vertiginous", // Borges
-	"Mordant", // Dostoevsky
-	"Lachrymose", // Victorian
-	"Phosphorescent", // Nabokov
-	"Sibylline", // Classical
-	"Crepuscular", // Borges
-	"Gossamer", // Romantic
-	// Classic Sci-Fi
-	"Prescient", // Dune - the spice grants prescience
-	"Grokking", // Stranger in a Strange Land
-	"Ansible", // Ursula K. Le Guin
-	"Hyperion", // Dan Simmons
-	"Solarian", // Asimov's Foundation
-	"Neuromantic", // William Gibson
-	"Bene", // Dune - Bene Gesserit
-	"Muaddib", // Dune - Paul's Fremen name
+	// Short literary/sci-fi (kept from original)
+	"Ethereal", // Romantic (8 chars)
+	"Mercurial", // Shakespeare (9 chars)
+	"Gossamer", // Romantic (8 chars)
+	"Mordant", // Dostoevsky (7 chars)
+	"Quixotic", // Cervantes (8 chars)
+	"Prescient", // Dune (9 chars)
+	"Grokking", // Stranger in a Strange Land (8 chars)
+	"Ansible", // Ursula K. Le Guin (7 chars)
+	"Hyperion", // Dan Simmons (8 chars)
+	"Solarian", // Asimov's Foundation (8 chars)
+	"Bene", // Dune - Bene Gesserit (4 chars)
+	// Industrial adjectives
+	"Rusted", // Industrial (6 chars)
+	"Galvanized", // Industrial (10 chars - at limit)
+	"Forged", // Industrial (6 chars)
+	"Welded", // Industrial (6 chars)
+	"Machined", // Industrial (8 chars)
+	"Tempered", // Industrial (8 chars)
+	"Annealed", // Industrial (8 chars)
+	"Polished", // Industrial (8 chars)
+	"Brushed", // Industrial (7 chars)
+	"Milled", // Industrial (6 chars)
+	"Lathed", // Industrial (6 chars)
+	"Threaded", // Industrial (8 chars)
+	"Riveted", // Industrial (7 chars)
+	"Bolted", // Industrial (6 chars)
+	"Stamped", // Industrial (7 chars)
+	"Cast", // Industrial (4 chars)
+	"Wrought", // Industrial (7 chars)
 ];
 
-// Extinct and fictional sci-fi animals for anonymous user names
+// Extinct animals, sci-fi creatures, and industrial objects for anonymous user names
 const ANIMALS = [
-	// Extinct
-	"Dodo", // Mauritius, extinct 1681
-	"Mammoth", // Ice Age megafauna
-	"Thylacine", // Tasmanian Tiger, extinct 1936
-	"Quagga", // South African zebra, extinct 1883
-	"Aurochs", // Wild cattle ancestor, extinct 1627
-	"Moa", // Giant New Zealand bird
-	"Glyptodon", // Armored mammal
-	"Megatherium", // Giant ground sloth
-	"Smilodon", // Saber-toothed cat
-	"Archaeopteryx", // First bird
-	"Trilobite", // Ancient arthropod
-	"Pteranodon", // Flying reptile
-	"Megalodon", // Giant shark
-	// Sci-Fi creatures
-	"Sandworm", // Dune - Shai-Hulud
-	"Thumper", // Dune - worm caller
-	"Stilgar", // Dune - Fremen leader (honorary creature)
-	"Thranx", // Alan Dean Foster's insectoid aliens
-	"Tribble", // Star Trek
-	"Sarlacc", // Star Wars
-	"Xenomorph", // Alien
-	"Replicant", // Blade Runner
-	"Tralfamadorian", // Vonnegut
-	"Bugger", // Ender's Game (Formics)
-	"Tarka", // Ring of Bright Water / Watership Down era
-	"Hrududu", // Watership Down - rabbit word for car/machine
+	// Short extinct animals (kept from original)
+	"Dodo", // Mauritius, extinct 1681 (4 chars)
+	"Mammoth", // Ice Age megafauna (7 chars)
+	"Thylacine", // Tasmanian Tiger, extinct 1936 (9 chars)
+	"Quagga", // South African zebra, extinct 1883 (6 chars)
+	"Aurochs", // Wild cattle ancestor, extinct 1627 (7 chars)
+	"Moa", // Giant New Zealand bird (3 chars)
+	"Glyptodon", // Armored mammal (9 chars)
+	"Smilodon", // Saber-toothed cat (8 chars)
+	"Trilobite", // Ancient arthropod (9 chars)
+	"Megalodon", // Giant shark (9 chars)
+	// Short sci-fi creatures (kept from original)
+	"Sandworm", // Dune - Shai-Hulud (8 chars)
+	"Thumper", // Dune - worm caller (7 chars)
+	"Stilgar", // Dune - Fremen leader (7 chars)
+	"Thranx", // Alan Dean Foster's insectoid aliens (6 chars)
+	"Tribble", // Star Trek (7 chars)
+	"Sarlacc", // Star Wars (7 chars)
+	"Xenomorph", // Alien (9 chars)
+	"Replicant", // Blade Runner (9 chars)
+	"Bugger", // Ender's Game (Formics) (6 chars)
+	"Tarka", // Ring of Bright Water (5 chars)
+	"Hrududu", // Watership Down - rabbit word for car/machine (7 chars)
+	// Industrial objects
+	"Bolt", // Industrial (4 chars)
+	"Washer", // Industrial (6 chars)
+	"Wrench", // Industrial (6 chars)
+	"Rivet", // Industrial (5 chars)
+	"Gear", // Industrial (4 chars)
+	"Bearing", // Industrial (7 chars)
+	"Piston", // Industrial (6 chars)
+	"Valve", // Industrial (5 chars)
+	"Gasket", // Industrial (6 chars)
+	"Sprocket", // Industrial (8 chars)
+	"Clutch", // Industrial (6 chars)
+	"Axle", // Industrial (4 chars)
+	"Shaft", // Industrial (5 chars)
+	"Flange", // Industrial (6 chars)
+	"Bushing", // Industrial (7 chars)
+	"Coupling", // Industrial (8 chars)
+	"Bracket", // Industrial (7 chars)
+	"Clamp", // Industrial (5 chars)
 ];
 
 // Heartbeat interval for participant liveness (milliseconds)

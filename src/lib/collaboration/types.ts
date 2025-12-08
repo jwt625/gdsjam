@@ -49,6 +49,10 @@ export interface YjsSessionData {
 	// Layer visibility broadcast (Issue #16)
 	layerBroadcastEnabled?: boolean;
 	layerBroadcastHostId?: string;
+
+	// Fullscreen mode broadcast (Issue #46)
+	fullscreenEnabled?: boolean;
+	fullscreenHostId?: string;
 }
 
 /**
@@ -111,6 +115,8 @@ export interface AwarenessState {
 	/** Host includes layer visibility in awareness for P2 sync */
 	layerBroadcastEnabled?: boolean;
 	layerVisibility?: CollaborativeLayerVisibility | null;
+	/** Host includes fullscreen state in awareness for P2 sync */
+	fullscreenEnabled?: boolean;
 }
 
 /**

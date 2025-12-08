@@ -12,6 +12,7 @@
 import { DEBUG } from "../config";
 import { generateUUID } from "../utils/uuid";
 import { FileTransfer } from "./FileTransfer";
+import { FullscreenSync, type FullscreenSyncCallbacks } from "./FullscreenSync";
 import { HostManager } from "./HostManager";
 import { LayerSync, type LayerSyncCallbacks } from "./LayerSync";
 import { ParticipantManager } from "./ParticipantManager";
@@ -62,6 +63,8 @@ export class SessionManager {
 	private viewportSyncCallbacks: ViewportSyncCallbacks = {};
 	private layerSync: LayerSync | null = null;
 	private layerSyncCallbacks: LayerSyncCallbacks = {};
+	private fullscreenSync: FullscreenSync | null = null;
+	private fullscreenSyncCallbacks: FullscreenSyncCallbacks = {};
 
 	constructor() {
 		// Get or create user ID
@@ -156,9 +159,10 @@ export class SessionManager {
 		this.hostManager.initialize(sessionId);
 		this.participantManager.initialize(sessionId);
 
-		// Initialize viewport and layer sync
+		// Initialize viewport, layer, and fullscreen sync
 		this.initializeViewportSync();
 		this.initializeLayerSync();
+		this.initializeFullscreenSync();
 
 		// Enable auto-promotion: oldest viewer becomes host when host leaves
 		this.setupAutoPromotion();
@@ -304,9 +308,10 @@ export class SessionManager {
 		this.hostManager.initialize(sessionId);
 		this.participantManager.initialize(sessionId);
 
-		// Initialize viewport and layer sync (after managers, before auto-promotion)
+		// Initialize viewport, layer, and fullscreen sync (after managers, before auto-promotion)
 		this.initializeViewportSync();
 		this.initializeLayerSync();
+		this.initializeFullscreenSync();
 
 		// Enable auto-promotion: oldest viewer becomes host when host leaves
 		this.setupAutoPromotion();
@@ -1109,5 +1114,48 @@ export class SessionManager {
 
 	getLayerSync(): LayerSync | null {
 		return this.layerSync;
+	}
+
+	// ==========================================
+	// Fullscreen Sync Facade Methods
+	// ==========================================
+
+	private initializeFullscreenSync(): void {
+		if (this.fullscreenSync) this.fullscreenSync.destroy();
+		this.fullscreenSync = new FullscreenSync(
+			this.yjsProvider,
+			this.userId,
+			this.fullscreenSyncCallbacks,
+		);
+		if (DEBUG) console.log("[SessionManager] FullscreenSync initialized");
+	}
+
+	setFullscreenSyncCallbacks(callbacks: FullscreenSyncCallbacks): void {
+		this.fullscreenSyncCallbacks = callbacks;
+		if (this.fullscreenSync) this.fullscreenSync.setCallbacks(callbacks);
+	}
+
+	enableFullscreen(): void {
+		if (!this.hostManager.getIsHost()) {
+			console.warn("[SessionManager] Only host can enable fullscreen");
+			return;
+		}
+		this.fullscreenSync?.enableFullscreen();
+	}
+
+	disableFullscreen(): void {
+		if (!this.hostManager.getIsHost()) {
+			console.warn("[SessionManager] Only host can disable fullscreen");
+			return;
+		}
+		this.fullscreenSync?.disableFullscreen();
+	}
+
+	isFullscreenEnabled(): boolean {
+		return this.fullscreenSync?.isFullscreenEnabled() ?? false;
+	}
+
+	getFullscreenSync(): FullscreenSync | null {
+		return this.fullscreenSync;
 	}
 }

@@ -24,6 +24,8 @@ interface CollaborationState {
 	// Layer sync state
 	isLayerBroadcasting: boolean;
 	isLayerFollowing: boolean;
+	// Fullscreen sync state
+	isFullscreenEnabled: boolean; // Fullscreen mode is enabled (synced across all users)
 }
 
 const initialState: CollaborationState = {
@@ -43,6 +45,8 @@ const initialState: CollaborationState = {
 	// Layer sync state
 	isLayerBroadcasting: false,
 	isLayerFollowing: false,
+	// Fullscreen sync state
+	isFullscreenEnabled: false,
 };
 
 function createCollaborationStore() {
@@ -694,46 +698,55 @@ function createCollaborationStore() {
 
 		/**
 		 * Enable viewport broadcast (host only)
+		 * Also auto-enables fullscreen mode for all users
 		 */
 		enableBroadcast: () => {
 			update((state) => {
 				if (!state.sessionManager || !state.isHost) return state;
 
 				state.sessionManager.enableViewportBroadcast();
+				// Auto-enable fullscreen when broadcast starts
+				state.sessionManager.enableFullscreen();
 
 				if (DEBUG) {
-					console.log("[collaborationStore] Viewport broadcast enabled");
+					console.log("[collaborationStore] Viewport broadcast enabled (with fullscreen)");
 				}
 
 				return {
 					...state,
 					isBroadcasting: true,
+					isFullscreenEnabled: true,
 				};
 			});
 		},
 
 		/**
 		 * Disable viewport broadcast (host only)
+		 * Also disables fullscreen mode
 		 */
 		disableBroadcast: () => {
 			update((state) => {
 				if (!state.sessionManager || !state.isHost) return state;
 
 				state.sessionManager.disableViewportBroadcast();
+				// Disable fullscreen when broadcast stops
+				state.sessionManager.disableFullscreen();
 
 				if (DEBUG) {
-					console.log("[collaborationStore] Viewport broadcast disabled");
+					console.log("[collaborationStore] Viewport broadcast disabled (with fullscreen)");
 				}
 
 				return {
 					...state,
 					isBroadcasting: false,
+					isFullscreenEnabled: false,
 				};
 			});
 		},
 
 		/**
 		 * Toggle viewport broadcast (host only)
+		 * Also toggles fullscreen mode
 		 */
 		toggleBroadcast: () => {
 			update((state) => {
@@ -741,17 +754,24 @@ function createCollaborationStore() {
 
 				if (state.isBroadcasting) {
 					state.sessionManager.disableViewportBroadcast();
+					state.sessionManager.disableFullscreen();
 				} else {
 					state.sessionManager.enableViewportBroadcast();
+					state.sessionManager.enableFullscreen();
 				}
 
 				if (DEBUG) {
-					console.log("[collaborationStore] Viewport broadcast toggled:", !state.isBroadcasting);
+					console.log(
+						"[collaborationStore] Viewport broadcast toggled:",
+						!state.isBroadcasting,
+						"(with fullscreen)",
+					);
 				}
 
 				return {
 					...state,
 					isBroadcasting: !state.isBroadcasting,
+					isFullscreenEnabled: !state.isBroadcasting,
 				};
 			});
 		},
@@ -955,6 +975,27 @@ function createCollaborationStore() {
 
 		isLayerBroadcastEnabled: (): boolean => {
 			return sessionManager?.isLayerBroadcastEnabled() ?? false;
+		},
+
+		// ==========================================
+		// Fullscreen Sync Actions
+		// ==========================================
+
+		/**
+		 * Handle fullscreen state changes from P0 (Y.Map) or P2 (awareness heartbeat)
+		 * Auto-enables fullscreen for all users when host starts broadcasting
+		 */
+		handleFullscreenStateChanged: (enabled: boolean, _hostId: string | null) => {
+			update((state) => {
+				if (DEBUG) {
+					console.log("[collaborationStore] Fullscreen state changed:", enabled);
+				}
+				return { ...state, isFullscreenEnabled: enabled };
+			});
+		},
+
+		isFullscreenEnabled: (): boolean => {
+			return sessionManager?.isFullscreenEnabled() ?? false;
 		},
 	};
 }

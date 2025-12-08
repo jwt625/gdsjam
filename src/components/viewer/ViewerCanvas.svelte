@@ -33,7 +33,9 @@ let canvas: HTMLCanvasElement;
 let renderer = $state<PixiRenderer | null>(null);
 let lastRenderedDocument: GDSDocument | null = null;
 let panelsVisible = $state(false);
-let layerPanelVisible = $state(true);
+// Layer panel: visible by default on desktop, hidden on mobile (max-width: 1023px)
+// Mobile detection happens via CSS, but we need to set initial state based on window size
+let layerPanelVisible = $state(typeof window !== "undefined" && window.innerWidth >= 1024);
 let minimapVisible = $state(true);
 let layerStoreInitialized = false;
 
@@ -357,8 +359,19 @@ function setupViewportSync() {
 		},
 	});
 
+	// Set up callbacks for fullscreen sync
+	sessionManager.setFullscreenSyncCallbacks({
+		onFullscreenStateChanged: (enabled: boolean, _hostId: string | null) => {
+			collaborationStore.handleFullscreenStateChanged(enabled, _hostId);
+			// Trigger fullscreen mode change in App.svelte via callback
+			if (onToggleFullscreen) {
+				onToggleFullscreen(enabled);
+			}
+		},
+	});
+
 	if (DEBUG) {
-		console.log("[ViewerCanvas] Viewport sync set up");
+		console.log("[ViewerCanvas] Viewport, layer, and fullscreen sync set up");
 	}
 }
 
