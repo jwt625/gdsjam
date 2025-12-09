@@ -330,20 +330,25 @@ function createCommentStore() {
 		},
 
 		/**
-		 * Cycle comment display state: minimal -> preview -> full -> minimal
+		 * Cycle comment display state:
+		 * - For short comments (≤140 chars): minimal -> preview -> minimal
+		 * - For long comments (>140 chars): minimal -> preview -> full -> minimal
 		 */
 		cycleDisplayState: (commentId: string) => {
 			update((state) => {
 				const comment = state.comments.get(commentId);
 				if (!comment) return state;
 
+				const isShortComment = comment.content.length <= 140;
 				let newState: CommentDisplayState;
+
 				switch (comment.displayState) {
 					case "minimal":
 						newState = "preview";
 						break;
 					case "preview":
-						newState = "full";
+						// Skip "full" state for short comments
+						newState = isShortComment ? "minimal" : "full";
 						break;
 					case "full":
 						newState = "minimal";
