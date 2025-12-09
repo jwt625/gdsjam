@@ -361,12 +361,119 @@ Store comments in database units (same as GDS coordinates) for consistency with 
 - If double-click detected, cancel single-click action
 
 ### Implementation Order
-1. Phase 1: Data model & storage
-2. Phase 2: Comment creation (mode, modal, save)
-3. Phase 3: Comment display on canvas (bubbles, states, hold `c`)
-4. Phase 5: Mobile support (FAB buttons, placement)
+1. Phase 1: Data model & storage - COMPLETE
+2. Phase 2: Comment creation (mode, modal, save) - COMPLETE
+3. Phase 3: Comment display on canvas (bubbles, states, hold `c`) - COMPLETE
+4. Phase 5: Mobile support (FAB buttons, placement) - NEXT
 5. Phase 6: Integration & polish
 6. **Phase 4 LAST**: Comment panel (list, recenter, host controls)
+
+---
+
+## Implementation Progress
+
+### Phase 1: Data Model & Storage - COMPLETE (2025-12-09)
+
+**Files Created:**
+- `src/lib/comments/types.ts` - Type definitions for comment feature
+- `src/lib/comments/utils.ts` - Utility functions (initials extraction, timestamp formatting)
+- `src/stores/commentStore.ts` - Svelte store for comment state management
+- `src/lib/collaboration/types.ts` (updated) - Added Comment and CommentPermissions interfaces
+
+**Key Features Implemented:**
+- Comment data model with display states (minimal/preview/full)
+- Comment store with CRUD operations
+- Rate limiting logic (viewer 1/min, host 1/10s)
+- localStorage persistence for solo mode (key: `gdsjam_comments_${fileName}_${fileSize}`)
+- Y.js sync preparation for collaboration mode
+- Utility functions for user initials extraction and timestamp formatting
+
+### Phase 2: Comment Creation - COMPLETE (2025-12-09)
+
+**Files Created:**
+- `src/components/comments/CommentInputModal.svelte` - Modal for creating comments
+
+**Files Modified:**
+- `src/components/viewer/ViewerCanvas.svelte` - Added comment mode, keyboard shortcuts, canvas click handler
+
+**Key Features Implemented:**
+- Comment mode toggle with `c` key
+- Hold `c` (500ms) to temporarily show/hide all comments
+- Double-click `c` (300ms) to toggle comment panel (TODO: implement panel in Phase 4)
+- ESC key to cancel comment mode at any step
+- Canvas click handler to place comments at world coordinates
+- CommentInputModal with 1000 character limit
+- Enter to submit, Shift+Enter for newline, ESC or click outside to cancel
+- Crosshair cursor when comment mode is active
+- Comment creation with UUID generation and user info
+- Rate limiting enforcement before comment creation
+- File initialization hook to initialize commentStore when file loads
+  - Solo mode: uses fileName + fileSize
+  - Collaboration mode: uses fileHash from session metadata
+
+**Keyboard Shortcuts:**
+- Single press `c`: toggle comment mode on/off
+- Double press `c` (within 300ms): toggle comment panel (TODO)
+- Hold `c` (500ms): temporarily show/hide all comments
+- ESC: cancel comment mode or close modal
+
+**Coordinate Transformation:**
+- Screen coordinates → world coordinates using viewport state
+- Y-axis flip handling (mainContainer.scale.y = -1)
+
+**User Identity:**
+- Solo mode: userId from localStorage or generate new UUID, displayName "You", color "#4ECDC4"
+- Collaboration mode: userId, displayName, color from SessionManager
+
+### Phase 3: Comment Display on Canvas - COMPLETE (2025-12-09)
+
+**Files Created:**
+- `src/components/comments/CommentBubble.svelte` - Comment bubble component
+
+**Files Modified:**
+- `src/components/viewer/ViewerCanvas.svelte` - Added comment bubble rendering
+- `src/stores/commentStore.ts` - Added `cycleDisplayState()` method
+
+**Key Features Implemented:**
+- CommentBubble component with three display states:
+  - **Minimal**: 24px circle with user initials (both initials, e.g., "AA")
+  - **Preview**: Expanded bubble showing author name + first 140 characters
+  - **Full**: Expanded bubble showing author name + full content (max 1000 chars)
+- Click bubble to cycle through states: minimal → preview → full → minimal
+- World coordinate → screen coordinate transformation for rendering
+- Y-axis flip handling for correct positioning
+- Comment bubbles positioned with bottom-left corner at world coordinate point
+- Visibility controlled by `commentStore.allCommentsVisible`
+- Dark theme styling matching scale bar (grey background, white outline, white text)
+- NO animations - instant state transitions
+- Keyboard accessibility (Enter key to activate)
+
+**Display Styling:**
+- Background: `rgba(60, 60, 60, 0.95)`
+- Border: `1px solid rgba(255, 255, 255, 0.3)`
+- Text color: `rgba(255, 255, 255, 0.9)` for author, `rgba(255, 255, 255, 0.8)` for content
+- Font size: 11px (matching page footnote)
+- Minimal state: 24px circle, 10px font, uppercase initials
+- Preview/Full state: max-width 300px, 8px padding
+
+**Bug Fixes (2025-12-09):**
+1. **Comment bubbles not updating with viewport changes**
+   - Added `viewportVersion` state that increments on every viewport change
+   - Updated comment bubble rendering to use `viewportVersion` in the key
+   - This forces re-evaluation of `worldToScreen()` on every viewport change
+   - Comment bubbles now correctly follow viewport pan/zoom
+
+2. **Text input modal not supporting space and keyboard shortcuts**
+   - Added `event.stopPropagation()` in textarea keydown handler
+   - Prevents global keyboard shortcuts from interfering with text input
+   - Space, Ctrl+C, Ctrl+V, and all other text editing shortcuts now work correctly
+   - ESC still works to cancel from both textarea and backdrop
+
+**Next Steps for Phase 5 (Mobile Support):**
+- Add comment button to FAB menu
+- Add toggle button to show/hide comments
+- Add button to open comment panel (Phase 4)
+- Implement mobile comment placement (tap or drag crosshair)
 
 ---
 
