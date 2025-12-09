@@ -11,6 +11,7 @@ import { KeyboardShortcutManager } from "./lib/keyboard/KeyboardShortcutManager"
 import { loadGDSIIFromBuffer } from "./lib/utils/gdsLoader";
 import { fetchGDSIIFromURL } from "./lib/utils/urlLoader";
 import { collaborationStore } from "./stores/collaborationStore";
+import { commentStore } from "./stores/commentStore";
 import { gdsStore } from "./stores/gdsStore";
 
 const KEYBOARD_OWNER = "App";
@@ -53,6 +54,12 @@ async function handleGlobalFileInput(event: Event) {
 		}
 
 		await loadGDSIIFromBuffer(arrayBuffer, file.name);
+
+		// Clear all comments when a new file is loaded
+		commentStore.reset();
+		if (DEBUG) {
+			console.log("[App] Comments cleared for new file");
+		}
 
 		// If in a session and is host, upload file to session
 		if ($collaborationStore.isInSession && $collaborationStore.isHost) {
@@ -316,6 +323,12 @@ onMount(async () => {
 
 			// Load the file
 			await loadGDSIIFromBuffer(arrayBuffer, fileName);
+
+			// Clear all comments when a new file is loaded
+			commentStore.reset();
+			if (DEBUG) {
+				console.log("[App] Comments cleared for new file from URL");
+			}
 		} catch (error) {
 			console.error("[App] Failed to load file from URL:", error);
 			gdsStore.setError(

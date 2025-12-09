@@ -11,6 +11,7 @@
 
 import { DEBUG } from "../config";
 import { generateUUID } from "../utils/uuid";
+import { CommentSync, type CommentSyncCallbacks } from "./CommentSync";
 import { FileTransfer } from "./FileTransfer";
 import { FullscreenSync, type FullscreenSyncCallbacks } from "./FullscreenSync";
 import { HostManager } from "./HostManager";
@@ -65,6 +66,8 @@ export class SessionManager {
 	private layerSyncCallbacks: LayerSyncCallbacks = {};
 	private fullscreenSync: FullscreenSync | null = null;
 	private fullscreenSyncCallbacks: FullscreenSyncCallbacks = {};
+	private commentSync: CommentSync | null = null;
+	private commentSyncCallbacks: CommentSyncCallbacks = {};
 
 	constructor() {
 		// Get or create user ID
@@ -159,10 +162,11 @@ export class SessionManager {
 		this.hostManager.initialize(sessionId);
 		this.participantManager.initialize(sessionId);
 
-		// Initialize viewport, layer, and fullscreen sync
+		// Initialize viewport, layer, fullscreen, and comment sync
 		this.initializeViewportSync();
 		this.initializeLayerSync();
 		this.initializeFullscreenSync();
+		this.initializeCommentSync();
 
 		// Enable auto-promotion: oldest viewer becomes host when host leaves
 		this.setupAutoPromotion();
@@ -308,10 +312,11 @@ export class SessionManager {
 		this.hostManager.initialize(sessionId);
 		this.participantManager.initialize(sessionId);
 
-		// Initialize viewport, layer, and fullscreen sync (after managers, before auto-promotion)
+		// Initialize viewport, layer, fullscreen, and comment sync (after managers, before auto-promotion)
 		this.initializeViewportSync();
 		this.initializeLayerSync();
 		this.initializeFullscreenSync();
+		this.initializeCommentSync();
 
 		// Enable auto-promotion: oldest viewer becomes host when host leaves
 		this.setupAutoPromotion();
@@ -1172,5 +1177,25 @@ export class SessionManager {
 
 	getFullscreenSync(): FullscreenSync | null {
 		return this.fullscreenSync;
+	}
+
+	// ==========================================
+	// Comment Sync Methods
+	// ==========================================
+
+	private initializeCommentSync(): void {
+		if (this.commentSync) this.commentSync.destroy();
+		this.commentSync = new CommentSync(this.yjsProvider, this.userId, this.commentSyncCallbacks);
+		this.commentSync.initialize();
+		if (DEBUG) console.log("[SessionManager] CommentSync initialized");
+	}
+
+	setCommentSyncCallbacks(callbacks: CommentSyncCallbacks): void {
+		this.commentSyncCallbacks = callbacks;
+		if (this.commentSync) this.commentSync.setCallbacks(callbacks);
+	}
+
+	getCommentSync(): CommentSync | null {
+		return this.commentSync;
 	}
 }
