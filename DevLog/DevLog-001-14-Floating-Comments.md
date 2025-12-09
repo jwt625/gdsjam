@@ -473,14 +473,93 @@ Store comments in database units (same as GDS coordinates) for consistency with 
    - Result: All text editing operations now work correctly (space, copy, paste, etc.), ESC still cancels
    - Files modified: `src/components/comments/CommentInputModal.svelte`
 
-**Next Steps for Phase 5 (Mobile Support):**
-- Add comment button to FAB menu
-- Add toggle button to show/hide comments
-- Add button to open comment panel (Phase 4)
-- Implement mobile comment placement (tap or drag crosshair)
+---
+
+## Phase 5: Mobile Support - COMPLETE (2025-12-09)
+
+**Status:** COMPLETE
+
+**Implementation:**
+
+1. **Mobile FAB Menu Integration**
+   - Added three comment-related menu items to `MobileControls.svelte`:
+     - "Add Comment" - Toggles comment mode (shows active state with teal highlight)
+     - "Show/Hide Comments" - Toggles visibility of all comment bubbles (eye/eye-off icons)
+     - "Comment Panel" - Opens comment panel (placeholder for Phase 4)
+   - Added props: `onToggleCommentMode`, `onToggleCommentsVisibility`, `onToggleCommentPanel`, `commentModeActive`, `commentsVisible`, `commentPanelVisible`
+   - All buttons follow existing FAB menu pattern with instant transitions (NO animations)
+
+2. **Mobile Comment Placement**
+   - Implemented fixed crosshair at viewport center (teal color, 40x40px SVG)
+   - Added "Place Comment" button (floating, bottom-right, teal background)
+   - User workflow: Enable comment mode → Pan viewport to position crosshair → Tap "Place Comment" → Enter text
+   - Crosshair and button only visible when `commentModeActive && window.innerWidth < 1024px`
+   - Added `handleMobilePlaceComment()` function to capture viewport center coordinates
+   - CSS styles for `.mobile-comment-crosshair` and `.mobile-place-comment-btn` (NO animations)
+
+**Files Modified:**
+- `src/components/ui/MobileControls.svelte` - Added comment controls to FAB menu
+- `src/components/viewer/ViewerCanvas.svelte` - Added mobile placement UI and handlers
+
+---
+
+## Phase 6: Integration & Polish - COMPLETE (2025-12-09)
+
+**Status:** COMPLETE
+
+**Implementation:**
+
+1. **File Change Handling**
+   - Added `commentStore.reset()` when file is loaded via keyboard shortcut (Ctrl+O)
+   - Added `commentStore.reset()` when file is loaded from URL parameter
+   - Prevents comment data from persisting across different files
+   - Files modified: `src/App.svelte`
+
+2. **Y.js Integration for Collaboration**
+   - Created `CommentSync.ts` class following same pattern as ViewportSync, LayerSync, FullscreenSync
+   - Uses `Y.Array<Comment>` for shared comment list
+   - Uses `Y.Map` session map for comment permissions
+   - Methods: `addComment()`, `deleteComment()`, `updatePermissions()`, `getComments()`, `getPermissions()`
+   - Callbacks: `onCommentsChanged`, `onPermissionsChanged`
+   - Integrated into `SessionManager.ts` alongside other sync modules
+   - Added `syncFromYjs()` and `syncPermissionsFromYjs()` methods to `commentStore.ts`
+   - Set up callbacks in `ViewerCanvas.svelte` to sync Y.js changes to local store
+   - Updated `handleCommentSubmit()` to sync comments to Y.js when in collaboration mode
+   - Files created: `src/lib/collaboration/CommentSync.ts`
+   - Files modified: `src/lib/collaboration/SessionManager.ts`, `src/stores/commentStore.ts`, `src/components/viewer/ViewerCanvas.svelte`
+
+3. **100 Comment Limit Enforcement**
+   - Added check in `handleCommentSubmit()` before creating comment
+   - If `comments.size >= 100`, reject with debug log
+   - Prevents performance issues with too many bubbles
+   - Files modified: `src/components/viewer/ViewerCanvas.svelte`
+
+**Behavior:**
+- Solo mode: Comments stored in localStorage only
+- Collaboration mode: Comments synced via Y.js, real-time updates to all participants
+- Host can control viewer permissions (enforced at store level)
+- Rate limiting: Viewer 1/min, Host 1/10s
+- Hard limit: 100 comments per file
+
+---
+
+## Implementation Status Summary
+
+| Phase | Status | Description |
+|-------|--------|-------------|
+| Phase 1: Data Model & Storage | COMPLETE | Types, store, localStorage persistence |
+| Phase 2: Comment Creation | COMPLETE | Keyboard shortcuts, click placement, input modal |
+| Phase 3: Comment Display | COMPLETE | Bubble rendering, 3 display states, coordinate transformation |
+| Phase 4: Comment Panel | NOT STARTED | Right-side panel, list view, host controls (LOW PRIORITY) |
+| Phase 5: Mobile Support | COMPLETE | FAB menu integration, fixed crosshair placement |
+| Phase 6: Integration & Polish | COMPLETE | File change handling, Y.js sync, 100 comment limit |
+
+**Overall Status:** Phases 1-3, 5-6 COMPLETE. Phase 4 remains as LOW PRIORITY.
 
 ---
 
 ### Future Enhancements
 - Auto-toggle between minimal and preview states based on viewport zoom level to reduce clutter at zoomed-out views
+- Toast notifications for rate limit and comment limit (currently debug logs only)
+- Comment Panel (Phase 4) - chronological list, viewport recentering, host controls
 

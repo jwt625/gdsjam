@@ -42,7 +42,7 @@ function handleKeydown(e: KeyboardEvent) {
 
 {#if visible}
 	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-	<div class="dialog-overlay" role="dialog" aria-modal="true" onkeydown={handleKeydown}>
+	<div class="dialog-overlay" role="dialog" aria-modal="true" tabindex="-1" onkeydown={handleKeydown}>
 		<div class="dialog-content">
 			<h2>DXF Unit Selection</h2>
 			<p class="dialog-message">

@@ -295,12 +295,13 @@ function handleCKeyDown(event: KeyboardEvent): void {
 
 	// Start hold detection timer
 	cKeyHoldTimer = setTimeout(() => {
-		// Hold threshold reached - toggle all comments visibility temporarily
+		// Hold threshold reached - toggle all comments visibility (persistent)
 		cKeyTriggeredHold = true;
-		commentStore.setAllCommentsVisibility(!$commentStore.allCommentsVisible, true);
+		const currentVisibility = $commentStore.allCommentsVisible;
+		commentStore.toggleAllCommentsVisibility();
 		if (DEBUG) {
 			console.log(
-				`[ViewerCanvas] C key hold detected - ${$commentStore.allCommentsVisible ? "showing" : "hiding"} all comments`,
+				`[ViewerCanvas] C key hold detected - ${currentVisibility ? "hiding" : "showing"} all comments`,
 			);
 		}
 	}, COMMENT_HOLD_DURATION_MS);
@@ -319,10 +320,9 @@ function handleCKeyUp(event: KeyboardEvent): void {
 		cKeyHoldTimer = null;
 	}
 
-	// If we triggered hold, restore previous visibility
+	// If we triggered hold, just reset the flag (visibility stays toggled)
 	if (cKeyTriggeredHold) {
-		commentStore.restorePreviousVisibility();
-		if (DEBUG) console.log("[ViewerCanvas] C key released - restored previous visibility");
+		if (DEBUG) console.log("[ViewerCanvas] C key released - visibility stays toggled");
 		cKeyDownTime = null;
 		cKeyTriggeredHold = false;
 		return;
@@ -390,6 +390,14 @@ function handleCanvasClick(event: MouseEvent): void {
 function handleCommentSubmit(content: string): void {
 	if (!pendingCommentPosition) return;
 
+	// Check 100 comment limit
+	const currentCommentCount = comments.size;
+	if (currentCommentCount >= 100) {
+		if (DEBUG) console.log("[ViewerCanvas] Comment limit (100) reached");
+		// TODO: Show toast notification
+		return;
+	}
+
 	// Get user info
 	const isInSession = $collaborationStore.isInSession;
 	const isHost = $collaborationStore.isHost;
@@ -437,8 +445,20 @@ function handleCommentSubmit(content: string): void {
 		editedAt: null,
 	};
 
-	// Add to store
+	// Add to store (local state)
 	commentStore.addComment(comment, isInSession);
+
+	// Sync to Y.js if in collaboration mode
+	if (isInSession) {
+		const sessionManager = collaborationStore.getSessionManager();
+		const commentSync = sessionManager?.getCommentSync();
+		if (commentSync) {
+			commentSync.addComment(comment);
+			if (DEBUG) {
+				console.log("[ViewerCanvas] Comment synced to Y.js:", comment.id);
+			}
+		}
+	}
 
 	if (DEBUG) {
 		console.log("[ViewerCanvas] Comment created:", comment.id);
@@ -478,6 +498,31 @@ function worldToScreen(worldX: number, worldY: number): { x: number; y: number }
  */
 function handleCommentBubbleClick(commentId: string): void {
 	commentStore.cycleDisplayState(commentId);
+}
+
+/**
+ * Handle mobile comment placement (fixed crosshair at viewport center)
+ */
+function handleMobilePlaceComment(): void {
+	if (!renderer || !canvas) return;
+
+	// Get viewport center in screen coordinates
+	const rect = canvas.getBoundingClientRect();
+	const centerScreenX = rect.width / 2;
+	const centerScreenY = rect.height / 2;
+
+	// Convert to world coordinates
+	const viewportState = renderer.getViewportState();
+	const worldX = (centerScreenX - viewportState.x) / viewportState.scale;
+	const worldY = -((centerScreenY - viewportState.y) / viewportState.scale);
+
+	if (DEBUG) {
+		console.log(`[ViewerCanvas] Mobile comment placement at center: (${worldX}, ${worldY})`);
+	}
+
+	// Store pending position and show modal
+	pendingCommentPosition = { worldX, worldY };
+	showCommentModal = true;
 }
 
 /**
@@ -713,8 +758,20 @@ function setupViewportSync() {
 		},
 	});
 
+	// Set up callbacks for comment sync
+	sessionManager.setCommentSyncCallbacks({
+		onCommentsChanged: (comments) => {
+			if (DEBUG) console.log("[ViewerCanvas] Comments changed from Y.js:", comments.length);
+			commentStore.syncFromYjs(comments);
+		},
+		onPermissionsChanged: (permissions) => {
+			if (DEBUG) console.log("[ViewerCanvas] Comment permissions changed from Y.js:", permissions);
+			commentStore.syncPermissionsFromYjs(permissions);
+		},
+	});
+
 	if (DEBUG) {
-		console.log("[ViewerCanvas] Viewport, layer, and fullscreen sync set up");
+		console.log("[ViewerCanvas] Viewport, layer, fullscreen, and comment sync set up");
 	}
 }
 
@@ -817,10 +874,16 @@ function toggleMinimap() {
 		onToggleLayers={() => { layerPanelVisible = !layerPanelVisible; }}
 		onToggleMinimap={toggleMinimap}
 		onToggleFullscreen={onToggleFullscreen}
+		onToggleCommentMode={() => { commentModeActive = !commentModeActive; }}
+		onToggleCommentsVisibility={() => commentStore.toggleAllCommentsVisibility()}
+		onToggleCommentPanel={() => { /* TODO: Implement in Phase 4 */ }}
 		performanceVisible={panelsVisible}
 		minimapVisible={minimapVisible}
 		layersVisible={layerPanelVisible}
 		{fullscreenMode}
+		{commentModeActive}
+		commentsVisible={allCommentsVisible}
+		commentPanelVisible={false}
 	/>
 
 	<!-- Comment input modal -->
@@ -843,6 +906,25 @@ function toggleMinimap() {
 				/>
 			{/if}
 		{/each}
+	{/if}
+
+	<!-- Mobile comment placement crosshair (fixed at viewport center) -->
+	{#if commentModeActive && typeof window !== 'undefined' && window.innerWidth < MOBILE_BREAKPOINT}
+		<div class="mobile-comment-crosshair">
+			<svg viewBox="0 0 40 40" width="40" height="40">
+				<line x1="20" y1="0" x2="20" y2="15" stroke="rgba(78, 205, 196, 0.8)" stroke-width="2"/>
+				<line x1="20" y1="25" x2="20" y2="40" stroke="rgba(78, 205, 196, 0.8)" stroke-width="2"/>
+				<line x1="0" y1="20" x2="15" y2="20" stroke="rgba(78, 205, 196, 0.8)" stroke-width="2"/>
+				<line x1="25" y1="20" x2="40" y2="20" stroke="rgba(78, 205, 196, 0.8)" stroke-width="2"/>
+				<circle cx="20" cy="20" r="3" fill="rgba(78, 205, 196, 0.8)"/>
+			</svg>
+		</div>
+		<button class="mobile-place-comment-btn" onclick={handleMobilePlaceComment}>
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+			</svg>
+			<span>Place Comment</span>
+		</button>
 	{/if}
 
 	<!-- Follow mode toast -->
@@ -886,6 +968,50 @@ function toggleMinimap() {
 
 	.viewer-container.comment-mode .viewer-canvas {
 		cursor: crosshair;
+	}
+
+	/* Mobile comment placement crosshair (fixed at viewport center) */
+	.mobile-comment-crosshair {
+		position: fixed;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		pointer-events: none;
+		z-index: 900;
+	}
+
+	/* Mobile place comment button */
+	.mobile-place-comment-btn {
+		position: fixed;
+		bottom: 90px;
+		right: 20px;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 12px 20px;
+		background: rgba(78, 205, 196, 0.95);
+		border: 1px solid rgba(255, 255, 255, 0.3);
+		border-radius: 24px;
+		color: #ffffff;
+		font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+		font-size: 14px;
+		font-weight: 600;
+		cursor: pointer;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+		z-index: 1001;
+		backdrop-filter: blur(10px);
+		/* NO ANIMATIONS per project requirements */
+		transition: none;
+	}
+
+	.mobile-place-comment-btn:active {
+		transform: scale(0.95);
+	}
+
+	.mobile-place-comment-btn svg {
+		width: 20px;
+		height: 20px;
+		flex-shrink: 0;
 	}
 
 	/* Follow mode toast */

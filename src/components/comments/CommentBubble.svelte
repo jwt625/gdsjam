@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { CommentWithDisplayState } from "../../lib/comments/types";
-import { extractInitials, truncateText } from "../../lib/comments/utils";
+import { extractInitials, formatTimestamp, truncateText } from "../../lib/comments/utils";
 
 interface Props {
 	comment: CommentWithDisplayState;
@@ -10,6 +10,9 @@ interface Props {
 }
 
 let { comment, screenX, screenY, onClick }: Props = $props();
+
+// Timestamp display mode (toggles between absolute and relative)
+let showAbsoluteTime = $state(false);
 
 // Get display content based on state
 const displayContent = $derived(() => {
@@ -26,6 +29,17 @@ const displayContent = $derived(() => {
 const isMinimal = $derived(comment.displayState === "minimal");
 const isPreview = $derived(comment.displayState === "preview");
 const isFull = $derived(comment.displayState === "full");
+
+// Format timestamp based on current mode
+const formattedTimestamp = $derived(
+	formatTimestamp(comment.createdAt, showAbsoluteTime ? "absolute" : "relative"),
+);
+
+// Toggle timestamp format
+function handleTimestampClick(event: MouseEvent | KeyboardEvent): void {
+	event.stopPropagation(); // Prevent bubble click
+	showAbsoluteTime = !showAbsoluteTime;
+}
 </script>
 
 <div
@@ -45,6 +59,16 @@ const isFull = $derived(comment.displayState === "full");
 		<div class="content">
 			<div class="header">
 				<span class="author">{comment.authorName}</span>
+				<span
+					class="timestamp"
+					onclick={handleTimestampClick}
+					onkeydown={(e) => e.key === 'Enter' && handleTimestampClick(e)}
+					role="button"
+					tabindex="0"
+					title="Click to toggle between absolute and relative time"
+				>
+					{formattedTimestamp}
+				</span>
 			</div>
 			<div class="text">{displayContent()}</div>
 		</div>
@@ -101,6 +125,7 @@ const isFull = $derived(comment.displayState === "full");
 .header {
 	display: flex;
 	align-items: center;
+	justify-content: space-between;
 	gap: 8px;
 }
 
@@ -108,6 +133,19 @@ const isFull = $derived(comment.displayState === "full");
 	color: rgba(255, 255, 255, 0.9);
 	font-size: 11px;
 	font-weight: 600;
+}
+
+.timestamp {
+	color: rgba(255, 255, 255, 0.6);
+	font-size: 10px;
+	cursor: pointer;
+	user-select: none;
+	white-space: nowrap;
+	flex-shrink: 0;
+}
+
+.timestamp:hover {
+	color: rgba(255, 255, 255, 0.8);
 }
 
 .text {

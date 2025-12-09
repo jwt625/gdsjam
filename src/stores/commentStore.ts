@@ -134,6 +134,42 @@ function createCommentStore() {
 		},
 
 		/**
+		 * Sync comments from Y.js (collaboration mode)
+		 */
+		syncFromYjs: (comments: Comment[]) => {
+			update((state) => {
+				const commentsMap = new Map(
+					comments.map((c) => [c.id, { ...c, displayState: "preview" as const }]),
+				);
+
+				if (DEBUG) {
+					console.log(`[commentStore] Synced ${commentsMap.size} comments from Y.js`);
+				}
+
+				return {
+					...state,
+					comments: commentsMap,
+				};
+			});
+		},
+
+		/**
+		 * Sync permissions from Y.js (collaboration mode)
+		 */
+		syncPermissionsFromYjs: (permissions: CommentPermissions) => {
+			update((state) => {
+				if (DEBUG) {
+					console.log("[commentStore] Synced permissions from Y.js:", permissions);
+				}
+
+				return {
+					...state,
+					permissions,
+				};
+			});
+		},
+
+		/**
 		 * Toggle comment mode on/off
 		 */
 		toggleCommentMode: () => {

@@ -95,6 +95,13 @@ export function formatTimestampRelative(timestamp: number): string {
 }
 
 /**
+ * Format timestamp based on mode (absolute or relative)
+ */
+export function formatTimestamp(timestamp: number, mode: "absolute" | "relative"): string {
+	return mode === "absolute" ? formatTimestampISO(timestamp) : formatTimestampRelative(timestamp);
+}
+
+/**
  * Truncate text to a maximum length with ellipsis
  */
 export function truncateText(text: string, maxLength: number): string {
