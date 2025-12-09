@@ -294,7 +294,11 @@ Store comments in database units (same as GDS coordinates) for consistency with 
 
 ### User Initials Display
 - Use both initials from display name (e.g., "AA" for "Anonymous Aardvark")
-- Every user has a name (check existing user name handling code)
+- Every user has a name (Anonymous Animal pattern in ParticipantManager)
+- **Decision**: Extract first letter of each word, ignore numeric suffixes
+  - "Anonymous Aardvark" → "AA"
+  - "Clever Koala 2" → "CK" (ignore the "2")
+  - "Swift Fox" → "SF"
 
 ### Comment Deletion
 - Host: can delete any comment
@@ -303,8 +307,10 @@ Store comments in database units (same as GDS coordinates) for consistency with 
 - Comments are cheap, no need for excessive confirmation
 
 ### File Hash for Solo Mode
-- Use file hash for localStorage key (same as collaboration)
-- File hash should be computed for solo mode uploads (verify implementation)
+- **Decision**: Use `fileName + fileSize` as localStorage key for solo mode (simpler than computing hash)
+- Collaboration mode: Use file hash from server (already computed during upload)
+- Solo mode: Use `gdsjam_comments_${fileName}_${fileSize}` as localStorage key
+- File hash computation for solo mode is unnecessary complexity
 
 ### Viewport Recentering Priority
 - Click comment in panel to recenter viewport
@@ -325,6 +331,44 @@ Store comments in database units (same as GDS coordinates) for consistency with 
 ### Coordinate Positioning
 - Exact click position in world coordinates (no snapping)
 - Comment bubble bottom-left corner positioned at the world coordinate point
+
+---
+
+## Technical Implementation Details (2025-12-09)
+
+### Hold `c` Key Behavior
+- **Trigger mechanism**: Same as `f` key (keydown/keyup with 500ms timer)
+- **Show/hide logic**: Similar to layer panel "show all / hide all" toggle
+  - If some comments are hidden: hold `c` shows all comments temporarily
+  - If all comments are visible: hold `c` hides all comments temporarily
+  - On key release: return to previous visibility state
+- Implementation: Track previous visibility state, restore on keyup
+
+### Comment Mode Cursor
+- **Decision**: `cursor: crosshair` when comment mode is active on desktop
+- Clear visual indication that user is in placement mode
+
+### Mobile Crosshair Placement
+- **Decision**: Fixed crosshair at viewport center (Option A)
+- User pans viewport to position crosshair at desired location
+- Tap "Place Comment" button to confirm placement at crosshair position
+- Simpler UX than draggable crosshair
+
+### Double-click Detection
+- **Decision**: 300ms interval (standard double-click timing)
+- Single tap `c`: toggle comment mode on/off
+- Double tap `c` (within 300ms): toggle comment panel visibility
+- If double-click detected, cancel single-click action
+
+### Implementation Order
+1. Phase 1: Data model & storage
+2. Phase 2: Comment creation (mode, modal, save)
+3. Phase 3: Comment display on canvas (bubbles, states, hold `c`)
+4. Phase 5: Mobile support (FAB buttons, placement)
+5. Phase 6: Integration & polish
+6. **Phase 4 LAST**: Comment panel (list, recenter, host controls)
+
+---
 
 ### Future Enhancements
 - Auto-toggle between minimal and preview states based on viewport zoom level to reduce clutter at zoomed-out views
