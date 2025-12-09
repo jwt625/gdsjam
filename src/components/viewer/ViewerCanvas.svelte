@@ -3,15 +3,23 @@ import { onDestroy, onMount } from "svelte";
 import { get } from "svelte/store";
 import type {
 	CollaborativeViewportState,
+	Comment,
+	CommentPermissions,
 	ParticipantViewport,
 } from "../../lib/collaboration/types";
 import { DEBUG } from "../../lib/config";
 import { KeyboardShortcutManager } from "../../lib/keyboard/KeyboardShortcutManager";
 import { PixiRenderer } from "../../lib/renderer/PixiRenderer";
+import { generateUUID } from "../../lib/utils/uuid";
 import { collaborationStore } from "../../stores/collaborationStore";
+import { commentStore } from "../../stores/commentStore";
 import { gdsStore } from "../../stores/gdsStore";
 import { layerStore } from "../../stores/layerStore";
 import type { BoundingBox, GDSDocument } from "../../types/gds";
+// biome-ignore lint/correctness/noUnusedImports: Used in Svelte template
+import CommentBubble from "../comments/CommentBubble.svelte";
+// biome-ignore lint/correctness/noUnusedImports: Used in Svelte template
+import CommentInputModal from "../comments/CommentInputModal.svelte";
 // biome-ignore lint/correctness/noUnusedImports: Used in Svelte template
 import LayerPanel from "../ui/LayerPanel.svelte";
 // biome-ignore lint/correctness/noUnusedImports: Used in Svelte template
@@ -49,6 +57,25 @@ const FULLSCREEN_HOLD_DURATION_MS = 500;
 let fKeyDownTime: number | null = null;
 let fKeyHoldTimer: ReturnType<typeof setTimeout> | null = null;
 let fKeyTriggeredFullscreen = false;
+
+// C key hold detection for comment visibility toggle
+const COMMENT_HOLD_DURATION_MS = 500;
+const DOUBLE_CLICK_INTERVAL_MS = 300;
+let cKeyDownTime: number | null = null;
+let cKeyHoldTimer: ReturnType<typeof setTimeout> | null = null;
+let cKeyTriggeredHold = false;
+let lastCKeyPressTime: number | null = null;
+
+// Comment mode state
+let commentModeActive = $state(false);
+let showCommentModal = $state(false);
+let pendingCommentPosition: { worldX: number; worldY: number } | null = $state(null);
+
+// Comment display state
+const comments = $derived($commentStore.comments);
+const allCommentsVisible = $derived($commentStore.allCommentsVisible);
+// Track viewport changes to trigger comment bubble position updates
+let viewportVersion = $state(0);
 
 // Minimap state
 let viewportBounds = $state<BoundingBox | null>(null);
@@ -122,6 +149,56 @@ function registerKeyboardShortcuts(): void {
 }
 
 /**
+ * Initialize comment store when file is loaded
+ */
+$effect(() => {
+	const fileName = $gdsStore.fileName;
+	const document = $gdsStore.document;
+
+	if (fileName && document) {
+		const isInSession = $collaborationStore.isInSession;
+
+		if (isInSession) {
+			// Collaboration mode: use file hash from session
+			const sessionManager = collaborationStore.getSessionManager();
+			if (sessionManager) {
+				const fileMetadata = sessionManager.getFileMetadata();
+				if (fileMetadata?.fileHash) {
+					// Get permissions from Y.js session map
+					const provider = sessionManager.getProvider();
+					const sessionMap = provider.getDoc().getMap<any>("session");
+					const commentPermissions = sessionMap.get("commentPermissions") as
+						| CommentPermissions
+						| undefined;
+
+					const permissions = commentPermissions || {
+						viewersCanComment: false,
+						viewerRateLimit: 60000, // 1 minute
+						hostRateLimit: 10000, // 10 seconds
+					};
+
+					commentStore.initializeForSession(fileMetadata.fileHash, permissions);
+					if (DEBUG) {
+						console.log(
+							`[ViewerCanvas] Comment store initialized for session: ${fileMetadata.fileHash}`,
+						);
+					}
+				}
+			}
+		} else {
+			// Solo mode: use fileName + fileSize
+			const fileSize = $gdsStore.statistics?.fileSizeBytes || 0;
+			commentStore.initializeForFile(fileName, fileSize);
+			if (DEBUG) {
+				console.log(
+					`[ViewerCanvas] Comment store initialized for solo mode: ${fileName} (${fileSize} bytes)`,
+				);
+			}
+		}
+	}
+});
+
+/**
  * Handle F key down - start hold detection timer
  * Short press (<500ms) = fit to view, Hold (>=500ms) = fullscreen
  */
@@ -189,6 +266,241 @@ function handleFKeyUp(event: KeyboardEvent): void {
 	fKeyTriggeredFullscreen = false;
 }
 
+/**
+ * Handle C key down - start hold detection timer and double-click detection
+ * Single press = toggle comment mode, Double press = toggle comment panel, Hold = show/hide all comments
+ */
+function handleCKeyDown(event: KeyboardEvent): void {
+	// Only handle C key
+	if (event.code !== "KeyC") return;
+
+	// Don't handle in input fields
+	const target = event.target as HTMLElement;
+	if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
+		return;
+	}
+
+	// Don't handle with modifiers
+	if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+
+	// Ignore repeat events (key held down)
+	if (event.repeat) return;
+
+	// Prevent default to avoid any browser shortcuts
+	event.preventDefault();
+
+	// Record keydown time and start timer
+	cKeyDownTime = Date.now();
+	cKeyTriggeredHold = false;
+
+	// Start hold detection timer
+	cKeyHoldTimer = setTimeout(() => {
+		// Hold threshold reached - toggle all comments visibility temporarily
+		cKeyTriggeredHold = true;
+		commentStore.setAllCommentsVisibility(!$commentStore.allCommentsVisible, true);
+		if (DEBUG) {
+			console.log(
+				`[ViewerCanvas] C key hold detected - ${$commentStore.allCommentsVisible ? "showing" : "hiding"} all comments`,
+			);
+		}
+	}, COMMENT_HOLD_DURATION_MS);
+}
+
+/**
+ * Handle C key up - if short press, toggle comment mode or panel (double-click)
+ */
+function handleCKeyUp(event: KeyboardEvent): void {
+	// Only handle C key
+	if (event.code !== "KeyC") return;
+
+	// Clear the hold timer
+	if (cKeyHoldTimer) {
+		clearTimeout(cKeyHoldTimer);
+		cKeyHoldTimer = null;
+	}
+
+	// If we triggered hold, restore previous visibility
+	if (cKeyTriggeredHold) {
+		commentStore.restorePreviousVisibility();
+		if (DEBUG) console.log("[ViewerCanvas] C key released - restored previous visibility");
+		cKeyDownTime = null;
+		cKeyTriggeredHold = false;
+		return;
+	}
+
+	// Check for double-click
+	const now = Date.now();
+	const isDoubleClick =
+		lastCKeyPressTime !== null && now - lastCKeyPressTime < DOUBLE_CLICK_INTERVAL_MS;
+
+	if (isDoubleClick) {
+		// Double-click: toggle comment panel (TODO: implement in Phase 4)
+		if (DEBUG) console.log("[ViewerCanvas] C key double-click - toggle comment panel (TODO)");
+		lastCKeyPressTime = null;
+	} else {
+		// Single click: toggle comment mode
+		if (cKeyDownTime !== null) {
+			const holdDuration = now - cKeyDownTime;
+			if (holdDuration < COMMENT_HOLD_DURATION_MS) {
+				commentModeActive = !commentModeActive;
+				if (DEBUG)
+					console.log(
+						`[ViewerCanvas] C key short press - comment mode ${commentModeActive ? "ON" : "OFF"}`,
+					);
+			}
+		}
+		lastCKeyPressTime = now;
+	}
+
+	// Reset state
+	cKeyDownTime = null;
+	cKeyTriggeredHold = false;
+}
+
+/**
+ * Handle canvas click for comment placement
+ */
+function handleCanvasClick(event: MouseEvent): void {
+	if (!commentModeActive || !renderer) return;
+
+	// Get click position relative to canvas
+	const rect = canvas.getBoundingClientRect();
+	const screenX = event.clientX - rect.left;
+	const screenY = event.clientY - rect.top;
+
+	// Convert screen coordinates to world coordinates (same logic as CoordinatesDisplay)
+	// Access mainContainer properties via renderer's viewport state
+	const viewportState = renderer.getViewportState();
+	const worldX = (screenX - viewportState.x) / viewportState.scale;
+	// Y-axis is flipped (mainContainer.scale.y = -1), so negate Y coordinate
+	const worldY = -((screenY - viewportState.y) / viewportState.scale);
+
+	if (DEBUG) {
+		console.log(`[ViewerCanvas] Comment placement at world: (${worldX}, ${worldY})`);
+	}
+
+	// Store pending position and show modal
+	pendingCommentPosition = { worldX, worldY };
+	showCommentModal = true;
+}
+
+/**
+ * Handle comment submission from modal
+ */
+function handleCommentSubmit(content: string): void {
+	if (!pendingCommentPosition) return;
+
+	// Get user info
+	const isInSession = $collaborationStore.isInSession;
+	const isHost = $collaborationStore.isHost;
+	let userId: string;
+	let displayName: string;
+	let color: string;
+
+	if (isInSession) {
+		// Collaboration mode: get from session manager
+		const sessionManager = collaborationStore.getSessionManager();
+		if (!sessionManager) return;
+
+		userId = sessionManager.getUserId();
+		const users = sessionManager.getConnectedUsers();
+		const currentUser = users.find((u) => u.id === userId);
+		displayName = currentUser?.displayName || "Anonymous";
+		color = currentUser?.color || "#888888";
+
+		// Check rate limit
+		if (!commentStore.checkRateLimit(userId, isHost)) {
+			if (DEBUG) console.log("[ViewerCanvas] Rate limit exceeded");
+			// TODO: Show toast notification
+			return;
+		}
+	} else {
+		// Solo mode: generate user info
+		userId = localStorage.getItem("gdsjam_userId") || generateUUID();
+		if (!localStorage.getItem("gdsjam_userId")) {
+			localStorage.setItem("gdsjam_userId", userId);
+		}
+		displayName = "You";
+		color = "#4ECDC4";
+	}
+
+	// Create comment
+	const comment: Comment = {
+		id: generateUUID(),
+		authorId: userId,
+		authorName: displayName,
+		authorColor: color,
+		content,
+		worldX: pendingCommentPosition.worldX,
+		worldY: pendingCommentPosition.worldY,
+		createdAt: Date.now(),
+		editedAt: null,
+	};
+
+	// Add to store
+	commentStore.addComment(comment, isInSession);
+
+	if (DEBUG) {
+		console.log("[ViewerCanvas] Comment created:", comment.id);
+	}
+
+	// Reset state
+	pendingCommentPosition = null;
+	showCommentModal = false;
+	commentModeActive = false;
+}
+
+/**
+ * Handle comment modal cancel
+ */
+function handleCommentCancel(): void {
+	pendingCommentPosition = null;
+	showCommentModal = false;
+	// Keep comment mode active so user can try again
+}
+
+/**
+ * Convert world coordinates to screen coordinates
+ */
+function worldToScreen(worldX: number, worldY: number): { x: number; y: number } | null {
+	if (!renderer) return null;
+
+	const viewportState = renderer.getViewportState();
+	const screenX = worldX * viewportState.scale + viewportState.x;
+	// Y-axis is flipped in the renderer (mainContainer.scale.y = -1)
+	const screenY = -worldY * viewportState.scale + viewportState.y;
+
+	return { x: screenX, y: screenY };
+}
+
+/**
+ * Handle comment bubble click - cycle through display states
+ */
+function handleCommentBubbleClick(commentId: string): void {
+	commentStore.cycleDisplayState(commentId);
+}
+
+/**
+ * Handle ESC key to cancel comment mode
+ */
+function handleEscKey(event: KeyboardEvent): void {
+	if (event.code !== "Escape") return;
+
+	// Cancel comment modal if open
+	if (showCommentModal) {
+		handleCommentCancel();
+		event.preventDefault();
+		return;
+	}
+
+	// Cancel comment mode if active
+	if (commentModeActive) {
+		commentModeActive = false;
+		if (DEBUG) console.log("[ViewerCanvas] ESC - comment mode cancelled");
+		event.preventDefault();
+	}
+}
+
 onMount(() => {
 	if (DEBUG) console.log("[ViewerCanvas] Initializing...");
 
@@ -198,6 +510,16 @@ onMount(() => {
 	// Register F key handlers for hold detection (fit view vs fullscreen)
 	window.addEventListener("keydown", handleFKeyDown);
 	window.addEventListener("keyup", handleFKeyUp);
+
+	// Register C key handlers for comment mode
+	window.addEventListener("keydown", handleCKeyDown);
+	window.addEventListener("keyup", handleCKeyUp);
+
+	// Register ESC key handler for cancelling comment mode
+	window.addEventListener("keydown", handleEscKey);
+
+	// Register canvas click handler for comment placement
+	canvas.addEventListener("click", handleCanvasClick);
 
 	// Initialize renderer asynchronously
 	if (canvas) {
@@ -210,6 +532,9 @@ onMount(() => {
 			renderer.setOnViewportChanged((viewportState) => {
 				// Update minimap viewport bounds
 				viewportBounds = renderer?.getPublicViewportBounds() ?? null;
+
+				// Increment viewport version to trigger comment bubble position updates
+				viewportVersion++;
 
 				// Read current state from store (not captured $derived values)
 				// This ensures we get the latest state when callback executes
@@ -258,10 +583,24 @@ onMount(() => {
 		window.removeEventListener("keydown", handleFKeyDown);
 		window.removeEventListener("keyup", handleFKeyUp);
 
-		// Clear any pending timer
+		// Remove C key handlers
+		window.removeEventListener("keydown", handleCKeyDown);
+		window.removeEventListener("keyup", handleCKeyUp);
+
+		// Remove ESC key handler
+		window.removeEventListener("keydown", handleEscKey);
+
+		// Remove canvas click handler
+		canvas.removeEventListener("click", handleCanvasClick);
+
+		// Clear any pending timers
 		if (fKeyHoldTimer) {
 			clearTimeout(fKeyHoldTimer);
 			fKeyHoldTimer = null;
+		}
+		if (cKeyHoldTimer) {
+			clearTimeout(cKeyHoldTimer);
+			cKeyHoldTimer = null;
 		}
 	};
 });
@@ -461,7 +800,7 @@ function toggleMinimap() {
 }
 </script>
 
-<div class="viewer-container">
+<div class="viewer-container" class:comment-mode={commentModeActive}>
 	<canvas bind:this={canvas} class="viewer-canvas"></canvas>
 	<PerformancePanel {renderer} statistics={$gdsStore.statistics} visible={panelsVisible} />
 	<LayerPanel statistics={$gdsStore.statistics} visible={layerPanelVisible} />
@@ -483,6 +822,28 @@ function toggleMinimap() {
 		layersVisible={layerPanelVisible}
 		{fullscreenMode}
 	/>
+
+	<!-- Comment input modal -->
+	<CommentInputModal
+		visible={showCommentModal}
+		onSubmit={handleCommentSubmit}
+		onCancel={handleCommentCancel}
+	/>
+
+	<!-- Comment bubbles -->
+	{#if allCommentsVisible && renderer}
+		{#each Array.from(comments.values()) as comment (`${comment.id}-${viewportVersion}`)}
+			{@const screenPos = worldToScreen(comment.worldX, comment.worldY)}
+			{#if screenPos}
+				<CommentBubble
+					{comment}
+					screenX={screenPos.x}
+					screenY={screenPos.y}
+					onClick={() => handleCommentBubbleClick(comment.id)}
+				/>
+			{/if}
+		{/each}
+	{/if}
 
 	<!-- Follow mode toast -->
 	{#if $collaborationStore.showFollowToast}
@@ -516,6 +877,15 @@ function toggleMinimap() {
 		display: block;
 		width: 100%;
 		height: 100%;
+	}
+
+	/* Comment mode cursor */
+	.viewer-container.comment-mode {
+		cursor: crosshair;
+	}
+
+	.viewer-container.comment-mode .viewer-canvas {
+		cursor: crosshair;
 	}
 
 	/* Follow mode toast */

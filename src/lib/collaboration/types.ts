@@ -53,6 +53,9 @@ export interface YjsSessionData {
 	// Fullscreen mode broadcast (Issue #46)
 	fullscreenEnabled?: boolean;
 	fullscreenHostId?: string;
+
+	// Comment permissions (Issue #49)
+	commentPermissions?: CommentPermissions;
 }
 
 /**
@@ -146,3 +149,39 @@ export type CollaborationEvent =
  * Collaboration event callback
  */
 export type CollaborationEventCallback = (event: CollaborationEvent) => void;
+
+/**
+ * Comment data structure for floating comments (Issue #49)
+ */
+export interface Comment {
+	/** Unique identifier (UUID) */
+	id: string;
+	/** Author user ID */
+	authorId: string;
+	/** Author display name (for display) */
+	authorName: string;
+	/** Author color (for bubble styling) */
+	authorColor: string;
+	/** Comment text content (max 1000 chars) */
+	content: string;
+	/** World coordinates (database units) - X position */
+	worldX: number;
+	/** World coordinates (database units) - Y position */
+	worldY: number;
+	/** Creation timestamp (milliseconds since epoch) */
+	createdAt: number;
+	/** Last edit timestamp (milliseconds since epoch, null if never edited) */
+	editedAt: number | null;
+}
+
+/**
+ * Comment permissions for collaboration sessions (Issue #49)
+ */
+export interface CommentPermissions {
+	/** Whether viewers can create comments (default: false) */
+	viewersCanComment: boolean;
+	/** Rate limit for viewers (comments per minute, default: 1) */
+	viewerRateLimit: number;
+	/** Rate limit for host (comments per 10 seconds, default: 1) */
+	hostRateLimit: number;
+}

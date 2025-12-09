@@ -457,17 +457,21 @@ Store comments in database units (same as GDS coordinates) for consistency with 
 - Preview/Full state: max-width 300px, 8px padding
 
 **Bug Fixes (2025-12-09):**
-1. **Comment bubbles not updating with viewport changes**
-   - Added `viewportVersion` state that increments on every viewport change
-   - Updated comment bubble rendering to use `viewportVersion` in the key
-   - This forces re-evaluation of `worldToScreen()` on every viewport change
-   - Comment bubbles now correctly follow viewport pan/zoom
+1. **Comment bubbles not updating with viewport changes** - FIXED
+   - Issue: Comment bubbles were rendered at fixed screen positions and didn't move when panning/zooming
+   - Root cause: `worldToScreen()` was only called once during initial render, not reactive to viewport changes
+   - Solution: Added `viewportVersion` state that increments on every viewport change via `setOnViewportChanged` callback
+   - Updated comment bubble rendering key from `comment.id` to `${comment.id}-${viewportVersion}` to force re-evaluation
+   - Result: Comment bubbles now correctly follow viewport pan/zoom operations
+   - Files modified: `src/components/viewer/ViewerCanvas.svelte`
 
-2. **Text input modal not supporting space and keyboard shortcuts**
-   - Added `event.stopPropagation()` in textarea keydown handler
-   - Prevents global keyboard shortcuts from interfering with text input
-   - Space, Ctrl+C, Ctrl+V, and all other text editing shortcuts now work correctly
-   - ESC still works to cancel from both textarea and backdrop
+2. **Text input modal not supporting space and keyboard shortcuts** - FIXED
+   - Issue: Space key and keyboard shortcuts (Ctrl+C, Ctrl+V, etc.) were not working in comment input modal
+   - Root cause: Global keyboard shortcuts were capturing events before textarea could process them
+   - Solution: Added `event.stopPropagation()` in textarea keydown handler to prevent event bubbling
+   - Split keyboard handling into `handleTextareaKeyDown()` (with stopPropagation) and `handleBackdropKeyDown()` (ESC only)
+   - Result: All text editing operations now work correctly (space, copy, paste, etc.), ESC still cancels
+   - Files modified: `src/components/comments/CommentInputModal.svelte`
 
 **Next Steps for Phase 5 (Mobile Support):**
 - Add comment button to FAB menu
