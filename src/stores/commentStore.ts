@@ -135,20 +135,37 @@ function createCommentStore() {
 
 		/**
 		 * Sync comments from Y.js (collaboration mode)
+		 * Merges Y.js comments with local state, preserving display states for existing comments
 		 */
 		syncFromYjs: (comments: Comment[]) => {
 			update((state) => {
-				const commentsMap = new Map(
-					comments.map((c) => [c.id, { ...c, displayState: "preview" as const }]),
-				);
+				const newCommentsMap = new Map<string, CommentWithDisplayState>();
+
+				// Merge Y.js comments with existing local state
+				for (const comment of comments) {
+					const existingComment = state.comments.get(comment.id);
+					if (existingComment) {
+						// Preserve display state for existing comments
+						newCommentsMap.set(comment.id, {
+							...comment,
+							displayState: existingComment.displayState,
+						});
+					} else {
+						// New comment - default to preview state
+						newCommentsMap.set(comment.id, {
+							...comment,
+							displayState: "preview" as const,
+						});
+					}
+				}
 
 				if (DEBUG) {
-					console.log(`[commentStore] Synced ${commentsMap.size} comments from Y.js`);
+					console.log(`[commentStore] Synced ${newCommentsMap.size} comments from Y.js`);
 				}
 
 				return {
 					...state,
-					comments: commentsMap,
+					comments: newCommentsMap,
 				};
 			});
 		},
