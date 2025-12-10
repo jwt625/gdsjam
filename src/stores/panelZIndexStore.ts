@@ -6,7 +6,7 @@
 import { derived, writable } from "svelte/store";
 
 // Panel identifiers
-export type PanelId = "participants" | "minimap" | "performance" | "layers";
+export type PanelId = "participants" | "minimap" | "performance" | "layers" | "comments";
 
 // Base z-index for panels (high enough to be above canvas, below modals)
 const BASE_Z_INDEX = 100;
@@ -18,7 +18,7 @@ interface PanelZIndexState {
 
 function createPanelZIndexStore() {
 	const { subscribe, update } = writable<PanelZIndexState>({
-		order: ["participants", "minimap", "performance", "layers"],
+		order: ["participants", "minimap", "performance", "layers", "comments"],
 	});
 
 	return {
