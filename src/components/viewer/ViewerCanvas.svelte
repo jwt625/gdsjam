@@ -76,6 +76,7 @@ let commentPanelVisible = $state(false);
 // Comment display state
 const comments = $derived($commentStore.comments);
 const allCommentsVisible = $derived($commentStore.allCommentsVisible);
+const commentPermissions = $derived($commentStore.permissions);
 // Track viewport changes to trigger comment bubble position updates
 let viewportVersion = $state(0);
 
@@ -310,8 +311,9 @@ function handleCKeyUp(event: KeyboardEvent): void {
 		lastCKeyPressTime !== null && now - lastCKeyPressTime < DOUBLE_CLICK_INTERVAL_MS;
 
 	if (isDoubleClick) {
-		// Double-click: toggle comment panel
+		// Double-click: toggle comment panel and exit comment mode
 		commentPanelVisible = !commentPanelVisible;
+		commentModeActive = false;
 		lastCKeyPressTime = null;
 	} else {
 		// Single click: toggle comment mode
@@ -382,6 +384,12 @@ function handleCommentSubmit(content: string): void {
 		const currentUser = users.find((u) => u.id === userId);
 		displayName = currentUser?.displayName || "Anonymous";
 		color = currentUser?.color || "#888888";
+
+		// Check if viewer is allowed to comment
+		if (!isHost && !commentPermissions.viewersCanComment) {
+			commentStore.showToast("Commenting is disabled by the host");
+			return;
+		}
 
 		// Check rate limit
 		if (!commentStore.checkRateLimit(userId, isHost)) {

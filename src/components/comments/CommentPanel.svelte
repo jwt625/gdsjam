@@ -30,7 +30,11 @@ const comments = $derived($commentStore.comments);
 const permissions = $derived($commentStore.permissions);
 const isInSession = $derived($collaborationStore.isInSession);
 const isHost = $derived($collaborationStore.isHost);
-const userId = $derived($collaborationStore.userId);
+
+// Get userId - in solo mode, use localStorage userId
+const userId = $derived(
+	isInSession ? $collaborationStore.userId : localStorage.getItem("gdsjam_userId") || "",
+);
 
 // Sort comments chronologically (newest first)
 const sortedComments = $derived(
