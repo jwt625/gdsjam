@@ -4,8 +4,7 @@
 
 import { writable } from "svelte/store";
 import { SessionManager } from "../lib/collaboration/SessionManager";
-import type { CollaborationEvent, UserInfo } from "../lib/collaboration/types";
-import { DEBUG } from "../lib/config";
+import type { UserInfo } from "../lib/collaboration/types";
 
 interface CollaborationState {
 	sessionManager: SessionManager | null;
@@ -69,9 +68,6 @@ function createCollaborationStore() {
 	// Set up event listener for peer changes
 	sessionManager.getProvider().onEvent((event) => {
 		if (event.type === "peer-joined" || event.type === "peer-left") {
-			if (DEBUG) {
-				console.log("[collaborationStore] Peer event:", event);
-			}
 			// Update connected users list
 			update((state) => {
 				if (!state.sessionManager) return state;
@@ -88,9 +84,6 @@ function createCollaborationStore() {
 		.getProvider()
 		.getAwareness()
 		.on("change", () => {
-			if (DEBUG) {
-				console.log("[collaborationStore] Awareness changed, updating user list");
-			}
 			update((state) => {
 				if (!state.sessionManager) return state;
 				return {
@@ -121,9 +114,6 @@ function createCollaborationStore() {
 	// Subscribe to host changes
 	sessionManager.onHostChanged((newHostId) => {
 		const isNowHost = newHostId === sessionManager.getUserId();
-		if (DEBUG) {
-			console.log("[collaborationStore] Host changed to:", newHostId, "isNowHost:", isNowHost);
-		}
 		update((state) => {
 			// When becoming host, reset broadcast states to start fresh
 			// When losing host, also reset broadcast states (old host)
@@ -188,10 +178,6 @@ function createCollaborationStore() {
 						: undefined,
 				);
 
-				if (DEBUG) {
-					console.log("[collaborationStore] Created session:", sessionId);
-				}
-
 				update((state) => ({
 					...state,
 					isInSession: true,
@@ -229,10 +215,6 @@ function createCollaborationStore() {
 
 			await (sessionManager as SessionManager).joinSession(sessionId);
 
-			if (DEBUG) {
-				console.log("[collaborationStore] Joined session:", sessionId);
-			}
-
 			update((state) => {
 				if (!state.sessionManager) return state;
 
@@ -254,10 +236,6 @@ function createCollaborationStore() {
 				if (!state.sessionManager) return state;
 
 				state.sessionManager.leaveSession();
-
-				if (DEBUG) {
-					console.log("[collaborationStore] Left session");
-				}
 
 				return {
 					...state,
@@ -317,10 +295,8 @@ function createCollaborationStore() {
 							fileTransferMessage: message,
 						}));
 					},
-					(event: CollaborationEvent) => {
-						if (DEBUG) {
-							console.log("[collaborationStore] File transfer event:", event);
-						}
+					() => {
+						// Unused event handler
 					},
 				);
 
@@ -387,10 +363,8 @@ function createCollaborationStore() {
 							fileTransferMessage: message,
 						}));
 					},
-					(event: CollaborationEvent) => {
-						if (DEBUG) {
-							console.log("[collaborationStore] File transfer event:", event);
-						}
+					() => {
+						// Unused event handler
 					},
 				);
 
@@ -473,10 +447,8 @@ function createCollaborationStore() {
 							fileTransferMessage: message,
 						}));
 					},
-					(event: CollaborationEvent) => {
-						if (DEBUG) {
-							console.log("[collaborationStore] File recovery event:", event);
-						}
+					() => {
+						// Unused event handler
 					},
 				);
 
@@ -514,10 +486,6 @@ function createCollaborationStore() {
 
 			// Store locally only - no server communication, no loading indicator
 			sessionManager.storePendingFile(arrayBuffer, fileName);
-
-			if (DEBUG) {
-				console.log("[collaborationStore] File stored locally for future session");
-			}
 		},
 
 		/**
@@ -622,10 +590,6 @@ function createCollaborationStore() {
 
 				const success = state.sessionManager.claimHost();
 
-				if (DEBUG) {
-					console.log("[collaborationStore] Claim host:", success);
-				}
-
 				if (success) {
 					return {
 						...state,
@@ -645,10 +609,6 @@ function createCollaborationStore() {
 				if (!state.sessionManager) return state;
 
 				const success = state.sessionManager.transferHost(targetUserId);
-
-				if (DEBUG) {
-					console.log("[collaborationStore] Transfer host to:", targetUserId, "success:", success);
-				}
 
 				if (success) {
 					return {
@@ -709,12 +669,6 @@ function createCollaborationStore() {
 				// Auto-enable fullscreen when broadcast starts
 				state.sessionManager.enableFullscreen();
 
-				if (DEBUG) {
-					console.log(
-						"[collaborationStore] Viewport broadcast enabled (with fullscreen & layer sync)",
-					);
-				}
-
 				return {
 					...state,
 					isBroadcasting: true,
@@ -736,12 +690,6 @@ function createCollaborationStore() {
 				state.sessionManager.disableViewportBroadcast();
 				// Disable fullscreen when broadcast stops
 				state.sessionManager.disableFullscreen();
-
-				if (DEBUG) {
-					console.log(
-						"[collaborationStore] Viewport broadcast disabled (with fullscreen & layer sync)",
-					);
-				}
 
 				return {
 					...state,
@@ -770,14 +718,6 @@ function createCollaborationStore() {
 					state.sessionManager.enableFullscreen();
 				}
 
-				if (DEBUG) {
-					console.log(
-						"[collaborationStore] Viewport broadcast toggled:",
-						!state.isBroadcasting,
-						"(with fullscreen & layer sync)",
-					);
-				}
-
 				return {
 					...state,
 					isBroadcasting: !state.isBroadcasting,
@@ -794,10 +734,6 @@ function createCollaborationStore() {
 			update((state) => {
 				if (state.isHost) return state; // Host doesn't follow
 
-				if (DEBUG) {
-					console.log("[collaborationStore] Following enabled");
-				}
-
 				return {
 					...state,
 					isFollowing: true,
@@ -812,10 +748,6 @@ function createCollaborationStore() {
 		disableFollowing: () => {
 			update((state) => {
 				if (state.isHost) return state;
-
-				if (DEBUG) {
-					console.log("[collaborationStore] Following disabled");
-				}
 
 				return {
 					...state,
@@ -837,10 +769,6 @@ function createCollaborationStore() {
 
 				// Set P1 override in ViewportSync
 				state.sessionManager?.getViewportSync()?.setFollowOverride(newFollowing);
-
-				if (DEBUG) {
-					console.log("[collaborationStore] Following toggled (P1 override):", newFollowing);
-				}
 
 				return {
 					...state,
@@ -908,13 +836,6 @@ function createCollaborationStore() {
 
 				// For viewers: sync with the broadcast state
 				// ViewportSync handles P1 override filtering before calling this
-				if (DEBUG) {
-					console.log("[collaborationStore] Broadcast state changed:", {
-						enabled,
-						wasFollowing: state.isFollowing,
-					});
-				}
-
 				return {
 					...state,
 					isFollowing: enabled,
@@ -938,7 +859,6 @@ function createCollaborationStore() {
 			update((state) => {
 				if (!state.sessionManager || !state.isHost) return state;
 				state.sessionManager.enableLayerBroadcast();
-				if (DEBUG) console.log("[collaborationStore] Layer broadcast enabled");
 				return { ...state, isLayerBroadcasting: true };
 			});
 		},
@@ -947,7 +867,6 @@ function createCollaborationStore() {
 			update((state) => {
 				if (!state.sessionManager || !state.isHost) return state;
 				state.sessionManager.disableLayerBroadcast();
-				if (DEBUG) console.log("[collaborationStore] Layer broadcast disabled");
 				return { ...state, isLayerBroadcasting: false };
 			});
 		},
@@ -960,8 +879,6 @@ function createCollaborationStore() {
 				} else {
 					state.sessionManager.enableLayerBroadcast();
 				}
-				if (DEBUG)
-					console.log("[collaborationStore] Layer broadcast toggled:", !state.isLayerBroadcasting);
 				return { ...state, isLayerBroadcasting: !state.isLayerBroadcasting };
 			});
 		},
@@ -971,7 +888,6 @@ function createCollaborationStore() {
 				if (state.isHost) return state;
 				const newFollowing = !state.isLayerFollowing;
 				state.sessionManager?.getLayerSync()?.setFollowOverride(newFollowing);
-				if (DEBUG) console.log("[collaborationStore] Layer following toggled:", newFollowing);
 				return { ...state, isLayerFollowing: newFollowing };
 			});
 		},
@@ -979,7 +895,6 @@ function createCollaborationStore() {
 		handleLayerBroadcastStateChanged: (enabled: boolean) => {
 			update((state) => {
 				if (state.isHost) return { ...state, isLayerBroadcasting: enabled };
-				if (DEBUG) console.log("[collaborationStore] Layer broadcast state changed:", enabled);
 				return { ...state, isLayerFollowing: enabled };
 			});
 		},
@@ -998,9 +913,6 @@ function createCollaborationStore() {
 		 */
 		handleFullscreenStateChanged: (enabled: boolean, _hostId: string | null) => {
 			update((state) => {
-				if (DEBUG) {
-					console.log("[collaborationStore] Fullscreen state changed:", enabled);
-				}
 				return { ...state, isFullscreenEnabled: enabled };
 			});
 		},

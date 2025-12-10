@@ -10,16 +10,6 @@
  */
 export const DEBUG = import.meta.env.VITE_DEBUG === "true";
 
-// Log environment variables for debugging (only in dev mode)
-if (DEBUG) {
-	console.log("[config.ts] Environment variables:", {
-		VITE_DEBUG: import.meta.env.VITE_DEBUG,
-		DEV: import.meta.env.DEV,
-		MODE: import.meta.env.MODE,
-	});
-	console.log("[config.ts] DEBUG mode:", DEBUG);
-}
-
 /**
  * Maximum number of polygons to render per frame (prevents OOM)
  * Controlled by VITE_MAX_POLYGONS_PER_RENDER environment variable

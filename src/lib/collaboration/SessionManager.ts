@@ -9,7 +9,6 @@
  * - Coordinate HostManager and ParticipantManager (facade pattern)
  */
 
-import { DEBUG } from "../config";
 import { generateUUID } from "../utils/uuid";
 import { CommentSync, type CommentSyncCallbacks } from "./CommentSync";
 import { FileTransfer } from "./FileTransfer";
@@ -77,10 +76,6 @@ export class SessionManager {
 		// Initialize managers
 		this.hostManager = new HostManager(this.yjsProvider, this.userId);
 		this.participantManager = new ParticipantManager(this.yjsProvider, this.userId);
-
-		if (DEBUG) {
-			console.log("[SessionManager] Initialized with user ID:", this.userId);
-		}
 	}
 
 	/**
@@ -91,9 +86,6 @@ export class SessionManager {
 		if (!userId) {
 			userId = generateUUID();
 			localStorage.setItem(USER_ID_KEY, userId);
-			if (DEBUG) {
-				console.log("[SessionManager] Created new user ID:", userId);
-			}
 		}
 		return userId;
 	}
@@ -109,13 +101,6 @@ export class SessionManager {
 
 		// If there's a pending file stored locally, upload it to server now
 		if (this.pendingFile && this.pendingFile.arrayBuffer) {
-			if (DEBUG) {
-				console.log(
-					"[SessionManager] Uploading pending file to server:",
-					this.pendingFile.fileName,
-				);
-			}
-
 			onProgress?.(0, "Uploading file to server...");
 
 			// Upload file to server
@@ -144,10 +129,6 @@ export class SessionManager {
 			this.pendingFile.fileHash = fileId; // fileId is the SHA-256 hash
 
 			onProgress?.(50, "Creating session...");
-
-			if (DEBUG) {
-				console.log("[SessionManager] Pending file uploaded:", fileId);
-			}
 		}
 
 		// Update URL with room parameter
@@ -200,10 +181,6 @@ export class SessionManager {
 				sessionMap.set("fileSize", this.pendingFile.fileSize);
 				sessionMap.set("fileHash", this.pendingFile.fileHash);
 				sessionMap.set("uploadedAt", Date.now());
-
-				if (DEBUG) {
-					console.log("[SessionManager] Added pending file to session:", this.pendingFile.fileName);
-				}
 			}
 		});
 
@@ -230,10 +207,6 @@ export class SessionManager {
 
 		onProgress?.(100, "Session created");
 
-		if (DEBUG) {
-			console.log("[SessionManager] Created session:", sessionId);
-		}
-
 		return sessionId;
 	}
 
@@ -245,10 +218,6 @@ export class SessionManager {
 	 * maintaining the "pure frontend-only viewer" principle when not in a session.
 	 */
 	storePendingFile(arrayBuffer: ArrayBuffer, fileName: string): void {
-		if (DEBUG) {
-			console.log("[SessionManager] Storing file locally for future session:", fileName);
-		}
-
 		// Store locally only - NO server upload
 		// fileId and fileHash will be set when createSession() uploads to server
 		this.pendingFile = {
@@ -258,13 +227,6 @@ export class SessionManager {
 			fileSize: arrayBuffer.byteLength,
 			arrayBuffer,
 		};
-
-		if (DEBUG) {
-			console.log("[SessionManager] Pending file stored locally:", {
-				fileName,
-				fileSize: arrayBuffer.byteLength,
-			});
-		}
 	}
 
 	/**
@@ -324,27 +286,14 @@ export class SessionManager {
 		// STEP 1: Check localStorage FIRST - Am I the host?
 		const wasHost = this.hostManager.hasHostRecoveryFlag();
 
-		if (DEBUG) {
-			console.log("[SessionManager] joinSession - checking host status:", {
-				sessionId,
-				wasHost,
-			});
-		}
-
 		if (wasHost) {
 			// ======================================
 			// HOST REFRESH PATH: I am source of truth for metadata
 			// File buffer comes from signaling server (not peers)
 			// ======================================
-			if (DEBUG) {
-				console.log("[SessionManager] HOST PATH: Restoring from localStorage");
-			}
 
 			// Load file metadata from localStorage
 			const storedSession = this.loadSessionFromLocalStorage();
-			if (DEBUG) {
-				console.log("[SessionManager] Loaded session info from localStorage:", storedSession);
-			}
 
 			// Connect to Y.js room - no need to wait for sync
 			// Host has metadata in localStorage, file is on signaling server
@@ -399,17 +348,10 @@ export class SessionManager {
 
 			// Clear recovery flag (successfully reclaimed)
 			this.hostManager.clearHostRecoveryFlag();
-
-			if (DEBUG) {
-				console.log("[SessionManager] HOST PATH complete - restored from localStorage");
-			}
 		} else {
 			// ======================================
 			// VIEWER PATH: Host is source of truth
 			// ======================================
-			if (DEBUG) {
-				console.log("[SessionManager] VIEWER PATH: Waiting for sync from host");
-			}
 
 			// Set awareness immediately (safe - uses awareness protocol, not Y.js doc)
 			this.participantManager.setLocalAwarenessState({ isHost: false });
@@ -418,11 +360,7 @@ export class SessionManager {
 			this.yjsProvider.connect(sessionId);
 
 			// Wait for Y.js to sync with peers before any document writes
-			const synced = await this.yjsProvider.waitForSync(5000);
-
-			if (DEBUG) {
-				console.log("[SessionManager] Sync completed:", synced);
-			}
+			await this.yjsProvider.waitForSync(5000);
 
 			// Now safe to write - document has host's data
 			this.participantManager.registerParticipant();
@@ -434,10 +372,6 @@ export class SessionManager {
 
 			// Notify FullscreenSync of current fullscreen state (for late joiners)
 			this.fullscreenSync?.notifyCurrentFullscreenState();
-
-			if (DEBUG) {
-				console.log("[SessionManager] VIEWER PATH complete - synced from host/peers");
-			}
 		}
 	}
 
@@ -471,10 +405,6 @@ export class SessionManager {
 		const url = new URL(window.location.href);
 		url.searchParams.delete("room");
 		window.history.pushState({}, "", url.toString());
-
-		if (DEBUG) {
-			console.log("[SessionManager] Left session");
-		}
 	}
 
 	/**
@@ -534,10 +464,6 @@ export class SessionManager {
 			});
 		}
 
-		if (DEBUG) {
-			console.log("[SessionManager] Total users:", users.length);
-		}
-
 		return users;
 	}
 
@@ -578,10 +504,6 @@ export class SessionManager {
 
 		// Upload file
 		await this.fileTransfer.uploadFile(arrayBuffer, fileName, this.userId);
-
-		if (DEBUG) {
-			console.log("[SessionManager] File uploaded to session");
-		}
 	}
 
 	/**
@@ -602,10 +524,6 @@ export class SessionManager {
 		// Download file
 		const result = await this.fileTransfer.downloadFile();
 
-		if (DEBUG) {
-			console.log("[SessionManager] File downloaded from session:", result.fileName);
-		}
-
 		return result;
 	}
 
@@ -624,10 +542,6 @@ export class SessionManager {
 
 		// Download file by ID
 		const result = await this.fileTransfer.downloadFileById(fileId, fileName, fileHash);
-
-		if (DEBUG) {
-			console.log("[SessionManager] File recovered from server:", result.fileName);
-		}
 
 		return result;
 	}
@@ -672,9 +586,6 @@ export class SessionManager {
 		fileSize: number,
 	): void {
 		if (!this.sessionId) {
-			if (DEBUG) {
-				console.log("[SessionManager] Cannot save to localStorage - no session ID");
-			}
 			return;
 		}
 
@@ -689,9 +600,6 @@ export class SessionManager {
 
 		try {
 			localStorage.setItem(key, JSON.stringify(info));
-			if (DEBUG) {
-				console.log("[SessionManager] Saved session info to localStorage:", key);
-			}
 		} catch (error) {
 			console.error("[SessionManager] Failed to save session to localStorage:", error);
 		}
@@ -718,16 +626,10 @@ export class SessionManager {
 			// Check if session info is too old (24 hours)
 			const maxAge = 24 * 60 * 60 * 1000;
 			if (Date.now() - info.savedAt > maxAge) {
-				if (DEBUG) {
-					console.log("[SessionManager] Stored session info expired, removing");
-				}
 				localStorage.removeItem(key);
 				return null;
 			}
 
-			if (DEBUG) {
-				console.log("[SessionManager] Loaded session info from localStorage:", info);
-			}
 			return info;
 		} catch (error) {
 			console.error("[SessionManager] Failed to load session from localStorage:", error);
@@ -746,9 +648,6 @@ export class SessionManager {
 		const key = `${SESSION_STORAGE_PREFIX}${this.sessionId}`;
 		try {
 			localStorage.removeItem(key);
-			if (DEBUG) {
-				console.log("[SessionManager] Cleared session info from localStorage:", key);
-			}
 		} catch (error) {
 			console.error("[SessionManager] Failed to clear session from localStorage:", error);
 		}
@@ -825,10 +724,6 @@ export class SessionManager {
 			this.layerSync?.disableBroadcast();
 
 			this.participantManager.setLocalAwarenessState({ isHost: false });
-
-			if (DEBUG) {
-				console.log("[SessionManager] Transferred host to:", targetUserId, "- broadcasts disabled");
-			}
 		}
 		return result;
 	}
@@ -884,10 +779,6 @@ export class SessionManager {
 		this.hostCheckInterval = setInterval(() => {
 			this.ensureHostExists();
 		}, 2000); // Check every 2 seconds
-
-		if (DEBUG) {
-			console.log("[SessionManager] Auto-promotion enabled with periodic check");
-		}
 	}
 
 	/**
@@ -905,9 +796,6 @@ export class SessionManager {
 
 		// Case 1: No host at all (currentHostId is empty)
 		if (!currentHostId) {
-			if (DEBUG) {
-				console.log("[SessionManager] No host detected, triggering auto-promotion");
-			}
 			this.tryAutoPromote();
 			return;
 		}
@@ -915,9 +803,6 @@ export class SessionManager {
 		// Case 2: Host exists but is stale (closed tab without proper leave)
 		// canClaimHost() checks if hostLastSeen is past DISCONNECT_GRACE_PERIOD
 		if (this.hostManager.canClaimHost()) {
-			if (DEBUG) {
-				console.log("[SessionManager] Host is stale (closed tab?), triggering auto-promotion");
-			}
 			this.tryAutoPromote();
 		}
 	}
@@ -929,17 +814,11 @@ export class SessionManager {
 	private tryAutoPromote(): void {
 		// Don't auto-promote if already host
 		if (this.hostManager.getIsHost()) {
-			if (DEBUG) {
-				console.log("[SessionManager] Already host, skipping auto-promotion");
-			}
 			return;
 		}
 
 		// Check if we can claim (no current host)
 		if (!this.hostManager.canClaimHost()) {
-			if (DEBUG) {
-				console.log("[SessionManager] Cannot claim host, skipping auto-promotion");
-			}
 			return;
 		}
 
@@ -947,9 +826,6 @@ export class SessionManager {
 		const participants = this.participantManager.getParticipants();
 		if (participants.length === 0) {
 			// No participants registered yet, claim host
-			if (DEBUG) {
-				console.log("[SessionManager] No participants, claiming host");
-			}
 			this.claimHost();
 			return;
 		}
@@ -959,22 +835,12 @@ export class SessionManager {
 		const firstParticipant = participants[0];
 		if (!firstParticipant) {
 			// Edge case: empty participants array
-			if (DEBUG) {
-				console.log("[SessionManager] No participants found, claiming host");
-			}
 			this.claimHost();
 			return;
 		}
 
 		if (firstParticipant.userId === this.userId) {
-			if (DEBUG) {
-				console.log("[SessionManager] I have lowest userId, claiming host");
-			}
 			this.claimHost();
-		} else {
-			if (DEBUG) {
-				console.log("[SessionManager] Not first in order, waiting for:", firstParticipant.userId);
-			}
 		}
 	}
 
@@ -997,16 +863,9 @@ export class SessionManager {
 		// This is needed because Y.Map observers only fire on changes, not initial state
 		this.yjsProvider.onEvent((event) => {
 			if (event.type === "peer-joined" && this.hostManager.getIsHost()) {
-				if (DEBUG) {
-					console.log("[SessionManager] New peer joined, re-broadcasting viewport state");
-				}
 				this.viewportSync?.rebroadcastState();
 			}
 		});
-
-		if (DEBUG) {
-			console.log("[SessionManager] ViewportSync initialized");
-		}
 	}
 
 	/**
@@ -1034,9 +893,6 @@ export class SessionManager {
 		this.viewportSync?.enableBroadcast();
 		// Auto-enable layer broadcast when viewport broadcast is enabled
 		this.layerSync?.enableBroadcast();
-		if (DEBUG) {
-			console.log("[SessionManager] Viewport broadcast enabled (with layer sync)");
-		}
 	}
 
 	/**
@@ -1051,9 +907,6 @@ export class SessionManager {
 		this.viewportSync?.disableBroadcast();
 		// Disable layer broadcast when viewport broadcast is disabled
 		this.layerSync?.disableBroadcast();
-		if (DEBUG) {
-			console.log("[SessionManager] Viewport broadcast disabled (with layer sync)");
-		}
 	}
 
 	/**
@@ -1100,7 +953,6 @@ export class SessionManager {
 	private initializeLayerSync(): void {
 		if (this.layerSync) this.layerSync.destroy();
 		this.layerSync = new LayerSync(this.yjsProvider, this.userId, this.layerSyncCallbacks);
-		if (DEBUG) console.log("[SessionManager] LayerSync initialized");
 	}
 
 	setLayerSyncCallbacks(callbacks: LayerSyncCallbacks): void {
@@ -1147,7 +999,6 @@ export class SessionManager {
 			this.userId,
 			this.fullscreenSyncCallbacks,
 		);
-		if (DEBUG) console.log("[SessionManager] FullscreenSync initialized");
 	}
 
 	setFullscreenSyncCallbacks(callbacks: FullscreenSyncCallbacks): void {
@@ -1187,7 +1038,6 @@ export class SessionManager {
 		if (this.commentSync) this.commentSync.destroy();
 		this.commentSync = new CommentSync(this.yjsProvider, this.userId, this.commentSyncCallbacks);
 		this.commentSync.initialize();
-		if (DEBUG) console.log("[SessionManager] CommentSync initialized");
 	}
 
 	setCommentSyncCallbacks(callbacks: CommentSyncCallbacks): void {

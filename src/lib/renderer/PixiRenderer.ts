@@ -22,7 +22,6 @@
 import { Application, Container, type Graphics, Text } from "pixi.js";
 import type { BoundingBox, GDSDocument } from "../../types/gds";
 import {
-	DEBUG,
 	FPS_UPDATE_INTERVAL,
 	HIERARCHICAL_POLYGON_THRESHOLD,
 	MAX_POLYGONS_PER_RENDER,
@@ -387,10 +386,6 @@ export class PixiRenderer {
 	 * Update layer visibility and update viewport to show/hide layers
 	 */
 	private updateLayerVisibility(visibility: { [key: string]: boolean }): void {
-		if (DEBUG) {
-			console.log("[PixiRenderer] Updating layer visibility", visibility);
-		}
-
 		// Detect newly visible layers that need to be rendered
 		const newlyVisibleLayers = this.viewportManager.detectNewlyVisibleLayers(
 			visibility,
@@ -404,15 +399,8 @@ export class PixiRenderer {
 			this.layerVisibility.set(key, visible);
 		}
 
-		if (DEBUG) {
-			console.log("[PixiRenderer] Internal layerVisibility map updated:", this.layerVisibility);
-		}
-
 		// If there are newly visible layers that haven't been rendered, render them
 		if (newlyVisibleLayers.length > 0) {
-			if (DEBUG) {
-				console.log("[PixiRenderer] Rendering newly visible layers:", newlyVisibleLayers);
-			}
 			this.renderLayers(newlyVisibleLayers);
 		} else {
 			// Update graphics visibility (combines layer visibility + viewport culling)
@@ -426,12 +414,7 @@ export class PixiRenderer {
 	 */
 	private async renderLayers(layerKeys: string[]): Promise<void> {
 		if (!this.currentDocument) {
-			console.warn("[PixiRenderer] No document to render layers from");
 			return;
-		}
-
-		if (DEBUG) {
-			console.log(`[PixiRenderer] Rendering ${layerKeys.length} layers on-demand`);
 		}
 
 		// Temporarily enable these layers in the document
@@ -461,16 +444,11 @@ export class PixiRenderer {
 	 */
 	private async performIncrementalRerender(): Promise<void> {
 		if (!this.currentDocument) {
-			console.warn("[LOD] No document to re-render");
 			return;
 		}
 
 		// Set flag to prevent re-render loops
 		this.isRerendering = true;
-
-		if (DEBUG) {
-			console.log(`[LOD] Starting re-render at depth ${this.currentRenderDepth}`);
-		}
 
 		// Save viewport state and current scale for stroke width calculation
 		const viewportState = this.getViewportState();
@@ -511,12 +489,6 @@ export class PixiRenderer {
 			graphics.destroy();
 		}
 		oldMainContainer.destroy();
-
-		if (DEBUG) {
-			console.log(
-				`[LOD] Re-render complete: ${this.totalRenderedPolygons.toLocaleString()} polygons in ${this.allGraphicsItems.length} tiles`,
-			);
-		}
 
 		// Apply layer visibility to newly created graphics
 		this.performViewportUpdate();
@@ -613,10 +585,6 @@ export class PixiRenderer {
 	 */
 	toggleFill(): void {
 		this.fillPolygons = !this.fillPolygons;
-		if (DEBUG) {
-			console.log(`[Renderer] Polygon fill mode: ${this.fillPolygons ? "filled" : "outline only"}`);
-			console.log(`[Renderer] Current scale: ${this.mainContainer.scale.x}`);
-		}
 
 		// Trigger re-render to apply the new fill mode
 		if (this.currentDocument) {
@@ -642,7 +610,6 @@ export class PixiRenderer {
 		await new Promise((resolve) => setTimeout(resolve, 0));
 		this.clear();
 
-		const startTime = performance.now();
 		// Only reset depth to 0 on initial render, not on incremental re-renders
 		if (!this.isRerendering) {
 			// For hierarchical files (top cells have instances but few/no polygons), start with higher depth
@@ -665,22 +632,10 @@ export class PixiRenderer {
 				totalTopCellInstances > 0 && totalTopCellPolygons < HIERARCHICAL_POLYGON_THRESHOLD;
 
 			this.currentRenderDepth = isHierarchical ? 3 : 0; // Start at depth 3 for hierarchical files
-
-			if (DEBUG && isHierarchical) {
-				console.log(
-					`[Render] Hierarchical file detected (${totalTopCellInstances} instances, ${totalTopCellPolygons} polygons in top cells), starting at depth 3`,
-				);
-			}
 		}
 
 		// Get scaled budget from LOD manager
 		const scaledBudget = this.lodManager.getScaledBudget();
-
-		if (DEBUG) {
-			console.log(
-				`[Render] Starting render: depth=${this.currentRenderDepth}, budget=${scaledBudget.toLocaleString()}`,
-			);
-		}
 
 		// Render using GDSRenderer
 		const result = await this.gdsRenderer.render(
@@ -698,13 +653,6 @@ export class PixiRenderer {
 		// Store results
 		this.allGraphicsItems = result.graphicsItems;
 		this.totalRenderedPolygons = result.totalPolygons;
-
-		const renderTime = performance.now() - startTime;
-		if (DEBUG) {
-			console.log(
-				`[Render] Complete: ${result.totalPolygons.toLocaleString()} polygons in ${renderTime.toFixed(0)}ms (${this.allGraphicsItems.length} tiles, depth=${this.currentRenderDepth})`,
-			);
-		}
 
 		if (!skipFitToView) {
 			onProgress?.(90, "Fitting to view...");
@@ -729,7 +677,6 @@ export class PixiRenderer {
 		}
 
 		if (!this.isInitialized || !this.app || !this.app.screen) {
-			console.warn("[PixiRenderer] Cannot fit to view - renderer not initialized");
 			return true; // Not locked, just not ready
 		}
 
@@ -802,6 +749,7 @@ export class PixiRenderer {
 		this.updateViewport();
 		this.updateGrid();
 		this.updateScaleBar();
+		this.notifyViewportChanged();
 	}
 
 	/**
@@ -998,9 +946,6 @@ export class PixiRenderer {
 			this.app.renderer.resize(width, height);
 			this.fpsCounter.updatePosition(width);
 			this.coordinatesDisplay.updatePosition(width, height);
-			if (DEBUG) {
-				console.log(`[PixiRenderer] Triggered resize to ${width}x${height}`);
-			}
 		}
 	}
 }

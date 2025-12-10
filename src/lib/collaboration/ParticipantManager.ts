@@ -9,7 +9,6 @@
  * - Provide participant list sorted by join time
  */
 
-import { DEBUG } from "../config";
 import type { YjsParticipant } from "./types";
 import type { YjsProvider } from "./YjsProvider";
 
@@ -127,23 +126,15 @@ export class ParticipantManager {
 		this.yjsProvider = yjsProvider;
 		this.userId = userId;
 		this.localColor = this.getUserColor(userId);
-
-		if (DEBUG) {
-			console.log("[ParticipantManager] Initialized for user:", userId);
-		}
 	}
 
 	/**
 	 * Initialize participant manager for a session
 	 */
-	initialize(sessionId: string): void {
+	initialize(_sessionId: string): void {
 		this.setupParticipantObserver();
 		this.startHeartbeat();
 		this.startStaleCleanup();
-
-		if (DEBUG) {
-			console.log("[ParticipantManager] Initialized for session:", sessionId);
-		}
 	}
 
 	/**
@@ -154,10 +145,6 @@ export class ParticipantManager {
 		this.heartbeatInterval = setInterval(() => {
 			this.updateLastSeen();
 		}, PARTICIPANT_HEARTBEAT_INTERVAL);
-
-		if (DEBUG) {
-			console.log("[ParticipantManager] Started heartbeat");
-		}
 	}
 
 	/**
@@ -198,10 +185,6 @@ export class ParticipantManager {
 		this.cleanupInterval = setInterval(() => {
 			this.cleanupStaleParticipants();
 		}, PARTICIPANT_HEARTBEAT_INTERVAL); // Same interval as heartbeat
-
-		if (DEBUG) {
-			console.log("[ParticipantManager] Started stale participant cleanup");
-		}
 	}
 
 	/**
@@ -229,14 +212,6 @@ export class ParticipantManager {
 			// Check if stale
 			const elapsed = now - (p.lastSeen || p.joinedAt);
 			if (elapsed > PARTICIPANT_STALE_THRESHOLD) {
-				if (DEBUG) {
-					console.log(
-						"[ParticipantManager] Removing stale participant:",
-						p.userId,
-						"elapsed:",
-						elapsed,
-					);
-				}
 				return false;
 			}
 			return true;
@@ -244,12 +219,6 @@ export class ParticipantManager {
 
 		if (activeParticipants.length !== participants.length) {
 			sessionMap.set("participants", activeParticipants);
-			if (DEBUG) {
-				console.log(
-					"[ParticipantManager] Cleaned up stale participants, remaining:",
-					activeParticipants.length,
-				);
-			}
 		}
 	}
 
@@ -262,10 +231,6 @@ export class ParticipantManager {
 			if (event.keysChanged.has("participants")) {
 				const participants = this.getParticipants();
 				this.notifyParticipantsChanged(participants);
-
-				if (DEBUG) {
-					console.log("[ParticipantManager] Participants changed:", participants.length);
-				}
 			}
 		});
 
@@ -339,9 +304,6 @@ export class ParticipantManager {
 
 		// Check if already registered
 		if (existingParticipants.some((p) => p.userId === this.userId)) {
-			if (DEBUG) {
-				console.log("[ParticipantManager] Already registered");
-			}
 			return;
 		}
 
@@ -367,10 +329,6 @@ export class ParticipantManager {
 			const updatedParticipants = [...existingParticipants, participant];
 			sessionMap.set("participants", updatedParticipants);
 		});
-
-		if (DEBUG) {
-			console.log("[ParticipantManager] Registered as:", displayName);
-		}
 	}
 
 	/**
@@ -385,17 +343,8 @@ export class ParticipantManager {
 		const existing = existingParticipants.find((p) => p.userId === this.userId);
 		if (existing) {
 			this.localDisplayName = existing.displayName;
-			if (DEBUG) {
-				console.log(
-					"[ParticipantManager] Re-registered existing participant:",
-					existing.displayName,
-				);
-			}
 		} else {
 			// Fallback: register as new if not found (shouldn't happen for host reclaim)
-			if (DEBUG) {
-				console.log("[ParticipantManager] Existing participant not found, registering as new");
-			}
 			this.registerParticipant();
 		}
 	}
@@ -418,10 +367,6 @@ export class ParticipantManager {
 
 		if (updatedParticipants.length !== existingParticipants.length) {
 			sessionMap.set("participants", updatedParticipants);
-
-			if (DEBUG) {
-				console.log("[ParticipantManager] Removed participant:", userId);
-			}
 		}
 	}
 
@@ -457,10 +402,6 @@ export class ParticipantManager {
 	 */
 	setLocalDisplayName(displayName: string): void {
 		this.localDisplayName = displayName;
-
-		if (DEBUG) {
-			console.log("[ParticipantManager] Set local display name:", displayName);
-		}
 	}
 
 	/**
@@ -481,10 +422,6 @@ export class ParticipantManager {
 			color: this.localColor,
 			...additionalState,
 		});
-
-		if (DEBUG) {
-			console.log("[ParticipantManager] Set local awareness state");
-		}
 	}
 
 	/**
@@ -511,9 +448,5 @@ export class ParticipantManager {
 		this.stopStaleCleanup();
 		this.participantChangedCallbacks = [];
 		this.localDisplayName = null;
-
-		if (DEBUG) {
-			console.log("[ParticipantManager] Destroyed");
-		}
 	}
 }

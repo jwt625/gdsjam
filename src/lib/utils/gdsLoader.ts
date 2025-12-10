@@ -3,7 +3,6 @@
  */
 
 import { gdsStore } from "../../stores/gdsStore";
-import { DEBUG } from "../config";
 import { convertDxfToGds } from "../converters/DxfToGdsConverter";
 import { parseGDSII } from "../gds/GDSParser";
 
@@ -33,11 +32,6 @@ export async function loadGDSIIFromBuffer(
 	arrayBuffer: ArrayBuffer,
 	fileName: string,
 ): Promise<void> {
-	const fileSizeMB = (arrayBuffer.byteLength / 1024 / 1024).toFixed(1);
-	if (DEBUG) {
-		console.log(`[gdsLoader] Loading ${fileName} (${fileSizeMB} MB)`);
-	}
-
 	const lowerFileName = fileName.toLowerCase();
 	const isDxfByExtension = lowerFileName.endsWith(".dxf");
 	const isDxfByContent = isDxfFile(arrayBuffer);
@@ -52,9 +46,6 @@ export async function loadGDSIIFromBuffer(
 
 	try {
 		if (isDxf) {
-			if (DEBUG && isDxfByContent && !isDxfByExtension) {
-				console.log("[gdsLoader] Detected DXF file by content (not extension)");
-			}
 			// Convert DXF to GDSII
 			gdsStore.setLoading(true, "Converting DXF to GDSII...", 5);
 
@@ -131,9 +122,6 @@ export async function loadGDSIIFromBuffer(
 			};
 
 			gdsStore.setDocument(document, fileName, statistics);
-			if (DEBUG) {
-				console.log("[gdsLoader] DXF file converted and loaded successfully");
-			}
 		} else {
 			// Parse GDSII file
 			gdsStore.setLoading(true, "Parsing GDSII file...", 5);
@@ -147,9 +135,6 @@ export async function loadGDSIIFromBuffer(
 			);
 
 			gdsStore.setDocument(document, fileName, statistics);
-			if (DEBUG) {
-				console.log("[gdsLoader] File loaded successfully");
-			}
 		}
 	} catch (error) {
 		console.error("[gdsLoader] Failed to load file:", error);

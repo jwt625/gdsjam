@@ -12,7 +12,7 @@
 import { Application, Container, Graphics, Text, TextStyle } from "pixi.js";
 import type { BoundingBox, Cell, GDSDocument } from "../../types/gds";
 import type { ParticipantViewport } from "../collaboration/types";
-import { DEBUG, HIERARCHICAL_POLYGON_THRESHOLD } from "../config";
+import { HIERARCHICAL_POLYGON_THRESHOLD } from "../config";
 
 /** Screen-space bounds for a participant viewport (used for click detection) */
 interface ParticipantViewportScreenBounds {
@@ -99,10 +99,6 @@ export class MinimapRenderer {
 		this.app.stage.on("pointerdown", this.handleClick.bind(this));
 
 		this.isInitialized = true;
-
-		if (DEBUG) {
-			console.log("[MinimapRenderer] Initialized with size:", canvas.width, "x", canvas.height);
-		}
 	}
 
 	/**
@@ -135,11 +131,6 @@ export class MinimapRenderer {
 				screenY <= bounds.top + bounds.height
 			) {
 				// Clicked on a participant viewport - navigate to their exact view
-				if (DEBUG) {
-					console.log(
-						`[MinimapRenderer] Clicked on participant ${bounds.userId} viewport, navigating to their view`,
-					);
-				}
 				this.onNavigateCallback?.(bounds.worldCenterX, bounds.worldCenterY, bounds.scale);
 				return;
 			}
@@ -148,12 +139,6 @@ export class MinimapRenderer {
 		// No participant viewport hit - convert to world coordinates for regular navigation
 		const worldX = (screenX - this.mainContainer.x) / this.mainContainer.scale.x;
 		const worldY = (screenY - this.mainContainer.y) / this.mainContainer.scale.y;
-
-		if (DEBUG) {
-			console.log(
-				`[MinimapRenderer] Click at screen (${screenX}, ${screenY}) -> world (${worldX}, ${worldY})`,
-			);
-		}
 
 		this.onNavigateCallback?.(worldX, worldY);
 	}
@@ -167,19 +152,11 @@ export class MinimapRenderer {
 		layerColors: Map<string, number>,
 	): Promise<void> {
 		if (!this.isInitialized || !this.app || !this.mainContainer) {
-			console.warn("[MinimapRenderer] Not initialized");
 			return;
 		}
 
 		const startTime = performance.now();
 		this.documentBounds = document.boundingBox;
-
-		if (DEBUG) {
-			console.log("[MinimapRenderer] Document bounds:", this.documentBounds);
-			console.log("[MinimapRenderer] Cells:", document.cells.size);
-			console.log("[MinimapRenderer] Layer visibility entries:", layerVisibility.size);
-			console.log("[MinimapRenderer] Layer color entries:", layerColors.size);
-		}
 
 		// Clear previous content
 		this.mainContainer.removeChildren();
@@ -194,7 +171,6 @@ export class MinimapRenderer {
 			this.documentBounds.maxX <= this.documentBounds.minX ||
 			this.documentBounds.maxY <= this.documentBounds.minY
 		) {
-			console.warn("[MinimapRenderer] Invalid document bounds:", this.documentBounds);
 			return;
 		}
 
@@ -205,13 +181,6 @@ export class MinimapRenderer {
 		await this.renderCells(document, layerVisibility, layerColors);
 
 		this.stats.lastRenderTimeMs = performance.now() - startTime;
-
-		if (DEBUG) {
-			console.log(
-				`[MinimapRenderer] Rendered ${this.stats.polygonCount} polygons, ` +
-					`skipped ${this.stats.cellsSkipped} cells, took ${this.stats.lastRenderTimeMs.toFixed(1)}ms`,
-			);
-		}
 	}
 
 	/**
@@ -251,20 +220,6 @@ export class MinimapRenderer {
 		// For Y with flip: we add because the scale is negative
 		this.mainContainer.x = screenWidth / 2 - centerX * scale;
 		this.mainContainer.y = screenHeight / 2 + centerY * scale;
-
-		if (DEBUG) {
-			console.log("[MinimapRenderer] fitToView:", {
-				screenWidth,
-				screenHeight,
-				docWidth,
-				docHeight,
-				scale,
-				containerX: this.mainContainer.x,
-				containerY: this.mainContainer.y,
-				centerX,
-				centerY,
-			});
-		}
 	}
 
 	/**
@@ -297,13 +252,6 @@ export class MinimapRenderer {
 			);
 		}
 
-		if (DEBUG) {
-			console.log(
-				"[MinimapRenderer] Top cells to render:",
-				topCells.map((c) => c.name),
-			);
-		}
-
 		// Batch all polygons by layer for efficient rendering
 		const layerGraphics = new Map<string, Graphics>();
 
@@ -323,12 +271,6 @@ export class MinimapRenderer {
 			totalTopCellInstances > 0 && totalTopCellPolygons < HIERARCHICAL_POLYGON_THRESHOLD;
 		startDepth = isHierarchical ? 3 : 0; // Start at depth 3 for hierarchical files
 
-		if (DEBUG && isHierarchical) {
-			console.log(
-				`[MinimapRenderer] Hierarchical file detected (${totalTopCellInstances} instances, ${totalTopCellPolygons} polygons in top cells), starting at depth ${startDepth}`,
-			);
-		}
-
 		for (const cell of topCells) {
 			await this.renderCellRecursive(
 				cell,
@@ -343,10 +285,6 @@ export class MinimapRenderer {
 				layerGraphics,
 				startDepth,
 			);
-		}
-
-		if (DEBUG) {
-			console.log("[MinimapRenderer] Layer graphics created:", layerGraphics.size);
 		}
 
 		// Add all layer graphics to container
@@ -400,17 +338,6 @@ export class MinimapRenderer {
 
 			// Get layer color
 			const color = layerColors.get(layerKey) ?? 0x888888;
-
-			// Debug first polygon
-			if (DEBUG && this.stats.polygonCount === 0) {
-				console.log("[MinimapRenderer] First polygon:", {
-					layerKey,
-					color: color.toString(16),
-					numPoints: polygon.points.length,
-					firstPoint: polygon.points[0],
-					bbox: polygon.boundingBox,
-				});
-			}
 
 			// Transform and draw polygon points (polygon.points is Point[] with .x, .y)
 			const firstPoint = polygon.points[0];
@@ -512,13 +439,6 @@ export class MinimapRenderer {
 	 * Update viewport outline to show current main canvas viewport
 	 */
 	updateViewportOutline(viewportBounds: BoundingBox): void {
-		console.log("[MinimapRenderer] updateViewportOutline called", {
-			hasOutline: !!this.viewportOutline,
-			hasContainer: !!this.mainContainer,
-			hasApp: !!this.app,
-			viewportBounds,
-		});
-
 		if (!this.viewportOutline || !this.mainContainer || !this.app) {
 			return;
 		}
@@ -544,16 +464,6 @@ export class MinimapRenderer {
 		const top = Math.min(y1, y2);
 		const width = Math.abs(x2 - x1);
 		const height = Math.abs(y2 - y1);
-
-		console.log("[MinimapRenderer] Drawing viewport rect:", {
-			left,
-			top,
-			width,
-			height,
-			scale,
-			offsetX,
-			offsetY,
-		});
 
 		// Draw viewport rectangle - use a thicker line to ensure visibility
 		this.viewportOutline.rect(left, top, width, height);
@@ -682,10 +592,6 @@ export class MinimapRenderer {
 
 			labelIndex++;
 		}
-
-		if (DEBUG) {
-			console.log(`[MinimapRenderer] Updated ${viewports.length} participant viewports`);
-		}
 	}
 
 	/**
@@ -734,19 +640,6 @@ export class MinimapRenderer {
 
 		// Update stage hit area after resize
 		this.app.stage.hitArea = this.app.screen;
-
-		if (DEBUG) {
-			console.log(
-				"[MinimapRenderer] Resized to:",
-				width,
-				"x",
-				height,
-				"screen:",
-				this.app.screen.width,
-				"x",
-				this.app.screen.height,
-			);
-		}
 
 		this.fitToView();
 

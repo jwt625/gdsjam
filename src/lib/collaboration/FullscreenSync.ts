@@ -7,7 +7,6 @@
  * - P2: Heartbeat (awareness) - default sync for late joiners
  */
 
-import { DEBUG } from "../config";
 import type { AwarenessState, YjsSessionData } from "./types";
 import type { YjsProvider } from "./YjsProvider";
 
@@ -27,7 +26,6 @@ export class FullscreenSync {
 		this.callbacks = callbacks;
 		this.setupAwarenessListener();
 		this.setupSessionMapListener();
-		if (DEBUG) console.log("[FullscreenSync] Initialized for user:", userId);
 	}
 
 	setCallbacks(callbacks: FullscreenSyncCallbacks): void {
@@ -41,10 +39,6 @@ export class FullscreenSync {
 	notifyCurrentFullscreenState(): void {
 		const enabled = this.isFullscreenEnabled();
 		const hostId = this.getBroadcastHostId();
-
-		if (DEBUG) {
-			console.log("[FullscreenSync] Current fullscreen state:", { enabled, hostId });
-		}
 
 		if (enabled && this.callbacks.onFullscreenStateChanged) {
 			this.callbacks.onFullscreenStateChanged(enabled, hostId);
@@ -67,8 +61,6 @@ export class FullscreenSync {
 
 		// Broadcast in awareness for P2 heartbeat sync
 		this.broadcastFullscreenState(true);
-
-		if (DEBUG) console.log("[FullscreenSync] Fullscreen enabled");
 	}
 
 	/**
@@ -83,8 +75,6 @@ export class FullscreenSync {
 
 		// Clear from awareness
 		this.clearFromAwareness();
-
-		if (DEBUG) console.log("[FullscreenSync] Fullscreen disabled");
 	}
 
 	/**
@@ -112,7 +102,6 @@ export class FullscreenSync {
 			const awareness = this.yjsProvider.getAwareness();
 			const current = awareness.getLocalState() || {};
 			awareness.setLocalState({ ...current, fullscreenEnabled: enabled });
-			if (DEBUG) console.log("[FullscreenSync] Broadcast fullscreen state:", enabled);
 		} catch (e) {
 			console.error("[FullscreenSync] Broadcast failed:", e);
 		}
@@ -169,7 +158,6 @@ export class FullscreenSync {
 	 */
 	setFullscreenOverride(override: boolean | undefined): void {
 		this.fullscreenOverride = override;
-		if (DEBUG) console.log("[FullscreenSync] Fullscreen override set:", override);
 	}
 
 	/**
@@ -184,7 +172,6 @@ export class FullscreenSync {
 	 */
 	resetFullscreenOverride(): void {
 		this.fullscreenOverride = undefined;
-		if (DEBUG) console.log("[FullscreenSync] Fullscreen override reset to undefined");
 	}
 
 	/**
@@ -204,12 +191,6 @@ export class FullscreenSync {
 
 			// P2: If no P1 override, sync with heartbeat
 			if (this.fullscreenOverride === undefined && hostFullscreenEnabled !== undefined) {
-				if (DEBUG) {
-					console.log("[FullscreenSync] P2 heartbeat sync:", {
-						hostFullscreenEnabled,
-						hostId,
-					});
-				}
 				// Notify callback of fullscreen state from heartbeat
 				if (this.callbacks.onFullscreenStateChanged) {
 					this.callbacks.onFullscreenStateChanged(hostFullscreenEnabled, hostId);
@@ -236,10 +217,6 @@ export class FullscreenSync {
 				if (this.callbacks.onFullscreenStateChanged) {
 					this.callbacks.onFullscreenStateChanged(enabled, hostId);
 				}
-
-				if (DEBUG) {
-					console.log("[FullscreenSync] P0 Fullscreen state changed:", { enabled, hostId });
-				}
 			}
 		});
 	}
@@ -247,7 +224,5 @@ export class FullscreenSync {
 	/**
 	 * Clean up resources
 	 */
-	destroy(): void {
-		if (DEBUG) console.log("[FullscreenSync] Destroyed");
-	}
+	destroy(): void {}
 }

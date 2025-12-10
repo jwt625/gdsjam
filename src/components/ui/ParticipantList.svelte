@@ -1,5 +1,4 @@
 <script lang="ts">
-import { DEBUG } from "../../lib/config";
 import { collaborationStore } from "../../stores/collaborationStore";
 import { getPanelZIndex, panelZIndexStore } from "../../stores/panelZIndexStore";
 
@@ -135,9 +134,6 @@ function handleMakeHost(userId: string, displayName: string) {
 function confirmTransfer() {
 	if (transferTargetId) {
 		collaborationStore.transferHost(transferTargetId);
-		if (DEBUG) {
-			console.log("[ParticipantList] Transferred host to:", transferTargetId);
-		}
 	}
 	cancelTransfer();
 }

@@ -11,8 +11,6 @@
  * - No animations (instant display)
  */
 
-import { DEBUG } from "../../lib/config";
-
 interface Props {
 	visible: boolean;
 	onSubmit: (content: string) => void;
@@ -36,22 +34,12 @@ const isOverLimit = $derived(charCount > MAX_CHARS);
  */
 function handleSubmit() {
 	if (content.trim().length === 0) {
-		if (DEBUG) {
-			console.log("[CommentInputModal] Empty comment, canceling");
-		}
 		handleCancel();
 		return;
 	}
 
 	if (isOverLimit) {
-		if (DEBUG) {
-			console.log("[CommentInputModal] Comment over character limit");
-		}
 		return;
-	}
-
-	if (DEBUG) {
-		console.log(`[CommentInputModal] Submitting comment: ${content.length} chars`);
 	}
 
 	onSubmit(content.trim());
@@ -63,9 +51,6 @@ function handleSubmit() {
  * Handle cancel
  */
 function handleCancel() {
-	if (DEBUG) {
-		console.log("[CommentInputModal] Canceling comment");
-	}
 	content = "";
 	visible = false;
 	onCancel();

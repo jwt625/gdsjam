@@ -14,8 +14,6 @@
  * - Single documentation source for all shortcuts
  */
 
-import { DEBUG } from "../config";
-
 /**
  * Modifier keys that can be combined with shortcuts
  */
@@ -80,14 +78,11 @@ class KeyboardShortcutManagerClass {
 	 */
 	init(): void {
 		if (this.isInitialized) {
-			if (DEBUG) console.log("[KeyboardShortcutManager] Already initialized");
 			return;
 		}
 
 		window.addEventListener("keydown", this.keyDownHandler);
 		this.isInitialized = true;
-
-		if (DEBUG) console.log("[KeyboardShortcutManager] Initialized");
 	}
 
 	/**
@@ -102,10 +97,6 @@ class KeyboardShortcutManagerClass {
 
 		const registered: RegisteredShortcut = { ...shortcut, owner };
 		this.shortcuts.set(shortcut.id, registered);
-
-		if (DEBUG) {
-			console.log(`[KeyboardShortcutManager] Registered: ${shortcut.id} (${shortcut.description})`);
-		}
 	}
 
 	/**
@@ -121,9 +112,7 @@ class KeyboardShortcutManagerClass {
 	 * Unregister a specific shortcut by ID
 	 */
 	unregister(id: string): void {
-		if (this.shortcuts.delete(id)) {
-			if (DEBUG) console.log(`[KeyboardShortcutManager] Unregistered: ${id}`);
-		}
+		this.shortcuts.delete(id);
 	}
 
 	/**
@@ -139,11 +128,6 @@ class KeyboardShortcutManagerClass {
 		}
 		for (const id of toRemove) {
 			this.shortcuts.delete(id);
-		}
-		if (DEBUG && toRemove.length > 0) {
-			console.log(
-				`[KeyboardShortcutManager] Unregistered ${toRemove.length} shortcuts for owner: ${owner}`,
-			);
 		}
 	}
 
@@ -216,7 +200,6 @@ class KeyboardShortcutManagerClass {
 		window.removeEventListener("keydown", this.keyDownHandler);
 		this.shortcuts.clear();
 		this.isInitialized = false;
-		if (DEBUG) console.log("[KeyboardShortcutManager] Destroyed");
 	}
 }
 

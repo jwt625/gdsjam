@@ -1,7 +1,6 @@
 <script lang="ts">
 import QRCode from "qrcode";
 import type { YjsParticipant } from "../../lib/collaboration/types";
-import { DEBUG } from "../../lib/config";
 import { loadGDSIIFromBuffer } from "../../lib/utils/gdsLoader";
 import { collaborationStore } from "../../stores/collaborationStore";
 import { gdsStore } from "../../stores/gdsStore";
@@ -21,9 +20,6 @@ let selectedNewHost = $state<string | null>(null);
 async function handleCreateSession() {
 	try {
 		await collaborationStore.createSession();
-		if (DEBUG) {
-			console.log("[HeaderBar] Session created. Upload a file to share it with peers.");
-		}
 	} catch (error) {
 		console.error("[HeaderBar] Failed to create session:", error);
 		gdsStore.setError(
@@ -56,9 +52,6 @@ function confirmLeave() {
 	// Transfer host if a new host is selected
 	if (selectedNewHost) {
 		collaborationStore.transferHost(selectedNewHost);
-		if (DEBUG) {
-			console.log("[HeaderBar] Transferred host to:", selectedNewHost);
-		}
 	}
 	// Leave the session
 	collaborationStore.leaveSession();
@@ -87,9 +80,6 @@ async function copySessionLink() {
 
 	try {
 		await navigator.clipboard.writeText(link);
-		if (DEBUG) {
-			console.log("[HeaderBar] Copied session link to clipboard:", link);
-		}
 	} catch (error) {
 		console.error("[HeaderBar] Failed to copy session link:", error);
 		gdsStore.setError("Failed to copy session link to clipboard");
@@ -149,33 +139,18 @@ async function handleFileInput(event: Event) {
 	const file = target.files?.[0];
 	if (!file) return;
 
-	const fileSizeMB = (file.size / 1024 / 1024).toFixed(1);
-	if (DEBUG) {
-		console.log(`[HeaderBar] Loading ${file.name} (${fileSizeMB} MB)`);
-	}
-
 	try {
 		gdsStore.setLoading(true, "Reading file...", 0);
 
 		const arrayBuffer = await file.arrayBuffer();
-		if (DEBUG) {
-			console.log(`[HeaderBar] File read complete: ${arrayBuffer.byteLength} bytes`);
-		}
 
 		// Load file locally first
 		await loadGDSIIFromBuffer(arrayBuffer, file.name);
 
 		// If in a session and is host, upload file to session
 		if ($collaborationStore.isInSession && $collaborationStore.isHost) {
-			if (DEBUG) {
-				console.log("[HeaderBar] Uploading file to collaboration session...");
-			}
-
 			try {
 				await collaborationStore.uploadFile(arrayBuffer, file.name);
-				if (DEBUG) {
-					console.log("[HeaderBar] File uploaded to session successfully");
-				}
 			} catch (error) {
 				console.error("[HeaderBar] Failed to upload file to session:", error);
 				gdsStore.setError(
@@ -185,15 +160,9 @@ async function handleFileInput(event: Event) {
 		} else if (!$collaborationStore.isInSession) {
 			// Not in a session - store locally only (NO server upload)
 			// File will be uploaded when session is created
-			if (DEBUG) {
-				console.log("[HeaderBar] Storing file locally for future session...");
-			}
 
 			try {
 				collaborationStore.storePendingFile(arrayBuffer, file.name);
-				if (DEBUG) {
-					console.log("[HeaderBar] File stored locally for future session");
-				}
 			} catch (error) {
 				console.error("[HeaderBar] Failed to store pending file:", error);
 				// Don't show error - file is loaded locally, just won't be shareable

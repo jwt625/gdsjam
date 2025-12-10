@@ -7,7 +7,6 @@ import type {
 	CommentPermissions,
 	ParticipantViewport,
 } from "../../lib/collaboration/types";
-import { DEBUG } from "../../lib/config";
 import { KeyboardShortcutManager } from "../../lib/keyboard/KeyboardShortcutManager";
 import { PixiRenderer } from "../../lib/renderer/PixiRenderer";
 import { generateUUID } from "../../lib/utils/uuid";
@@ -20,6 +19,8 @@ import type { BoundingBox, GDSDocument } from "../../types/gds";
 import CommentBubble from "../comments/CommentBubble.svelte";
 // biome-ignore lint/correctness/noUnusedImports: Used in Svelte template
 import CommentInputModal from "../comments/CommentInputModal.svelte";
+// biome-ignore lint/correctness/noUnusedImports: Used in Svelte template
+import CommentPanel from "../comments/CommentPanel.svelte";
 // biome-ignore lint/correctness/noUnusedImports: Used in Svelte template
 import LayerPanel from "../ui/LayerPanel.svelte";
 // biome-ignore lint/correctness/noUnusedImports: Used in Svelte template
@@ -70,6 +71,7 @@ let lastCKeyPressTime: number | null = null;
 let commentModeActive = $state(false);
 let showCommentModal = $state(false);
 let pendingCommentPosition: { worldX: number; worldY: number } | null = $state(null);
+let commentPanelVisible = $state(false);
 
 // Comment display state
 const comments = $derived($commentStore.comments);
@@ -114,7 +116,6 @@ function registerKeyboardShortcuts(): void {
 			key: "KeyP",
 			callback: () => {
 				panelsVisible = !panelsVisible;
-				if (DEBUG) console.log(`[ViewerCanvas] Panels ${panelsVisible ? "shown" : "hidden"}`);
 			},
 			description: "Toggle performance panels",
 		},
@@ -123,8 +124,6 @@ function registerKeyboardShortcuts(): void {
 			key: "KeyL",
 			callback: () => {
 				layerPanelVisible = !layerPanelVisible;
-				if (DEBUG)
-					console.log(`[ViewerCanvas] Layer panel ${layerPanelVisible ? "shown" : "hidden"}`);
 			},
 			description: "Toggle layer panel",
 		},
@@ -133,7 +132,6 @@ function registerKeyboardShortcuts(): void {
 			key: "KeyM",
 			callback: () => {
 				minimapVisible = !minimapVisible;
-				if (DEBUG) console.log(`[ViewerCanvas] Minimap ${minimapVisible ? "shown" : "hidden"}`);
 			},
 			description: "Toggle minimap",
 		},
@@ -178,22 +176,12 @@ $effect(() => {
 					};
 
 					commentStore.initializeForSession(fileMetadata.fileHash, permissions);
-					if (DEBUG) {
-						console.log(
-							`[ViewerCanvas] Comment store initialized for session: ${fileMetadata.fileHash}`,
-						);
-					}
 				}
 			}
 		} else {
 			// Solo mode: use fileName + fileSize
 			const fileSize = $gdsStore.statistics?.fileSizeBytes || 0;
 			commentStore.initializeForFile(fileName, fileSize);
-			if (DEBUG) {
-				console.log(
-					`[ViewerCanvas] Comment store initialized for solo mode: ${fileName} (${fileSize} bytes)`,
-				);
-			}
 		}
 	}
 });
@@ -231,10 +219,6 @@ function handleFKeyDown(event: KeyboardEvent): void {
 		fKeyTriggeredFullscreen = true;
 		if (onToggleFullscreen) {
 			onToggleFullscreen(!fullscreenMode);
-			if (DEBUG)
-				console.log(
-					`[ViewerCanvas] F key hold detected - ${fullscreenMode ? "exiting" : "entering"} fullscreen`,
-				);
 		}
 	}, FULLSCREEN_HOLD_DURATION_MS);
 }
@@ -257,7 +241,6 @@ function handleFKeyUp(event: KeyboardEvent): void {
 		const holdDuration = Date.now() - fKeyDownTime;
 		if (holdDuration < FULLSCREEN_HOLD_DURATION_MS) {
 			renderer?.fitToView();
-			if (DEBUG) console.log("[ViewerCanvas] F key short press - fit to view");
 		}
 	}
 
@@ -297,13 +280,7 @@ function handleCKeyDown(event: KeyboardEvent): void {
 	cKeyHoldTimer = setTimeout(() => {
 		// Hold threshold reached - toggle all comments visibility (persistent)
 		cKeyTriggeredHold = true;
-		const currentVisibility = $commentStore.allCommentsVisible;
 		commentStore.toggleAllCommentsVisibility();
-		if (DEBUG) {
-			console.log(
-				`[ViewerCanvas] C key hold detected - ${currentVisibility ? "hiding" : "showing"} all comments`,
-			);
-		}
 	}, COMMENT_HOLD_DURATION_MS);
 }
 
@@ -322,7 +299,6 @@ function handleCKeyUp(event: KeyboardEvent): void {
 
 	// If we triggered hold, just reset the flag (visibility stays toggled)
 	if (cKeyTriggeredHold) {
-		if (DEBUG) console.log("[ViewerCanvas] C key released - visibility stays toggled");
 		cKeyDownTime = null;
 		cKeyTriggeredHold = false;
 		return;
@@ -334,8 +310,8 @@ function handleCKeyUp(event: KeyboardEvent): void {
 		lastCKeyPressTime !== null && now - lastCKeyPressTime < DOUBLE_CLICK_INTERVAL_MS;
 
 	if (isDoubleClick) {
-		// Double-click: toggle comment panel (TODO: implement in Phase 4)
-		if (DEBUG) console.log("[ViewerCanvas] C key double-click - toggle comment panel (TODO)");
+		// Double-click: toggle comment panel
+		commentPanelVisible = !commentPanelVisible;
 		lastCKeyPressTime = null;
 	} else {
 		// Single click: toggle comment mode
@@ -343,10 +319,6 @@ function handleCKeyUp(event: KeyboardEvent): void {
 			const holdDuration = now - cKeyDownTime;
 			if (holdDuration < COMMENT_HOLD_DURATION_MS) {
 				commentModeActive = !commentModeActive;
-				if (DEBUG)
-					console.log(
-						`[ViewerCanvas] C key short press - comment mode ${commentModeActive ? "ON" : "OFF"}`,
-					);
 			}
 		}
 		lastCKeyPressTime = now;
@@ -375,10 +347,6 @@ function handleCanvasClick(event: MouseEvent): void {
 	// Y-axis is flipped (mainContainer.scale.y = -1), so negate Y coordinate
 	const worldY = -((screenY - viewportState.y) / viewportState.scale);
 
-	if (DEBUG) {
-		console.log(`[ViewerCanvas] Comment placement at world: (${worldX}, ${worldY})`);
-	}
-
 	// Store pending position and show modal
 	pendingCommentPosition = { worldX, worldY };
 	showCommentModal = true;
@@ -393,8 +361,7 @@ function handleCommentSubmit(content: string): void {
 	// Check 100 comment limit
 	const currentCommentCount = comments.size;
 	if (currentCommentCount >= 100) {
-		if (DEBUG) console.log("[ViewerCanvas] Comment limit (100) reached");
-		// TODO: Show toast notification
+		commentStore.showToast("Comment limit reached (100 comments maximum)");
 		return;
 	}
 
@@ -418,8 +385,10 @@ function handleCommentSubmit(content: string): void {
 
 		// Check rate limit
 		if (!commentStore.checkRateLimit(userId, isHost)) {
-			if (DEBUG) console.log("[ViewerCanvas] Rate limit exceeded");
-			// TODO: Show toast notification
+			const rateLimit = isHost ? "10 seconds" : "1 minute";
+			commentStore.showToast(
+				`Please wait before posting another comment (${rateLimit} rate limit)`,
+			);
 			return;
 		}
 	} else {
@@ -454,14 +423,7 @@ function handleCommentSubmit(content: string): void {
 		const commentSync = sessionManager?.getCommentSync();
 		if (commentSync) {
 			commentSync.addComment(comment);
-			if (DEBUG) {
-				console.log("[ViewerCanvas] Comment synced to Y.js:", comment.id);
-			}
 		}
-	}
-
-	if (DEBUG) {
-		console.log("[ViewerCanvas] Comment created:", comment.id);
 	}
 
 	// Reset state
@@ -516,13 +478,33 @@ function handleMobilePlaceComment(): void {
 	const worldX = (centerScreenX - viewportState.x) / viewportState.scale;
 	const worldY = -((centerScreenY - viewportState.y) / viewportState.scale);
 
-	if (DEBUG) {
-		console.log(`[ViewerCanvas] Mobile comment placement at center: (${worldX}, ${worldY})`);
-	}
-
 	// Store pending position and show modal
 	pendingCommentPosition = { worldX, worldY };
 	showCommentModal = true;
+}
+
+/**
+ * Handle viewport recentering from comment panel
+ */
+function handleRecenterViewport(worldX: number, worldY: number): void {
+	if (!renderer || !canvas) return;
+
+	// Get canvas dimensions
+	const rect = canvas.getBoundingClientRect();
+	const centerScreenX = rect.width / 2;
+	const centerScreenY = rect.height / 2;
+
+	// Calculate new viewport position to center the comment
+	const viewportState = renderer.getViewportState();
+	const newX = centerScreenX - worldX * viewportState.scale;
+	const newY = centerScreenY + worldY * viewportState.scale; // Y-axis is flipped
+
+	// Set viewport position
+	renderer.setViewportState({
+		...viewportState,
+		x: newX,
+		y: newY,
+	});
 }
 
 /**
@@ -541,14 +523,11 @@ function handleEscKey(event: KeyboardEvent): void {
 	// Cancel comment mode if active
 	if (commentModeActive) {
 		commentModeActive = false;
-		if (DEBUG) console.log("[ViewerCanvas] ESC - comment mode cancelled");
 		event.preventDefault();
 	}
 }
 
 onMount(() => {
-	if (DEBUG) console.log("[ViewerCanvas] Initializing...");
-
 	// Register keyboard shortcuts via centralized manager
 	registerKeyboardShortcuts();
 
@@ -613,9 +592,6 @@ onMount(() => {
 				});
 				// After render completes, fitToView has run - get correct viewport bounds
 				viewportBounds = renderer.getPublicViewportBounds();
-				if (DEBUG) console.log("[ViewerCanvas] Initial viewportBounds set:", viewportBounds);
-			} else {
-				if (DEBUG) console.log("[ViewerCanvas] No document to render");
 			}
 		})();
 	}
@@ -667,10 +643,6 @@ function setupViewportSync() {
 			// Read current state from store (not captured $derived values)
 			const state = get(collaborationStore);
 			if (!renderer || !state.isFollowing) return;
-
-			if (DEBUG) {
-				console.log("[ViewerCanvas] Applying host viewport:", viewport);
-			}
 
 			// Apply the host's viewport state
 			// We need to convert from host's screen coordinates to our screen
@@ -729,7 +701,6 @@ function setupViewportSync() {
 	// Set up layer sync callbacks
 	sessionManager.setLayerSyncCallbacks({
 		onHostLayerVisibilityChanged: (visibility: { [key: string]: boolean }) => {
-			if (DEBUG) console.log("[ViewerCanvas] Applying host layer visibility");
 			// Apply to gdsStore (source of truth)
 			for (const [key, visible] of Object.entries(visibility)) {
 				const doc = $gdsStore.document;
@@ -764,22 +735,15 @@ function setupViewportSync() {
 	// Set up callbacks for comment sync
 	sessionManager.setCommentSyncCallbacks({
 		onCommentsChanged: (comments) => {
-			if (DEBUG) console.log("[ViewerCanvas] Comments changed from Y.js:", comments.length);
 			commentStore.syncFromYjs(comments);
 		},
 		onPermissionsChanged: (permissions) => {
-			if (DEBUG) console.log("[ViewerCanvas] Comment permissions changed from Y.js:", permissions);
 			commentStore.syncPermissionsFromYjs(permissions);
 		},
 	});
-
-	if (DEBUG) {
-		console.log("[ViewerCanvas] Viewport, layer, fullscreen, and comment sync set up");
-	}
 }
 
 onDestroy(() => {
-	if (DEBUG) console.log("[ViewerCanvas] Destroying renderer");
 	renderer?.destroy();
 });
 
@@ -788,9 +752,6 @@ onDestroy(() => {
 $effect(() => {
 	const gdsDocument = $gdsStore.document;
 	if (renderer?.isReady() && gdsDocument && gdsDocument !== lastRenderedDocument) {
-		if (DEBUG) {
-			console.log("[ViewerCanvas] Rendering document:", gdsDocument.name);
-		}
 		lastRenderedDocument = gdsDocument;
 		// Reset layer store initialization flag when new document is loaded
 		layerStoreInitialized = false;
@@ -814,8 +775,6 @@ $effect(() => {
 	if (gdsDocument && !layerStoreInitialized) {
 		layerStore.setLayers(gdsDocument.layers);
 		layerStoreInitialized = true;
-		if (DEBUG)
-			console.log("[ViewerCanvas] Initialized layer store with", gdsDocument.layers.size, "layers");
 	}
 });
 
@@ -826,10 +785,6 @@ $effect(() => {
 	// Lock viewport when following (viewer only, not host)
 	const shouldLock = isFollowing && !isHost;
 	renderer.setViewportLocked(shouldLock);
-
-	if (DEBUG) {
-		console.log("[ViewerCanvas] Viewport locked:", shouldLock);
-	}
 });
 
 // Re-setup viewport sync when session state changes
@@ -879,14 +834,14 @@ function toggleMinimap() {
 		onToggleFullscreen={onToggleFullscreen}
 		onToggleCommentMode={() => { commentModeActive = !commentModeActive; }}
 		onToggleCommentsVisibility={() => commentStore.toggleAllCommentsVisibility()}
-		onToggleCommentPanel={() => { /* TODO: Implement in Phase 4 */ }}
+		onToggleCommentPanel={() => { commentPanelVisible = !commentPanelVisible; }}
 		performanceVisible={panelsVisible}
 		minimapVisible={minimapVisible}
 		layersVisible={layerPanelVisible}
 		{fullscreenMode}
 		{commentModeActive}
 		commentsVisible={allCommentsVisible}
-		commentPanelVisible={false}
+		{commentPanelVisible}
 	/>
 
 	<!-- Comment input modal -->
@@ -894,6 +849,12 @@ function toggleMinimap() {
 		visible={showCommentModal}
 		onSubmit={handleCommentSubmit}
 		onCancel={handleCommentCancel}
+	/>
+
+	<!-- Comment panel -->
+	<CommentPanel
+		visible={commentPanelVisible}
+		onRecenterViewport={handleRecenterViewport}
 	/>
 
 	<!-- Comment bubbles -->
@@ -942,6 +903,24 @@ function toggleMinimap() {
 				type="button"
 				class="toast-dismiss"
 				onclick={() => collaborationStore.hideFollowToast()}
+				aria-label="Dismiss"
+			>
+				×
+			</button>
+		</div>
+	{/if}
+
+	<!-- Comment toast -->
+	{#if $commentStore.toastMessage}
+		<div class="comment-toast" role="status" aria-live="polite">
+			<svg class="toast-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+			</svg>
+			<span>{$commentStore.toastMessage}</span>
+			<button
+				type="button"
+				class="toast-dismiss"
+				onclick={() => commentStore.hideToast()}
 				aria-label="Dismiss"
 			>
 				×
@@ -1069,6 +1048,28 @@ function toggleMinimap() {
 
 	.toast-dismiss:hover {
 		opacity: 1;
+	}
+
+	/* Comment toast */
+	.comment-toast {
+		position: absolute;
+		top: 60px;
+		left: 50%;
+		transform: translateX(-50%);
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 8px 12px;
+		background: rgba(255, 152, 0, 0.9);
+		color: white;
+		border-radius: 6px;
+		font-family: system-ui, -apple-system, sans-serif;
+		font-size: 13px;
+		font-weight: 500;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+		z-index: 1000;
+		/* NO ANIMATIONS */
+		transition: none;
 	}
 </style>
 

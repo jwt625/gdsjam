@@ -16,7 +16,6 @@
 
 import type { Graphics } from "pixi.js";
 import type { BoundingBox } from "../../../types/gds";
-import { DEBUG } from "../../config";
 import type { RTreeItem, SpatialIndex } from "../../spatial/RTree";
 
 export interface ViewportUpdateResult {
@@ -74,9 +73,6 @@ export class ViewportManager {
 		allGraphicsItems: RTreeItem[],
 	): ViewportUpdateResult {
 		if (allGraphicsItems.length === 0) {
-			if (DEBUG) {
-				console.log("[ViewportManager] updateVisibility: No graphics items");
-			}
 			return {
 				visiblePolygonCount: 0,
 				visibleByLayerCount: 0,
@@ -124,18 +120,6 @@ export class ViewportManager {
 			if (isVisible) {
 				visiblePolygonCount += item.polygonCount || 0;
 			}
-		}
-
-		if (DEBUG) {
-			console.log(
-				`[ViewportManager] updateVisibility: ${allGraphicsItems.length} total items, ${visibleIds.size} in viewport, ${visibleByLayerCount} visible by layer, ${hiddenByLayerCount} hidden by layer`,
-			);
-			console.log(
-				`[ViewportManager] Layer breakdown:`,
-				Array.from(layerCounts.entries())
-					.map(([key, counts]) => `${key}: ${counts.visible}/${counts.total}`)
-					.join(", "),
-			);
 		}
 
 		return {

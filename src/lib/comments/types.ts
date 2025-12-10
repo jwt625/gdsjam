@@ -50,4 +50,6 @@ export interface CommentStoreState {
 	permissions: CommentPermissions;
 	/** File identifier for localStorage (fileName_fileSize or fileHash) */
 	fileIdentifier: string | null;
+	/** Toast notification message (null = no toast) */
+	toastMessage: string | null;
 }

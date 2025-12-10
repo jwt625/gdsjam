@@ -7,7 +7,6 @@
  * - P2: Heartbeat (awareness) - default sync for late joiners
  */
 
-import { DEBUG } from "../config";
 import type { AwarenessState, CollaborativeLayerVisibility, YjsSessionData } from "./types";
 import type { YjsProvider } from "./YjsProvider";
 
@@ -33,7 +32,6 @@ export class LayerSync {
 		this.callbacks = callbacks;
 		this.setupAwarenessListener();
 		this.setupSessionMapListener();
-		if (DEBUG) console.log("[LayerSync] Initialized for user:", userId);
 	}
 
 	setCallbacks(callbacks: LayerSyncCallbacks): void {
@@ -50,7 +48,6 @@ export class LayerSync {
 			sessionMap.set("layerBroadcastEnabled", true);
 			sessionMap.set("layerBroadcastHostId", this.userId);
 		});
-		if (DEBUG) console.log("[LayerSync] Broadcast enabled");
 	}
 
 	disableBroadcast(): void {
@@ -60,7 +57,6 @@ export class LayerSync {
 			sessionMap.delete("layerBroadcastHostId");
 		});
 		this.clearFromAwareness();
-		if (DEBUG) console.log("[LayerSync] Broadcast disabled");
 	}
 
 	isBroadcastEnabled(): boolean {
@@ -101,8 +97,6 @@ export class LayerSync {
 			const current = awareness.getLocalState() || {};
 			awareness.setLocalState({ ...current, layerVisibility: state, layerBroadcastEnabled: true });
 			this.lastBroadcastTime = Date.now();
-			if (DEBUG)
-				console.log("[LayerSync] Broadcast:", Object.keys(state.visibility).length, "layers");
 		} catch (e) {
 			console.error("[LayerSync] Broadcast failed:", e);
 		}
@@ -117,7 +111,6 @@ export class LayerSync {
 
 	setFollowOverride(override: boolean | undefined): void {
 		this.followOverride = override;
-		if (DEBUG) console.log("[LayerSync] Follow override:", override);
 	}
 
 	private shouldFollow(): boolean {
@@ -176,13 +169,11 @@ export class LayerSync {
 				this.followOverride = undefined;
 				const enabled = this.isBroadcastEnabled();
 				this.callbacks.onBroadcastStateChanged?.(enabled, this.getBroadcastHostId());
-				if (DEBUG) console.log("[LayerSync] P0 state changed:", enabled);
 			}
 		});
 	}
 
 	destroy(): void {
 		if (this.throttleTimeout) clearTimeout(this.throttleTimeout);
-		if (DEBUG) console.log("[LayerSync] Destroyed");
 	}
 }

@@ -6,7 +6,6 @@ import HeaderBar from "./components/ui/HeaderBar.svelte";
 import LoadingOverlay from "./components/ui/LoadingOverlay.svelte";
 import ParticipantList from "./components/ui/ParticipantList.svelte";
 import ViewerCanvas from "./components/viewer/ViewerCanvas.svelte";
-import { DEBUG } from "./lib/config";
 import { KeyboardShortcutManager } from "./lib/keyboard/KeyboardShortcutManager";
 import { loadGDSIIFromBuffer } from "./lib/utils/gdsLoader";
 import { fetchGDSIIFromURL } from "./lib/utils/urlLoader";
@@ -27,9 +26,6 @@ let fullscreenMode = $state(false);
  */
 function handleToggleFullscreen(enabled: boolean): void {
 	fullscreenMode = enabled;
-	if (DEBUG) {
-		console.log(`[App] Fullscreen mode: ${enabled ? "enabled" : "disabled"}`);
-	}
 }
 
 /**
@@ -40,38 +36,20 @@ async function handleGlobalFileInput(event: Event) {
 	const file = target.files?.[0];
 	if (!file) return;
 
-	const fileSizeMB = (file.size / 1024 / 1024).toFixed(1);
-	if (DEBUG) {
-		console.log(`[App] Loading ${file.name} (${fileSizeMB} MB) via keyboard shortcut`);
-	}
-
 	try {
 		gdsStore.setLoading(true, "Reading file...", 0);
 
 		const arrayBuffer = await file.arrayBuffer();
-		if (DEBUG) {
-			console.log(`[App] File read complete: ${arrayBuffer.byteLength} bytes`);
-		}
 
 		await loadGDSIIFromBuffer(arrayBuffer, file.name);
 
 		// Clear all comments when a new file is loaded
 		commentStore.reset();
-		if (DEBUG) {
-			console.log("[App] Comments cleared for new file");
-		}
 
 		// If in a session and is host, upload file to session
 		if ($collaborationStore.isInSession && $collaborationStore.isHost) {
-			if (DEBUG) {
-				console.log("[App] Uploading file to collaboration session...");
-			}
-
 			try {
 				await collaborationStore.uploadFile(arrayBuffer, file.name);
-				if (DEBUG) {
-					console.log("[App] File uploaded to session successfully");
-				}
 			} catch (error) {
 				console.error("[App] Failed to upload file to session:", error);
 				gdsStore.setError(
@@ -81,21 +59,12 @@ async function handleGlobalFileInput(event: Event) {
 		} else if (!$collaborationStore.isInSession) {
 			// Not in a session - store locally only (NO server upload)
 			// File will be uploaded when session is created
-			if (DEBUG) {
-				console.log("[App] Storing file locally for future session...");
-			}
 
 			try {
 				collaborationStore.storePendingFile(arrayBuffer, file.name);
-				if (DEBUG) {
-					console.log("[App] File stored locally for future session");
-				}
 			} catch (error) {
 				console.error("[App] Failed to store pending file:", error);
 				// Don't show error - file is loaded locally, just won't be shareable
-				if (DEBUG) {
-					console.log("[App] File loaded locally but not stored for sharing");
-				}
 			}
 		}
 	} catch (error) {
@@ -121,9 +90,6 @@ function registerKeyboardShortcuts(): void {
 			context: () => {
 				// Block file upload for clients in a session (only host can upload)
 				if ($collaborationStore.isInSession && !$collaborationStore.isHost) {
-					if (DEBUG) {
-						console.log("[App] Blocking Ctrl+O for non-host client in session");
-					}
 					return false;
 				}
 				return true;
@@ -158,9 +124,6 @@ onMount(async () => {
 
 	// Handle room parameter (join collaboration session)
 	if (roomId) {
-		if (DEBUG) {
-			console.log("[App] Joining collaboration session:", roomId);
-		}
 		// Wait for Y.js sync before checking for file metadata
 		await collaborationStore.joinSession(roomId);
 
@@ -181,18 +144,10 @@ onMount(async () => {
 				if (isDownloading) return;
 				isDownloading = true;
 
-				if (DEBUG) {
-					console.log("[App] New file detected in session, downloading...", fileId);
-				}
-
 				try {
 					const { arrayBuffer, fileName } = await collaborationStore.downloadFile();
 					await loadGDSIIFromBuffer(arrayBuffer, fileName);
 					currentFileId = fileId;
-
-					if (DEBUG) {
-						console.log("[App] File loaded from session successfully");
-					}
 				} catch (error) {
 					console.error("[App] Failed to download file from session:", error);
 					gdsStore.setError(
@@ -218,20 +173,12 @@ onMount(async () => {
 
 			// Check if file is already available in Y.js
 			if (collaborationStore.isFileAvailable()) {
-				if (DEBUG) {
-					console.log("[App] File already available in session, downloading...");
-				}
-
 				// Download the initial file - observer will handle future uploads
 				observer();
 			} else {
 				// Check if we have stored session info in localStorage (for recovery after refresh)
 				const storedSession = collaborationStore.getStoredSessionInfo();
 				if (storedSession) {
-					if (DEBUG) {
-						console.log("[App] Found stored session info, attempting recovery...");
-					}
-
 					try {
 						const { arrayBuffer, fileName } = await collaborationStore.downloadFileById(
 							storedSession.fileId,
@@ -241,10 +188,6 @@ onMount(async () => {
 						await loadGDSIIFromBuffer(arrayBuffer, fileName);
 						// Set currentFileId so observer doesn't re-download
 						currentFileId = storedSession.fileId;
-
-						if (DEBUG) {
-							console.log("[App] File recovered from localStorage successfully");
-						}
 						// Don't return early - observer is already set up for future updates
 					} catch (error) {
 						console.error("[App] Failed to recover file from localStorage:", error);
@@ -259,10 +202,6 @@ onMount(async () => {
 				setTimeout(observer, 500);
 				setTimeout(observer, 1500);
 
-				if (DEBUG) {
-					console.log("[App] Waiting for file metadata to appear in session...");
-				}
-
 				// Check session status based on peer count instead of aggressive timeout
 				const checkSessionStatus = () => {
 					if (currentFileId || sessionMap.has("fileId")) {
@@ -272,16 +211,9 @@ onMount(async () => {
 					// Count peers (excluding self)
 					const peerCount = awareness.getStates().size - 1;
 
-					if (DEBUG) {
-						console.log("[App] Session status check - peer count:", peerCount);
-					}
-
 					if (peerCount === 0 && !hasShownSessionEndedNotice) {
 						// No peers connected - session may have ended
 						hasShownSessionEndedNotice = true;
-						if (DEBUG) {
-							console.log("[App] No peers in session - may have ended");
-						}
 						// Don't show error, just info - the FileUpload component shows waiting UI
 						// Only show notice after giving time for WebRTC to connect
 					}
@@ -296,9 +228,6 @@ onMount(async () => {
 				awareness.on("change", () => {
 					// No early return needed - awareness changes don't trigger downloads
 					const peerCount = awareness.getStates().size - 1;
-					if (DEBUG) {
-						console.log("[App] Awareness changed - peer count:", peerCount);
-					}
 
 					// If peers appeared after we showed "session ended", clear any notices
 					if (peerCount > 0) {
@@ -311,10 +240,6 @@ onMount(async () => {
 
 	// Handle URL parameter (load file from URL)
 	if (fileUrl) {
-		if (DEBUG) {
-			console.log("[App] Loading file from URL parameter:", fileUrl);
-		}
-
 		try {
 			// Fetch the file from URL
 			const { arrayBuffer, fileName } = await fetchGDSIIFromURL(fileUrl, (progress, message) => {
@@ -326,9 +251,6 @@ onMount(async () => {
 
 			// Clear all comments when a new file is loaded
 			commentStore.reset();
-			if (DEBUG) {
-				console.log("[App] Comments cleared for new file from URL");
-			}
 		} catch (error) {
 			console.error("[App] Failed to load file from URL:", error);
 			gdsStore.setError(

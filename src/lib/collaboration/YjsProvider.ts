@@ -32,10 +32,6 @@ export class YjsProvider {
 		if (DEBUG && typeof localStorage !== "undefined") {
 			localStorage.setItem("log", "y-webrtc");
 		}
-
-		if (DEBUG) {
-			console.log("[YjsProvider] Initialized with user ID:", userId);
-		}
 	}
 
 	/**
@@ -44,17 +40,11 @@ export class YjsProvider {
 	connect(roomName: string): void {
 		// If already connected to this room, do nothing
 		if (this.provider && this.roomName === roomName) {
-			if (DEBUG) {
-				console.log("[YjsProvider] Already connected to room:", this.roomName);
-			}
 			return;
 		}
 
 		// If connected to a different room, disconnect first
 		if (this.provider && this.roomName !== roomName) {
-			if (DEBUG) {
-				console.log("[YjsProvider] Disconnecting from old room:", this.roomName);
-			}
 			this.disconnect();
 		}
 
@@ -70,11 +60,6 @@ export class YjsProvider {
 		const signalingServerUrl = signalingToken
 			? `${signalingUrl}?token=${signalingToken}`
 			: signalingUrl;
-
-		if (DEBUG) {
-			console.log("[YjsProvider] Using signaling server:", signalingUrl);
-			console.log("[YjsProvider] Token present:", !!signalingToken);
-		}
 
 		// Load TURN server credentials from environment
 		const turnPassword = import.meta.env.VITE_TURN_PASSWORD;
@@ -98,12 +83,6 @@ export class YjsProvider {
 				username: "gdsjam",
 				credential: turnPassword,
 			});
-
-			if (DEBUG) {
-				console.log("[YjsProvider] TURN server configured");
-			}
-		} else if (DEBUG) {
-			console.log("[YjsProvider] TURN server not configured (credentials missing)");
 		}
 
 		this.provider = new WebrtcProvider(roomName, this.ydoc, {
@@ -123,143 +102,31 @@ export class YjsProvider {
 		});
 
 		// Listen to Y.js document updates
-		if (DEBUG) {
-			this.ydoc.on("update", (_update: Uint8Array, origin: any) => {
-				console.log("[YjsProvider] Y.js document updated, origin:", origin);
-				const sessionMap = this.ydoc.getMap("session");
-				console.log("  - Session map keys:", Array.from(sessionMap.keys()));
-			});
-		}
-
 		// Set up event listeners
-		this.provider.on("synced", (event: { synced: boolean }) => {
-			if (DEBUG) {
-				console.log("[YjsProvider] Synced:", event.synced);
-			}
+		this.provider.on("synced", () => {
+			// Synced
 		});
 
 		// Log awareness changes (other users' presence)
 		this.awareness.on("change", () => {
-			if (DEBUG) {
-				const states = Array.from(this.awareness.getStates().entries());
-				console.log("[YjsProvider] Awareness states:", states);
-				console.log("[YjsProvider] Number of aware clients:", states.length);
-			}
+			// Awareness changed
 		});
-
-		// Log WebRTC connection status and listen to internal events
-		if (DEBUG && this.provider.room) {
-			const room = this.provider.room as any;
-			console.log("[YjsProvider] WebRTC room created, waiting for peer connections...");
-
-			// Access the WebRTC peer connections map
-			if (room.webrtcConns) {
-				console.log("[YjsProvider] WebRTC connections map exists");
-
-				// Monitor when new peer connections are created
-				const originalSet = room.webrtcConns.set.bind(room.webrtcConns);
-				room.webrtcConns.set = (key: string, value: any) => {
-					console.log("[YjsProvider] New WebRTC peer connection created:", key);
-
-					// Monitor the peer connection state
-					if (value && value.peer) {
-						const pc = value.peer as RTCPeerConnection;
-						console.log("[YjsProvider] RTCPeerConnection initial state:", pc.connectionState);
-
-						pc.addEventListener("connectionstatechange", () => {
-							console.log(`[YjsProvider] Peer ${key} connection state:`, pc.connectionState);
-						});
-
-						pc.addEventListener("iceconnectionstatechange", () => {
-							console.log(`[YjsProvider] Peer ${key} ICE connection state:`, pc.iceConnectionState);
-						});
-
-						pc.addEventListener("icegatheringstatechange", () => {
-							console.log(`[YjsProvider] Peer ${key} ICE gathering state:`, pc.iceGatheringState);
-						});
-
-						pc.addEventListener("icecandidate", (event: RTCPeerConnectionIceEvent) => {
-							if (event.candidate) {
-								console.log(
-									`[YjsProvider] Peer ${key} ICE candidate:`,
-									event.candidate.type,
-									event.candidate.protocol,
-								);
-							} else {
-								console.log(`[YjsProvider] Peer ${key} ICE gathering complete`);
-							}
-						});
-					}
-
-					return originalSet(key, value);
-				};
-			}
-
-			// Listen to signaling messages
-			if (room.provider && room.provider.on) {
-				room.provider.on("message", (data: any) => {
-					console.log("[YjsProvider] Signaling message received:", data);
-				});
-			}
-		}
 
 		this.provider.on(
 			"peers",
 			(event: { added: string[]; removed: string[]; webrtcPeers: string[] }) => {
-				if (DEBUG) {
-					console.log("[YjsProvider] Peers changed:", event);
-					console.log("[YjsProvider] WebRTC peers:", event.webrtcPeers);
-					console.log(
-						"[YjsProvider] Connected peers before update:",
-						Array.from(this.connectedPeers),
-					);
-				}
-
 				// Update connected peers set
 				for (const peerId of event.added) {
 					this.connectedPeers.add(peerId);
-					if (DEBUG) {
-						console.log("[YjsProvider] Peer joined:", peerId);
-					}
 					this.notifyEvent({ type: "peer-joined", userId: peerId });
 				}
 
 				for (const peerId of event.removed) {
 					this.connectedPeers.delete(peerId);
-					if (DEBUG) {
-						console.log("[YjsProvider] Peer left:", peerId);
-					}
 					this.notifyEvent({ type: "peer-left", userId: peerId });
-				}
-
-				if (DEBUG) {
-					console.log(
-						"[YjsProvider] Connected peers after update:",
-						Array.from(this.connectedPeers),
-					);
 				}
 			},
 		);
-
-		if (DEBUG) {
-			console.log("[YjsProvider] Connected to room:", roomName);
-
-			// Log WebRTC connection status periodically
-			setTimeout(() => {
-				const peerCount = this.connectedPeers.size;
-				const awarenessCount = this.awareness.getStates().size;
-				console.log("[YjsProvider] Status check:");
-				console.log("  - Connected WebRTC peers:", peerCount);
-				console.log("  - Awareness states:", awarenessCount);
-				console.log("  - Peer IDs:", Array.from(this.connectedPeers));
-
-				// Check Y.js document state
-				const sessionMap = this.ydoc.getMap("session");
-				console.log("[YjsProvider] Y.js document state:");
-				console.log("  - Session map keys:", Array.from(sessionMap.keys()));
-				console.log("  - Session map data:", sessionMap.toJSON());
-			}, 3000);
-		}
 	}
 
 	/**
@@ -271,10 +138,6 @@ export class YjsProvider {
 			this.provider = null;
 			this.roomName = null;
 			this.connectedPeers.clear();
-
-			if (DEBUG) {
-				console.log("[YjsProvider] Disconnected from room");
-			}
 		}
 	}
 
@@ -356,9 +219,6 @@ export class YjsProvider {
 
 			// If already synced, resolve immediately
 			if ((this.provider as any).synced) {
-				if (DEBUG) {
-					console.log("[YjsProvider] Already synced, no need to wait");
-				}
 				resolve(true);
 				return;
 			}
@@ -369,9 +229,6 @@ export class YjsProvider {
 			const timeout = setTimeout(() => {
 				if (!resolved) {
 					resolved = true;
-					if (DEBUG) {
-						console.log("[YjsProvider] Sync timeout expired after", timeoutMs, "ms");
-					}
 					resolve(false);
 				}
 			}, timeoutMs);
@@ -382,9 +239,6 @@ export class YjsProvider {
 					resolved = true;
 					clearTimeout(timeout);
 					this.provider?.off("synced", onSynced);
-					if (DEBUG) {
-						console.log("[YjsProvider] Sync completed");
-					}
 					resolve(true);
 				}
 			};

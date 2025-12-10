@@ -1,6 +1,5 @@
 <script lang="ts">
 import { onDestroy, onMount } from "svelte";
-import { DEBUG } from "../../lib/config";
 import { collaborationStore } from "../../stores/collaborationStore";
 import { gdsStore } from "../../stores/gdsStore";
 import { layerStore } from "../../stores/layerStore";
@@ -192,9 +191,6 @@ function toggleLayer(key: string) {
 
 	// Get the updated visibility from gdsStore (source of truth)
 	const updatedVisibility = getVisibilityFromGdsStore();
-	if (DEBUG) {
-		console.log("[LayerPanel] Toggled layer", key, "visibility:", updatedVisibility);
-	}
 	onLayerVisibilityChange(updatedVisibility);
 }
 
@@ -221,7 +217,6 @@ function onLayerVisibilityChange(visibility: { [key: string]: boolean }) {
 	if (isInSession && isHost && isLayerBroadcasting) {
 		const sessionManager = collaborationStore.getSessionManager();
 		sessionManager?.broadcastLayerVisibility(visibility);
-		if (DEBUG) console.log("[LayerPanel] Broadcast layer visibility");
 	}
 }
 

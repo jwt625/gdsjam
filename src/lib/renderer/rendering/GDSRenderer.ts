@@ -17,7 +17,7 @@
 
 import { Container, Graphics } from "pixi.js";
 import type { BoundingBox, Cell, GDSDocument, Polygon } from "../../../types/gds";
-import { DEBUG, SPATIAL_TILE_SIZE } from "../../config";
+import { SPATIAL_TILE_SIZE } from "../../config";
 import type { RTreeItem, SpatialIndex } from "../../spatial/RTree";
 
 export type RenderProgressCallback = (progress: number, message: string) => void;
@@ -74,13 +74,6 @@ export class GDSRenderer {
 			(cell) => !referencedCells.has(cell.name),
 		);
 
-		if (DEBUG) {
-			console.log(
-				`[GDSRenderer] Found ${topCells.length} top-level cells:`,
-				topCells.map((c) => `${c.name} (${c.polygons.length}p, ${c.instances.length}i)`).join(", "),
-			);
-		}
-
 		// Calculate total polygon count for progress tracking
 		let totalPolygonCount = 0;
 		for (const cell of topCells) {
@@ -96,11 +89,6 @@ export class GDSRenderer {
 			if (polygonBudget <= 0) break;
 
 			const topCellName = cell.name;
-			if (DEBUG) {
-				console.log(
-					`[GDSRenderer] Rendering top cell: ${topCellName} (${cell.polygons.length} polygons)`,
-				);
-			}
 
 			const baseProgress = Math.floor((processedPolygons / totalPolygonCount) * 80);
 			const message = `Rendering ${topCellName} (${cell.polygons.length} polygons)...`;
@@ -144,13 +132,6 @@ export class GDSRenderer {
 				);
 				break;
 			}
-		}
-
-		if (DEBUG) {
-			console.log(
-				`[GDSRenderer] Render complete: ${totalPolygons.toLocaleString()} polygons in ${allGraphicsItems.length} tiles`,
-			);
-			console.log("[GDSRenderer] Cell render counts:", this.cellRenderCounts);
 		}
 
 		return {
@@ -322,12 +303,6 @@ export class GDSRenderer {
 
 		// Skip rendering instances for context info cells (they're just library references)
 		const isContextCell = cell.name.includes("CONTEXT_INFO");
-
-		if (DEBUG && isContextCell) {
-			console.log(
-				`[GDSRenderer] SKIPPING context cell: ${cell.name} (${cell.instances.length} instances)`,
-			);
-		}
 
 		if (maxDepth > 0 && remainingBudget > 0 && !isContextCell) {
 			for (const instance of cell.instances) {

@@ -3,7 +3,6 @@
  */
 
 import { inflate } from "pako";
-import { DEBUG } from "../config";
 import { loadGDSIIFromBuffer } from "../utils/gdsLoader";
 import type { Example } from "./types";
 
@@ -145,10 +144,6 @@ export async function loadExample(
 	example: Example,
 	onProgress?: (progress: number, message: string) => void,
 ): Promise<LoadExampleResult> {
-	if (DEBUG) {
-		console.log(`[exampleLoader] Loading example: ${example.name}`);
-	}
-
 	onProgress?.(PROGRESS.START, `Fetching ${example.name}...`);
 
 	let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
@@ -174,10 +169,6 @@ export async function loadExample(
 		validateFileSize(contentLength);
 
 		const totalBytes = contentLength ? Number.parseInt(contentLength, 10) : 0;
-
-		if (DEBUG) {
-			console.log(`[exampleLoader] Content-Length: ${totalBytes} bytes`);
-		}
 
 		// Read the response body with progress tracking
 		reader = response.body?.getReader();
@@ -233,24 +224,14 @@ export async function loadExample(
 			offset += chunk.length;
 		}
 
-		if (DEBUG) {
-			console.log(`[exampleLoader] Downloaded ${totalLength} bytes`);
-		}
-
 		let arrayBuffer: ArrayBuffer = combinedArray.buffer;
 		let fileName = example.name.replace(/\s+/g, "_");
 
 		// Decompress if needed
 		if (example.isCompressed) {
 			onProgress?.(PROGRESS.DECOMPRESS, "Decompressing...");
-			if (DEBUG) {
-				console.log("[exampleLoader] Decompressing gzip data...");
-			}
 			arrayBuffer = decompressGzip(arrayBuffer);
 			fileName = fileName.replace(/\.gz$/, "");
-			if (DEBUG) {
-				console.log(`[exampleLoader] Decompressed to ${arrayBuffer.byteLength} bytes`);
-			}
 		}
 
 		// Ensure filename has .gds extension
@@ -262,10 +243,6 @@ export async function loadExample(
 
 		// Load the file using the shared loader
 		await loadGDSIIFromBuffer(arrayBuffer, fileName);
-
-		if (DEBUG) {
-			console.log(`[exampleLoader] Example loaded successfully: ${example.name}`);
-		}
 
 		// Return the buffer and filename for collaboration sync
 		return { arrayBuffer, fileName };

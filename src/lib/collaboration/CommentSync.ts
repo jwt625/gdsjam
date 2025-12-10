@@ -12,7 +12,6 @@
  */
 
 import type * as Y from "yjs";
-import { DEBUG } from "../config";
 import type { Comment, CommentPermissions } from "./types";
 import type { YjsProvider } from "./YjsProvider";
 
@@ -35,7 +34,6 @@ export class CommentSync {
 	constructor(yjsProvider: YjsProvider, _userId: string, callbacks: CommentSyncCallbacks = {}) {
 		this.yjsProvider = yjsProvider;
 		this.callbacks = callbacks;
-		if (DEBUG) console.log("[CommentSync] Initialized for user:", _userId);
 	}
 
 	setCallbacks(callbacks: CommentSyncCallbacks): void {
@@ -52,9 +50,6 @@ export class CommentSync {
 		// Listen for comment array changes
 		this.commentsArray.observe(() => {
 			const comments = this.commentsArray!.toArray();
-			if (DEBUG) {
-				console.log("[CommentSync] Comments changed via observer:", comments.length);
-			}
 			this.lastCommentCount = comments.length;
 			this.callbacks.onCommentsChanged?.(comments);
 		});
@@ -65,9 +60,6 @@ export class CommentSync {
 				const permissions = this.sessionMap!.get("commentPermissions") as
 					| CommentPermissions
 					| undefined;
-				if (permissions && DEBUG) {
-					console.log("[CommentSync] Permissions changed:", permissions);
-				}
 				if (permissions) {
 					this.callbacks.onPermissionsChanged?.(permissions);
 				}
@@ -91,10 +83,6 @@ export class CommentSync {
 
 		// Start heartbeat polling as fallback for missed Y.js observer events
 		this.startHeartbeat();
-
-		if (DEBUG) {
-			console.log("[CommentSync] Initialized with", initialComments.length, "comments");
-		}
 	}
 
 	/**
@@ -106,10 +94,6 @@ export class CommentSync {
 		this.heartbeatInterval = setInterval(() => {
 			this.pollComments();
 		}, COMMENT_SYNC_HEARTBEAT);
-
-		if (DEBUG) {
-			console.log("[CommentSync] Started heartbeat polling");
-		}
 	}
 
 	/**
@@ -130,14 +114,6 @@ export class CommentSync {
 
 		const comments = this.commentsArray.toArray();
 		if (comments.length !== this.lastCommentCount) {
-			if (DEBUG) {
-				console.log(
-					"[CommentSync] Comments changed via heartbeat poll:",
-					this.lastCommentCount,
-					"->",
-					comments.length,
-				);
-			}
 			this.lastCommentCount = comments.length;
 			this.callbacks.onCommentsChanged?.(comments);
 		}
@@ -153,9 +129,6 @@ export class CommentSync {
 		}
 
 		this.commentsArray.push([comment]);
-		if (DEBUG) {
-			console.log("[CommentSync] Added comment:", comment.id);
-		}
 	}
 
 	/**
@@ -171,9 +144,6 @@ export class CommentSync {
 		const index = comments.findIndex((c) => c.id === commentId);
 		if (index !== -1) {
 			this.commentsArray.delete(index, 1);
-			if (DEBUG) {
-				console.log("[CommentSync] Deleted comment:", commentId);
-			}
 		}
 	}
 
@@ -187,9 +157,6 @@ export class CommentSync {
 		}
 
 		this.sessionMap.set("commentPermissions", permissions);
-		if (DEBUG) {
-			console.log("[CommentSync] Updated permissions:", permissions);
-		}
 	}
 
 	/**
@@ -215,6 +182,5 @@ export class CommentSync {
 		this.stopHeartbeat();
 		this.commentsArray = null;
 		this.sessionMap = null;
-		if (DEBUG) console.log("[CommentSync] Destroyed");
 	}
 }

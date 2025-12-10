@@ -13,7 +13,6 @@
  * - Separate from ParticipantManager for Phase 1 (may consolidate in Phase 3)
  */
 
-import { DEBUG } from "../config";
 import type {
 	AwarenessState,
 	CollaborativeViewportState,
@@ -74,10 +73,6 @@ export class ViewportSync {
 
 		this.setupAwarenessListener();
 		this.setupSessionMapListener();
-
-		if (DEBUG) {
-			console.log("[ViewportSync] Initialized for user:", userId);
-		}
 	}
 
 	/**
@@ -88,10 +83,6 @@ export class ViewportSync {
 	notifyCurrentBroadcastState(): void {
 		const enabled = this.isBroadcastEnabled();
 		const hostId = this.getBroadcastHostId();
-
-		if (DEBUG) {
-			console.log("[ViewportSync] Current broadcast state:", { enabled, hostId });
-		}
 
 		// Only notify if broadcast is actually enabled
 		if (enabled && this.callbacks.onBroadcastStateChanged) {
@@ -172,10 +163,6 @@ export class ViewportSync {
 			});
 
 			this.lastBroadcastTime = Date.now();
-
-			if (DEBUG) {
-				console.log("[ViewportSync] Broadcast viewport:", viewport);
-			}
 		} catch (error) {
 			console.error("[ViewportSync] Failed to broadcast viewport:", error);
 			// Don't throw - viewport sync is non-critical
@@ -196,10 +183,6 @@ export class ViewportSync {
 			...rest
 		} = currentState as any;
 		awareness.setLocalState(rest);
-
-		if (DEBUG) {
-			console.log("[ViewportSync] Cleared viewport from awareness");
-		}
 	}
 
 	/**
@@ -218,10 +201,6 @@ export class ViewportSync {
 			sessionMap.set("broadcastEnabled", true);
 			sessionMap.set("broadcastHostId", this.userId);
 		});
-
-		if (DEBUG) {
-			console.log("[ViewportSync] Broadcast enabled");
-		}
 	}
 
 	/**
@@ -232,10 +211,6 @@ export class ViewportSync {
 	rebroadcastState(): void {
 		if (!this.isBroadcastEnabled()) {
 			return;
-		}
-
-		if (DEBUG) {
-			console.log("[ViewportSync] Re-broadcasting state for new peer");
 		}
 
 		// Force a Y.Map update by writing the same values
@@ -258,10 +233,6 @@ export class ViewportSync {
 		});
 
 		this.clearViewportFromAwareness();
-
-		if (DEBUG) {
-			console.log("[ViewportSync] Broadcast disabled");
-		}
 	}
 
 	/**
@@ -353,10 +324,6 @@ export class ViewportSync {
 			});
 
 			this.lastOwnBroadcastTime = Date.now();
-
-			if (DEBUG) {
-				console.log("[ViewportSync] Own viewport broadcast:", viewport);
-			}
 		} catch (error) {
 			console.error("[ViewportSync] Failed to broadcast own viewport:", error);
 		}
@@ -424,12 +391,6 @@ export class ViewportSync {
 
 			// P2: If no P1 override, sync with heartbeat
 			if (this.followOverride === undefined && hostBroadcastEnabled !== undefined) {
-				if (DEBUG) {
-					console.log("[ViewportSync] P2 heartbeat sync:", {
-						hostBroadcastEnabled,
-						hostId,
-					});
-				}
 				// Notify callback of broadcast state from heartbeat
 				if (this.callbacks.onBroadcastStateChanged) {
 					this.callbacks.onBroadcastStateChanged(hostBroadcastEnabled, hostId);
@@ -498,9 +459,6 @@ export class ViewportSync {
 	 */
 	setFollowOverride(override: boolean | undefined): void {
 		this.followOverride = override;
-		if (DEBUG) {
-			console.log("[ViewportSync] Follow override set:", override);
-		}
 	}
 
 	/**
@@ -515,9 +473,6 @@ export class ViewportSync {
 	 */
 	resetFollowOverride(): void {
 		this.followOverride = undefined;
-		if (DEBUG) {
-			console.log("[ViewportSync] Follow override reset to undefined");
-		}
 	}
 
 	/**
@@ -538,10 +493,6 @@ export class ViewportSync {
 				if (this.callbacks.onBroadcastStateChanged) {
 					this.callbacks.onBroadcastStateChanged(enabled, hostId);
 				}
-
-				if (DEBUG) {
-					console.log("[ViewportSync] P0 Broadcast state changed:", { enabled, hostId });
-				}
 			}
 		});
 	}
@@ -557,10 +508,6 @@ export class ViewportSync {
 		if (this.ownThrottleTimeout) {
 			clearTimeout(this.ownThrottleTimeout);
 			this.ownThrottleTimeout = null;
-		}
-
-		if (DEBUG) {
-			console.log("[ViewportSync] Destroyed");
 		}
 	}
 }

@@ -9,7 +9,6 @@
  * - Provide host-related warnings and notifications
  */
 
-import { DEBUG } from "../config";
 import type { YjsProvider } from "./YjsProvider";
 
 // localStorage key prefix for host recovery (same browser, cross-tab)
@@ -34,10 +33,6 @@ export class HostManager {
 	constructor(yjsProvider: YjsProvider, userId: string) {
 		this.yjsProvider = yjsProvider;
 		this.userId = userId;
-
-		if (DEBUG) {
-			console.log("[HostManager] Initialized for user:", userId);
-		}
 	}
 
 	/**
@@ -46,10 +41,6 @@ export class HostManager {
 	initialize(sessionId: string): void {
 		this.sessionId = sessionId;
 		this.setupHostObserver();
-
-		if (DEBUG) {
-			console.log("[HostManager] Initialized for session:", sessionId);
-		}
 	}
 
 	/**
@@ -70,16 +61,9 @@ export class HostManager {
 					}
 
 					this.notifyHostChanged(newHostId);
-
-					if (DEBUG) {
-						console.log("[HostManager] Host changed to:", newHostId, "isHost:", this.isHost);
-					}
 				} else {
 					// Host was cleared (intentional leave) - notify for auto-promotion
 					this.setIsHost(false);
-					if (DEBUG) {
-						console.log("[HostManager] Host was cleared, triggering auto-promotion check");
-					}
 					this.notifyHostAbsent();
 				}
 			}
@@ -109,10 +93,6 @@ export class HostManager {
 		if (this.isHost) {
 			this.startHostHeartbeat();
 		}
-
-		if (DEBUG) {
-			console.log("[HostManager] Set host ID:", hostId);
-		}
 	}
 
 	/**
@@ -123,10 +103,6 @@ export class HostManager {
 
 		const sessionMap = this.yjsProvider.getMap<any>("session");
 		sessionMap.set("hostLastSeen", Date.now());
-
-		if (DEBUG) {
-			console.log("[HostManager] Updated hostLastSeen");
-		}
 	}
 
 	/**
@@ -135,10 +111,6 @@ export class HostManager {
 	 */
 	setIsHostLocal(isHost: boolean): void {
 		this.isHost = isHost;
-
-		if (DEBUG) {
-			console.log("[HostManager] Set local isHost:", isHost);
-		}
 	}
 
 	/**
@@ -149,10 +121,6 @@ export class HostManager {
 		this.hostHeartbeatInterval = setInterval(() => {
 			this.updateHostLastSeen();
 		}, HOST_HEARTBEAT_INTERVAL);
-
-		if (DEBUG) {
-			console.log("[HostManager] Started host heartbeat");
-		}
 	}
 
 	/**
@@ -162,10 +130,6 @@ export class HostManager {
 		if (this.hostHeartbeatInterval) {
 			clearInterval(this.hostHeartbeatInterval);
 			this.hostHeartbeatInterval = null;
-
-			if (DEBUG) {
-				console.log("[HostManager] Stopped host heartbeat");
-			}
 		}
 	}
 
@@ -208,9 +172,6 @@ export class HostManager {
 		const key = `${HOST_RECOVERY_KEY_PREFIX}${this.sessionId}`;
 		try {
 			localStorage.setItem(key, this.userId);
-			if (DEBUG) {
-				console.log("[HostManager] Marked host for recovery:", key);
-			}
 		} catch (error) {
 			console.error("[HostManager] Failed to mark host for recovery:", error);
 		}
@@ -225,9 +186,6 @@ export class HostManager {
 		const key = `${HOST_RECOVERY_KEY_PREFIX}${this.sessionId}`;
 		try {
 			localStorage.removeItem(key);
-			if (DEBUG) {
-				console.log("[HostManager] Cleared host recovery flag:", key);
-			}
 		} catch (error) {
 			console.error("[HostManager] Failed to clear host recovery flag:", error);
 		}
@@ -268,9 +226,6 @@ export class HostManager {
 			if (currentHostId && currentHostId !== this.userId) {
 				// Someone else is now host, clear our flag
 				localStorage.removeItem(key);
-				if (DEBUG) {
-					console.log("[HostManager] Cannot reclaim - different host:", currentHostId);
-				}
 				return false;
 			}
 
@@ -278,9 +233,6 @@ export class HostManager {
 			this.setCurrentHostId(this.userId);
 			localStorage.removeItem(key); // Clear flag after successful reclaim
 
-			if (DEBUG) {
-				console.log("[HostManager] Successfully reclaimed host status");
-			}
 			return true;
 		} catch (error) {
 			console.error("[HostManager] Failed to try reclaim host:", error);
@@ -323,17 +275,11 @@ export class HostManager {
 	 */
 	claimHost(): boolean {
 		if (!this.canClaimHost()) {
-			if (DEBUG) {
-				console.log("[HostManager] Cannot claim host - conditions not met");
-			}
 			return false;
 		}
 
 		this.setCurrentHostId(this.userId);
 
-		if (DEBUG) {
-			console.log("[HostManager] Successfully claimed host status");
-		}
 		return true;
 	}
 
@@ -354,10 +300,6 @@ export class HostManager {
 
 		this.isHost = false;
 		this.clearHostRecoveryFlag();
-
-		if (DEBUG) {
-			console.log("[HostManager] Cleaned up host state on leave");
-		}
 	}
 
 	/**
@@ -365,9 +307,6 @@ export class HostManager {
 	 */
 	transferHost(targetUserId: string): boolean {
 		if (!this.isHost) {
-			if (DEBUG) {
-				console.log("[HostManager] Cannot transfer - not host");
-			}
 			return false;
 		}
 
@@ -377,9 +316,6 @@ export class HostManager {
 		this.setCurrentHostId(targetUserId);
 		this.isHost = false;
 
-		if (DEBUG) {
-			console.log("[HostManager] Transferred host to:", targetUserId);
-		}
 		return true;
 	}
 
@@ -467,9 +403,5 @@ export class HostManager {
 		this.hostAbsentCallbacks = [];
 		this.sessionId = null;
 		this.isHost = false;
-
-		if (DEBUG) {
-			console.log("[HostManager] Destroyed");
-		}
 	}
 }

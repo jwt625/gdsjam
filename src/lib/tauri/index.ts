@@ -7,7 +7,6 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { DEBUG } from "../config";
 
 /**
  * Check if the app is running in Tauri (desktop mode)
@@ -22,17 +21,11 @@ export function isTauri(): boolean {
  */
 export async function openFileDialog(): Promise<string | null> {
 	if (!isTauri()) {
-		if (DEBUG) {
-			console.log("[Tauri] Not in Tauri mode, file dialog not available");
-		}
 		return null;
 	}
 
 	try {
 		const result = await invoke<string | null>("open_file_dialog");
-		if (DEBUG) {
-			console.log("[Tauri] File dialog result:", result);
-		}
 		return result;
 	} catch (error) {
 		console.error("[Tauri] Failed to open file dialog:", error);
@@ -53,9 +46,6 @@ export async function watchFile(
 	onError?: (error: string) => void,
 ): Promise<() => void> {
 	if (!isTauri()) {
-		if (DEBUG) {
-			console.log("[Tauri] Not in Tauri mode, file watching not available");
-		}
 		return () => {}; // No-op unwatch function
 	}
 
@@ -65,9 +55,6 @@ export async function watchFile(
 
 		// Listen for file change events
 		const unlistenChange = await listen("file-changed", () => {
-			if (DEBUG) {
-				console.log("[Tauri] File changed:", path);
-			}
 			onChange();
 		});
 
@@ -79,18 +66,11 @@ export async function watchFile(
 			}
 		});
 
-		if (DEBUG) {
-			console.log("[Tauri] Started watching file:", path);
-		}
-
 		// Return a function to stop watching
 		return async () => {
 			unlistenChange();
 			unlistenError();
 			await invoke("unwatch_file");
-			if (DEBUG) {
-				console.log("[Tauri] Stopped watching file:", path);
-			}
 		};
 	} catch (error) {
 		console.error("[Tauri] Failed to watch file:", error);
@@ -108,9 +88,6 @@ export async function getLastFilePath(): Promise<string | null> {
 
 	try {
 		const result = await invoke<string | null>("get_last_file_path");
-		if (DEBUG) {
-			console.log("[Tauri] Last file path:", result);
-		}
 		return result;
 	} catch (error) {
 		console.error("[Tauri] Failed to get last file path:", error);
@@ -128,9 +105,6 @@ export async function saveLastFilePath(path: string): Promise<void> {
 
 	try {
 		await invoke("save_last_file_path", { path });
-		if (DEBUG) {
-			console.log("[Tauri] Saved last file path:", path);
-		}
 	} catch (error) {
 		console.error("[Tauri] Failed to save last file path:", error);
 	}
@@ -149,9 +123,6 @@ export async function readFile(path: string): Promise<ArrayBuffer> {
 	try {
 		const { readFile } = await import("@tauri-apps/plugin-fs");
 		const contents = await readFile(path);
-		if (DEBUG) {
-			console.log(`[Tauri] Read file: ${path} (${contents.byteLength} bytes)`);
-		}
 		return contents.buffer;
 	} catch (error) {
 		console.error("[Tauri] Failed to read file:", error);

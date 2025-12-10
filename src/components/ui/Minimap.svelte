@@ -1,7 +1,6 @@
 <script lang="ts">
 import { onDestroy, onMount } from "svelte";
 import type { ParticipantViewport } from "../../lib/collaboration/types";
-import { DEBUG } from "../../lib/config";
 import { MinimapRenderer } from "../../lib/renderer/MinimapRenderer";
 import { layerStore } from "../../stores/layerStore";
 import { getPanelZIndex, panelZIndexStore } from "../../stores/panelZIndexStore";
@@ -57,7 +56,7 @@ function loadState() {
 			if (state.collapsed !== undefined) isCollapsed = state.collapsed;
 		}
 	} catch (e) {
-		if (DEBUG) console.warn("[Minimap] Failed to load state:", e);
+		// Silently fail - state loading is not critical
 	}
 }
 
@@ -73,7 +72,7 @@ function saveState() {
 			}),
 		);
 	} catch (e) {
-		if (DEBUG) console.warn("[Minimap] Failed to save state:", e);
+		// Silently fail - state saving is not critical
 	}
 }
 
@@ -277,14 +276,11 @@ async function initRenderer() {
 // Minimap always shows all layers visible with colors cached at document load.
 async function renderMinimap() {
 	if (!minimapRenderer || !document) {
-		if (DEBUG) console.log("[Minimap] Skipping render - no renderer or document");
 		return;
 	}
 
 	// Pass empty visibility map - all layers default to visible
 	const visibility = new Map<string, boolean>();
-
-	if (DEBUG) console.log("[Minimap] Rendering with all layers visible, using cached colors");
 
 	await minimapRenderer.render(document, visibility, cachedColors);
 }
@@ -294,13 +290,6 @@ $effect(() => {
 	// Read viewportBounds at top level to ensure it's tracked as dependency
 	const bounds = viewportBounds;
 
-	if (DEBUG) {
-		console.log("[Minimap] Viewport effect:", {
-			hasRenderer: !!minimapRenderer,
-			hasViewportBounds: !!bounds,
-			viewportBounds: bounds,
-		});
-	}
 	if (minimapRenderer && bounds) {
 		minimapRenderer.updateViewportOutline(bounds);
 	}

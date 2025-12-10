@@ -3,7 +3,6 @@
  */
 
 import { writable } from "svelte/store";
-import { DEBUG } from "../lib/config";
 import type { FileStatistics, GDSDocument } from "../types/gds";
 
 export interface GDSState {
@@ -42,9 +41,6 @@ function createGDSStore() {
 			fileName: string,
 			statistics: FileStatistics | null = null,
 		) => {
-			if (DEBUG) {
-				console.log(`[gdsStore] Setting document: ${fileName}`);
-			}
 			update((state) => ({
 				...state,
 				document,
@@ -62,9 +58,6 @@ function createGDSStore() {
 		 * Set rendering state
 		 */
 		setRendering: (isRendering: boolean, message = "", progress = 0) => {
-			if (DEBUG) {
-				console.log(`[gdsStore] setRendering: ${progress}% - ${message}`);
-			}
 			update((state) => ({
 				...state,
 				isRendering,

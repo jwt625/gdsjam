@@ -17,7 +17,6 @@ import type {
 	CommentStoreState,
 	CommentWithDisplayState,
 } from "../lib/comments/types";
-import { DEBUG } from "../lib/config";
 
 const STORAGE_KEY_PREFIX = "gdsjam_comments_";
 const DEFAULT_PERMISSIONS: CommentPermissions = {
@@ -25,6 +24,9 @@ const DEFAULT_PERMISSIONS: CommentPermissions = {
 	viewerRateLimit: 1, // 1 comment per minute
 	hostRateLimit: 1, // 1 comment per 10 seconds
 };
+const TOAST_DURATION_MS = 3000; // 3 seconds
+
+let toastTimeout: ReturnType<typeof setTimeout> | null = null;
 
 /**
  * Create the comment store
@@ -38,6 +40,7 @@ function createCommentStore() {
 		rateLimits: new Map(),
 		permissions: { ...DEFAULT_PERMISSIONS },
 		fileIdentifier: null,
+		toastMessage: null,
 	};
 
 	const { subscribe, set, update } = writable<CommentStoreState>(initialState);
@@ -55,14 +58,7 @@ function createCommentStore() {
 			update((state) => {
 				// Skip if already initialized for this file
 				if (state.fileIdentifier === fileIdentifier) {
-					if (DEBUG) {
-						console.log(`[commentStore] Already initialized for file: ${fileIdentifier}, skipping`);
-					}
 					return state;
-				}
-
-				if (DEBUG) {
-					console.log(`[commentStore] Initializing for file: ${fileIdentifier}`);
 				}
 
 				return {
@@ -92,18 +88,11 @@ function createCommentStore() {
 			update((state) => {
 				// Skip if already initialized for this file
 				if (state.fileIdentifier === fileHash) {
-					if (DEBUG) {
-						console.log(`[commentStore] Already initialized for session: ${fileHash}, skipping`);
-					}
 					// Just update permissions, don't reset anything else
 					return {
 						...state,
 						permissions,
 					};
-				}
-
-				if (DEBUG) {
-					console.log(`[commentStore] Initializing for session: ${fileHash}`);
 				}
 
 				return {
@@ -138,10 +127,6 @@ function createCommentStore() {
 					...state,
 					comments: commentsMap,
 				}));
-
-				if (DEBUG) {
-					console.log(`[commentStore] Loaded ${commentsMap.size} comments from localStorage`);
-				}
 			} catch (error) {
 				console.error("[commentStore] Failed to load from localStorage:", error);
 			}
@@ -155,10 +140,6 @@ function createCommentStore() {
 				const key = `${STORAGE_KEY_PREFIX}${fileIdentifier}`;
 				const commentsArray = Array.from(comments.values());
 				localStorage.setItem(key, JSON.stringify(commentsArray));
-
-				if (DEBUG) {
-					console.log(`[commentStore] Saved ${commentsArray.length} comments to localStorage`);
-				}
 			} catch (error) {
 				console.error("[commentStore] Failed to save to localStorage:", error);
 			}
@@ -190,10 +171,6 @@ function createCommentStore() {
 					}
 				}
 
-				if (DEBUG) {
-					console.log(`[commentStore] Synced ${newCommentsMap.size} comments from Y.js`);
-				}
-
 				return {
 					...state,
 					comments: newCommentsMap,
@@ -206,10 +183,6 @@ function createCommentStore() {
 		 */
 		syncPermissionsFromYjs: (permissions: CommentPermissions) => {
 			update((state) => {
-				if (DEBUG) {
-					console.log("[commentStore] Synced permissions from Y.js:", permissions);
-				}
-
 				return {
 					...state,
 					permissions,
@@ -223,9 +196,6 @@ function createCommentStore() {
 		toggleCommentMode: () => {
 			update((state) => {
 				const newMode = !state.commentModeActive;
-				if (DEBUG) {
-					console.log(`[commentStore] Comment mode: ${newMode ? "ON" : "OFF"}`);
-				}
 				return {
 					...state,
 					commentModeActive: newMode,
@@ -268,10 +238,6 @@ function createCommentStore() {
 					commentStore.saveToLocalStorage(state.fileIdentifier, commentsForStorage);
 				}
 
-				if (DEBUG) {
-					console.log(`[commentStore] Added comment: ${comment.id}`);
-				}
-
 				return {
 					...state,
 					comments: newComments,
@@ -297,10 +263,6 @@ function createCommentStore() {
 						}),
 					);
 					commentStore.saveToLocalStorage(state.fileIdentifier, commentsForStorage);
-				}
-
-				if (DEBUG) {
-					console.log(`[commentStore] Deleted comment: ${commentId}`);
 				}
 
 				return {
@@ -361,12 +323,6 @@ function createCommentStore() {
 				const newComments = new Map(state.comments);
 				newComments.set(commentId, updatedComment);
 
-				if (DEBUG) {
-					console.log(
-						`[commentStore] Cycled display state for ${commentId}: ${comment.displayState} -> ${newState}`,
-					);
-				}
-
 				return {
 					...state,
 					comments: newComments,
@@ -380,9 +336,6 @@ function createCommentStore() {
 		toggleAllCommentsVisibility: () => {
 			update((state) => {
 				const newVisibility = !state.allCommentsVisible;
-				if (DEBUG) {
-					console.log(`[commentStore] All comments: ${newVisibility ? "VISIBLE" : "HIDDEN"}`);
-				}
 				return {
 					...state,
 					allCommentsVisible: newVisibility,
@@ -453,9 +406,6 @@ function createCommentStore() {
 				if (recentComments.length >= rateLimit) {
 					canComment = false;
 					rateLimitState.lastViolation = now;
-					if (DEBUG) {
-						console.log(`[commentStore] Rate limit exceeded for user: ${userId}`);
-					}
 				} else {
 					// Add current timestamp
 					recentComments.push(now);
@@ -491,11 +441,51 @@ function createCommentStore() {
 		},
 
 		/**
+		 * Show toast notification
+		 */
+		showToast: (message: string) => {
+			// Clear any existing timeout
+			if (toastTimeout) {
+				clearTimeout(toastTimeout);
+			}
+
+			update((state) => ({
+				...state,
+				toastMessage: message,
+			}));
+
+			// Auto-hide after duration
+			toastTimeout = setTimeout(() => {
+				update((state) => ({
+					...state,
+					toastMessage: null,
+				}));
+				toastTimeout = null;
+			}, TOAST_DURATION_MS);
+		},
+
+		/**
+		 * Hide toast notification
+		 */
+		hideToast: () => {
+			if (toastTimeout) {
+				clearTimeout(toastTimeout);
+				toastTimeout = null;
+			}
+			update((state) => ({
+				...state,
+				toastMessage: null,
+			}));
+		},
+
+		/**
 		 * Reset store (clear all data)
 		 */
 		reset: () => {
-			if (DEBUG) {
-				console.log("[commentStore] Resetting store");
+			// Clear toast timeout
+			if (toastTimeout) {
+				clearTimeout(toastTimeout);
+				toastTimeout = null;
 			}
 			set(initialState);
 		},

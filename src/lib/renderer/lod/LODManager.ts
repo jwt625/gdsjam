@@ -1,5 +1,4 @@
 import {
-	DEBUG,
 	LOD_CHANGE_COOLDOWN,
 	LOD_DECREASE_THRESHOLD,
 	LOD_INCREASE_THRESHOLD,
@@ -95,12 +94,6 @@ export class LODManager {
 			return false;
 		}
 
-		if (DEBUG) {
-			console.log(
-				`[LOD] Zoom threshold crossed: ${currentZoom.toFixed(4)}x (thresholds: ${this.zoomThresholdLow.toFixed(4)}x - ${this.zoomThresholdHigh.toFixed(4)}x)`,
-			);
-		}
-
 		return this.triggerRerender(isRerendering);
 	}
 
@@ -122,28 +115,15 @@ export class LODManager {
 
 		// Calculate new LOD depth based on visible polygon count
 		const utilization = this.callbacks.getBudgetUtilization();
-
-		if (DEBUG) {
-			console.log(
-				`[LOD] Budget utilization: ${(utilization * 100).toFixed(1)}% (depth: ${this.currentDepth})`,
-			);
-		}
-
 		let newDepth = this.currentDepth;
 
 		// If budget is underutilized (< 30%), increase depth to show more detail
 		if (utilization < LOD_INCREASE_THRESHOLD && this.currentDepth < LOD_MAX_DEPTH) {
 			newDepth = this.currentDepth + 1;
-			if (DEBUG) {
-				console.log(`[LOD] Increasing depth: ${this.currentDepth} → ${newDepth}`);
-			}
 		}
 		// If budget is overutilized (> 90%), decrease depth to improve performance
 		else if (utilization > LOD_DECREASE_THRESHOLD && this.currentDepth > LOD_MIN_DEPTH) {
 			newDepth = this.currentDepth - 1;
-			if (DEBUG) {
-				console.log(`[LOD] Decreasing depth: ${this.currentDepth} → ${newDepth}`);
-			}
 		}
 
 		// Check if re-render is needed
@@ -152,16 +132,6 @@ export class LODManager {
 		const shouldRerender = depthChanged || shouldRerenderAnyway;
 
 		if (shouldRerender) {
-			if (DEBUG) {
-				if (depthChanged) {
-					console.log(`[LOD] Depth change triggered re-render: ${this.currentDepth} → ${newDepth}`);
-				} else {
-					console.log(
-						`[LOD] Zoom threshold crossed - re-rendering (e.g., to update stroke widths in outline mode)`,
-					);
-				}
-			}
-
 			this.currentDepth = newDepth;
 			this.lastLODChangeTime = now;
 

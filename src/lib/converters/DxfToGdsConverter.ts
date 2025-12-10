@@ -6,7 +6,6 @@
 import type { IDxf, IEntity } from "dxf-parser";
 import { DxfParser } from "dxf-parser";
 import type { Cell, GDSDocument, Layer, Point, Polygon } from "../../types/gds";
-import { DEBUG } from "../config";
 import { generateUUID } from "../utils/uuid";
 
 /**
@@ -191,10 +190,6 @@ export async function convertDxfToGds(
 	const decoder = new TextDecoder("utf-8");
 	const dxfText = decoder.decode(fileData);
 
-	if (DEBUG) {
-		console.log(`[DxfToGdsConverter] Parsing DXF file: ${fileName}`);
-	}
-
 	// Parse DXF
 	const parser = new DxfParser();
 	let dxf: IDxf;
@@ -270,16 +265,6 @@ export async function convertDxfToGds(
 
 	onProgress?.(30, "Converting entities to GDSII...");
 
-	if (DEBUG) {
-		console.log("[DxfToGdsConverter] DXF parsed successfully:", {
-			entities: dxf.entities?.length || 0,
-			units: unitName,
-			insunits,
-			layers: Object.keys(dxf.tables?.layer?.layers || {}).length,
-			blocks: Object.keys(dxf.blocks || {}).length,
-		});
-	}
-
 	// Create layer map
 	const layerMap = new Map<string, Layer>();
 	const dxfLayers = dxf.tables?.layer?.layers || {};
@@ -329,10 +314,6 @@ export async function convertDxfToGds(
 	const database = 1e-9; // 1 database unit = 1 nanometer (standard for GDSII)
 	const scaleFactor = dxfUnitInMeters / database;
 
-	if (DEBUG) {
-		console.log(`[DxfToGdsConverter] Scale factor: ${scaleFactor} (${unitName} to database units)`);
-	}
-
 	for (let i = 0; i < entities.length; i++) {
 		const entity = entities[i];
 		if (!entity) continue;
@@ -369,12 +350,6 @@ export async function convertDxfToGds(
 	}
 
 	onProgress?.(90, "Creating GDSII document...");
-
-	if (DEBUG) {
-		console.log(
-			`[DxfToGdsConverter] Converted ${polygons.length} polygons from ${entities.length} entities`,
-		);
-	}
 
 	// Calculate bounding box for the entire document
 	let minX = Number.POSITIVE_INFINITY;

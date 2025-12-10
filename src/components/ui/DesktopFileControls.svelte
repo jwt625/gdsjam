@@ -8,7 +8,6 @@
  * - Auto-watch toggle
  */
 
-import { DEBUG } from "../../lib/config";
 import { isTauri, openFileDialog, readFile, saveLastFilePath, watchFile } from "../../lib/tauri";
 import { loadGDSIIFromBuffer } from "../../lib/utils/gdsLoader";
 import { gdsStore } from "../../stores/gdsStore";
@@ -24,39 +23,12 @@ const isDesktop = isTauri();
 const hasFile = $derived(currentFilePath !== null || $gdsStore.fileName !== null);
 const canWatch = $derived(currentFilePath !== null); // Can only watch if we have a file path
 
-// Debug logging - always log on mount to help diagnose
-console.log("[DesktopFileControls] Component mounted:", {
-	isDesktop,
-	hasTauriGlobal: typeof window !== "undefined" && "__TAURI__" in window,
-	windowTauri: typeof window !== "undefined" ? (window as any).__TAURI__ : undefined,
-});
-
-$effect(() => {
-	if (DEBUG) {
-		console.log("[DesktopFileControls] State:", {
-			isDesktop,
-			hasFile,
-			canWatch,
-			currentFilePath,
-			gdsFileName: $gdsStore.fileName,
-			isWatching,
-		});
-	}
-});
-
 /**
  * Open file dialog and load the selected file
  */
 async function handleOpenFile() {
-	if (DEBUG) {
-		console.log("[DesktopFileControls] Opening file dialog...");
-	}
-
 	const filePath = await openFileDialog();
 	if (!filePath) {
-		if (DEBUG) {
-			console.log("[DesktopFileControls] No file selected");
-		}
 		return;
 	}
 
@@ -68,10 +40,6 @@ async function handleOpenFile() {
  */
 async function loadFileFromPath(filePath: string) {
 	try {
-		if (DEBUG) {
-			console.log("[DesktopFileControls] Loading file:", filePath);
-		}
-
 		gdsStore.setLoading(true, "Reading file...", 0);
 
 		// Read file from disk
@@ -91,10 +59,6 @@ async function loadFileFromPath(filePath: string) {
 		if (isWatching) {
 			await startWatching(filePath);
 		}
-
-		if (DEBUG) {
-			console.log("[DesktopFileControls] File loaded successfully");
-		}
 	} catch (error) {
 		console.error("[DesktopFileControls] Failed to load file:", error);
 		gdsStore.setError(
@@ -109,10 +73,6 @@ async function loadFileFromPath(filePath: string) {
 async function handleRefresh() {
 	if (!currentFilePath) {
 		return;
-	}
-
-	if (DEBUG) {
-		console.log("[DesktopFileControls] Refreshing file:", currentFilePath);
 	}
 
 	await loadFileFromPath(currentFilePath);
@@ -132,9 +92,6 @@ async function startWatching(filePath: string) {
 	unwatchFn = await watchFile(
 		filePath,
 		async () => {
-			if (DEBUG) {
-				console.log("[DesktopFileControls] File changed, reloading...");
-			}
 			await loadFileFromPath(filePath);
 		},
 		(error: string) => {
@@ -142,10 +99,6 @@ async function startWatching(filePath: string) {
 			gdsStore.setError(`File watch error: ${error}`);
 		},
 	);
-
-	if (DEBUG) {
-		console.log("[DesktopFileControls] Started watching file");
-	}
 }
 
 /**
@@ -159,9 +112,6 @@ async function handleToggleWatch() {
 	} else if (!isWatching && unwatchFn) {
 		unwatchFn();
 		unwatchFn = null;
-		if (DEBUG) {
-			console.log("[DesktopFileControls] Stopped watching file");
-		}
 	}
 }
 

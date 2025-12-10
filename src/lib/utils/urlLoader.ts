@@ -2,8 +2,6 @@
  * URL Loader - Fetch GDSII files from remote URLs
  */
 
-import { DEBUG } from "../config";
-
 /**
  * Fetch a GDSII file from a URL
  * @param url - The URL to fetch the file from
@@ -14,10 +12,6 @@ export async function fetchGDSIIFromURL(
 	url: string,
 	onProgress?: (progress: number, message: string) => void,
 ): Promise<{ arrayBuffer: ArrayBuffer; fileName: string }> {
-	if (DEBUG) {
-		console.log(`[urlLoader] Fetching GDSII from URL: ${url}`);
-	}
-
 	try {
 		// Validate URL
 		let parsedUrl: URL;
@@ -36,10 +30,6 @@ export async function fetchGDSIIFromURL(
 			fileName = `${fileName}.gds`;
 		}
 
-		if (DEBUG) {
-			console.log(`[urlLoader] Extracted filename: ${fileName}`);
-		}
-
 		onProgress?.(5, "Fetching file from URL...");
 
 		// Fetch the file
@@ -53,21 +43,9 @@ export async function fetchGDSIIFromURL(
 			throw new Error(`HTTP error! status: ${response.status} ${response.statusText}`);
 		}
 
-		// Check content type (optional, some servers may not set it correctly)
-		const contentType = response.headers.get("content-type");
-		if (DEBUG && contentType) {
-			console.log(`[urlLoader] Content-Type: ${contentType}`);
-		}
-
 		// Get content length for progress tracking
 		const contentLength = response.headers.get("content-length");
 		const totalBytes = contentLength ? Number.parseInt(contentLength, 10) : 0;
-
-		if (DEBUG) {
-			console.log(
-				`[urlLoader] Content-Length: ${totalBytes} bytes (${(totalBytes / 1024 / 1024).toFixed(1)} MB)`,
-			);
-		}
 
 		// Read the response body with progress tracking
 		const reader = response.body?.getReader();
@@ -109,10 +87,6 @@ export async function fetchGDSIIFromURL(
 		for (const chunk of chunks) {
 			combinedArray.set(chunk, offset);
 			offset += chunk.length;
-		}
-
-		if (DEBUG) {
-			console.log(`[urlLoader] Downloaded ${totalLength} bytes`);
 		}
 
 		onProgress?.(100, "File ready");

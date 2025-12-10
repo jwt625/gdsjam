@@ -14,7 +14,6 @@ import type {
 	Point,
 	Polygon,
 } from "../../types/gds";
-import { DEBUG } from "../config";
 import { generateUUID } from "../utils/uuid";
 
 /**
@@ -161,25 +160,6 @@ function validateGDSIIFormat(fileData: Uint8Array): void {
 	const firstRecordLength = dataView.getUint16(0, false); // Big-endian
 	const firstRecordTag = dataView.getUint16(2, false); // Big-endian
 
-	// Also check little-endian in case of byte-order issues
-	const firstRecordLengthLE = dataView.getUint16(0, true);
-	const firstRecordTagLE = dataView.getUint16(2, true);
-
-	// Log first few bytes for debugging
-	if (DEBUG) {
-		const firstBytes = Array.from(fileData.slice(0, 16))
-			.map((b) => b.toString(16).padStart(2, "0"))
-			.join(" ");
-		console.log("[GDSParser] First 16 bytes (hex):", firstBytes);
-		console.log("[GDSParser] Big-endian - Length:", firstRecordLength, "Tag:", firstRecordTag);
-		console.log(
-			"[GDSParser] Little-endian - Length:",
-			firstRecordLengthLE,
-			"Tag:",
-			firstRecordTagLE,
-		);
-	}
-
 	if (firstRecordLength < 4 || firstRecordLength % 2 !== 0) {
 		const detectedFormat = detectFileFormat(fileData);
 		throw new Error(
@@ -191,14 +171,6 @@ function validateGDSIIFormat(fileData: Uint8Array): void {
 
 	if (firstRecordTag !== RecordType.HEADER) {
 		const detectedFormat = detectFileFormat(fileData);
-
-		// Check if little-endian would work (wrong byte order)
-		if (firstRecordTagLE === RecordType.HEADER) {
-			throw new Error(
-				`Invalid GDSII format: File appears to be in little-endian byte order, but GDSII requires big-endian. ` +
-					`The file may have been created with incorrect byte ordering.`,
-			);
-		}
 
 		// Provide helpful error message based on detected format
 		let errorMsg = `Invalid GDSII format: Expected HEADER record (tag ${RecordType.HEADER}), got tag ${firstRecordTag} (0x${firstRecordTag.toString(16)}). `;
@@ -226,10 +198,6 @@ function validateGDSIIFormat(fileData: Uint8Array): void {
 		}
 
 		throw new Error(errorMsg);
-	}
-
-	if (DEBUG) {
-		console.log("[GDSParser] GDSII format validation passed");
 	}
 }
 
@@ -300,10 +268,6 @@ export async function parseGDSII(
 	const startTime = performance.now();
 	const fileSizeMB = fileBuffer.byteLength / 1024 / 1024;
 
-	if (DEBUG) {
-		console.log(`[GDSParser] Parsing GDSII file (${fileSizeMB.toFixed(1)} MB)...`);
-	}
-
 	try {
 		if (fileBuffer.byteLength > 1024 * 1024 * 1024) {
 			throw new Error(`File too large (${fileSizeMB.toFixed(0)} MB). Maximum: 1GB.`);
@@ -325,10 +289,6 @@ export async function parseGDSII(
 		// biome-ignore lint/suspicious/noExplicitAny: External library returns unknown data types
 		const records: Array<{ tag: number; data: any }> = parseGDSWithDiagnostics(fileData);
 
-		if (DEBUG) {
-			console.log(`[GDSParser] Parsed ${records.length} records`);
-		}
-
 		if (records.length === 0) {
 			throw new Error("No valid GDSII records found. File may be corrupted.");
 		}
@@ -338,11 +298,6 @@ export async function parseGDSII(
 		const document = await buildGDSDocument(records, onProgress);
 
 		const parseTime = performance.now() - startTime;
-		if (DEBUG) {
-			console.log(
-				`[GDSParser] Complete in ${parseTime.toFixed(0)}ms - ${document.cells.size} cells, ${document.layers.size} layers`,
-			);
-		}
 
 		// Collect statistics
 		onProgress?.(95, "Collecting statistics...");
@@ -399,16 +354,6 @@ export async function parseGDSII(
 			layoutHeight,
 		};
 
-		if (DEBUG) {
-			console.log("[GDSParser] Statistics:", {
-				totalCells: statistics.totalCells,
-				totalPolygons: statistics.totalPolygons,
-				totalInstances: statistics.totalInstances,
-				layers: statistics.layerStats.size,
-				parseTimeMs: statistics.parseTimeMs.toFixed(1),
-			});
-		}
-
 		onProgress?.(100, "Parsing complete!");
 		return { document, statistics };
 	} catch (error) {
@@ -428,10 +373,6 @@ async function buildGDSDocument(
 	records: Array<{ tag: number; data: any }>,
 	onProgress?: ParseProgressCallback,
 ): Promise<GDSDocument> {
-	if (DEBUG) {
-		console.log(`[buildGDSDocument] Processing ${records.length} records`);
-	}
-
 	const cells = new Map<string, Cell>();
 	const layers = new Map<string, Layer>();
 	let libraryName = "Untitled";
@@ -614,12 +555,6 @@ async function buildGDSDocument(
 		}
 	}
 
-	if (DEBUG) {
-		console.log(
-			`[buildGDSDocument] Parsed ${polygonCount} polygons and ${instanceCount} instances in ${cells.size} cells`,
-		);
-	}
-
 	// Calculate bounding boxes for cells recursively (bottom-up)
 	// We need to process cells in dependency order: leaf cells first, then parents
 	const cellBBoxCalculated = new Set<string>();
@@ -756,13 +691,6 @@ async function buildGDSDocument(
 			cell.skipInMinimap =
 				cellWidth < MINIMAP_SKIP_THRESHOLD * layoutExtentX &&
 				cellHeight < MINIMAP_SKIP_THRESHOLD * layoutExtentY;
-		}
-
-		if (DEBUG) {
-			const skippedCount = Array.from(cells.values()).filter((c) => c.skipInMinimap).length;
-			console.log(
-				`[buildGDSDocument] Minimap LOD: ${skippedCount}/${cells.size} cells marked for skip (< 1% of layout)`,
-			);
 		}
 	}
 

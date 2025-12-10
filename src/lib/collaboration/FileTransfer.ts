@@ -10,7 +10,6 @@
  */
 
 import type * as Y from "yjs";
-import { DEBUG } from "../config";
 import { computeSHA256 } from "../utils/hash";
 import type { CollaborationEvent, SessionMetadata } from "./types";
 
@@ -40,13 +39,6 @@ export class FileTransfer {
 	 * Uploads file via HTTP and stores metadata in Y.js for sync to peers
 	 */
 	async uploadFile(arrayBuffer: ArrayBuffer, fileName: string, userId: string): Promise<void> {
-		const startTime = performance.now();
-		const fileSizeMB = (arrayBuffer.byteLength / 1024 / 1024).toFixed(1);
-
-		if (DEBUG) {
-			console.log(`[FileTransfer] Uploading file: ${fileName} (${fileSizeMB} MB)`);
-		}
-
 		this.onProgress?.(0, "Uploading file to server...");
 
 		// Upload file to server
@@ -73,10 +65,6 @@ export class FileTransfer {
 		// fileId is the SHA-256 hash computed by the server
 		const fileHash = fileId;
 
-		if (DEBUG) {
-			console.log(`[FileTransfer] File uploaded to server with ID: ${fileId}`);
-		}
-
 		this.onProgress?.(80, "Storing metadata in session...");
 
 		// Store metadata in Y.js (single transaction)
@@ -90,16 +78,6 @@ export class FileTransfer {
 			sessionMap.set("uploadedAt", Date.now());
 		});
 
-		if (DEBUG) {
-			console.log(`[FileTransfer] Y.js document state after upload:`);
-			console.log(`  - Session map:`, this.ydoc.getMap("session").toJSON());
-		}
-
-		const elapsed = performance.now() - startTime;
-		if (DEBUG) {
-			console.log(`[FileTransfer] Upload complete in ${elapsed.toFixed(0)}ms`);
-		}
-
 		this.onProgress?.(100, "File uploaded successfully");
 		this.onEvent?.({
 			type: "file-transfer-complete",
@@ -111,10 +89,6 @@ export class FileTransfer {
 	 * Downloads file via HTTP using fileId from Y.js metadata
 	 */
 	async downloadFile(): Promise<{ arrayBuffer: ArrayBuffer; fileName: string; fileHash: string }> {
-		if (DEBUG) {
-			console.log("[FileTransfer] Starting file download...");
-		}
-
 		// Get session metadata
 		const sessionMap = this.ydoc.getMap<unknown>("session");
 		const fileId = sessionMap.get("fileId") as string;
@@ -148,10 +122,6 @@ export class FileTransfer {
 			);
 		}
 
-		if (DEBUG) {
-			console.log("[FileTransfer] File hash validated successfully");
-		}
-
 		this.onProgress?.(100, "File downloaded successfully");
 		this.onEvent?.({
 			type: "file-transfer-complete",
@@ -173,10 +143,6 @@ export class FileTransfer {
 		fileName: string,
 		expectedHash: string,
 	): Promise<{ arrayBuffer: ArrayBuffer; fileName: string; fileHash: string }> {
-		if (DEBUG) {
-			console.log("[FileTransfer] Starting file recovery download for:", fileId);
-		}
-
 		this.onProgress?.(0, "Recovering file from server...");
 
 		const fileServerUrl = import.meta.env.VITE_FILE_SERVER_URL || "https://signaling.gdsjam.com";
@@ -197,10 +163,6 @@ export class FileTransfer {
 			throw new Error(
 				`File hash mismatch! Expected ${expectedHash.substring(0, 16)}..., got ${actualHash.substring(0, 16)}...`,
 			);
-		}
-
-		if (DEBUG) {
-			console.log("[FileTransfer] File recovery completed successfully");
 		}
 
 		this.onProgress?.(100, "File recovered successfully");
@@ -243,9 +205,6 @@ export class FileTransfer {
 
 				// Exponential backoff
 				const delay = 1000 * 2 ** i;
-				if (DEBUG) {
-					console.log(`[FileTransfer] Download failed, retrying in ${delay}ms...`, error);
-				}
 				await new Promise((resolve) => setTimeout(resolve, delay));
 			}
 		}

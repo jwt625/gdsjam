@@ -1,5 +1,4 @@
 <script lang="ts">
-import { DEBUG } from "../../lib/config";
 import type { Example } from "../../lib/examples";
 import { EXAMPLES, ExampleLoadError, loadExample } from "../../lib/examples";
 import { loadGDSIIFromBuffer } from "../../lib/utils/gdsLoader";
@@ -28,23 +27,10 @@ let loadingExampleId: string | null = $state(null);
  * @throws CollaborationSyncError if sync fails (file is still loaded locally)
  */
 async function syncFileToCollaboration(arrayBuffer: ArrayBuffer, fileName: string): Promise<void> {
-	if (DEBUG) {
-		console.log("[FileUpload] Checking collaboration state for sync:");
-		console.log("  - isInSession:", $collaborationStore.isInSession);
-		console.log("  - isHost:", $collaborationStore.isHost);
-	}
-
 	if ($collaborationStore.isInSession && $collaborationStore.isHost) {
 		// In session as host - upload file to session for immediate sync to viewers
-		if (DEBUG) {
-			console.log("[FileUpload] Uploading file to collaboration session...");
-		}
-
 		try {
 			await collaborationStore.uploadFile(arrayBuffer, fileName);
-			if (DEBUG) {
-				console.log("[FileUpload] File uploaded to session successfully");
-			}
 		} catch (error) {
 			console.error("[FileUpload] Failed to upload file to session:", error);
 			throw new CollaborationSyncError(error instanceof Error ? error.message : String(error));
@@ -52,25 +38,12 @@ async function syncFileToCollaboration(arrayBuffer: ArrayBuffer, fileName: strin
 	} else if (!$collaborationStore.isInSession) {
 		// Not in a session - store locally only (NO server upload)
 		// File will be uploaded when session is created
-		if (DEBUG) {
-			console.log("[FileUpload] Storing file locally for future session...");
-		}
-
 		try {
 			collaborationStore.storePendingFile(arrayBuffer, fileName);
-			if (DEBUG) {
-				console.log("[FileUpload] File stored locally for future session");
-			}
 		} catch (error) {
 			console.error("[FileUpload] Failed to store pending file:", error);
 			// Don't throw - file is loaded locally, just won't be shareable
-			if (DEBUG) {
-				console.log("[FileUpload] File loaded locally but not stored for sharing");
-			}
 		}
-	} else if (DEBUG) {
-		// In session as viewer - don't upload (viewers receive files, not upload)
-		console.log("[FileUpload] Viewer in session - file loaded locally only");
 	}
 }
 
@@ -84,10 +57,6 @@ async function handleExampleClick(example: Example, event: Event) {
 		return; // Already loading an example
 	}
 
-	if (DEBUG) {
-		console.log(`[FileUpload] Loading example: ${example.name}`);
-	}
-
 	loadingExampleId = example.id;
 
 	try {
@@ -96,10 +65,6 @@ async function handleExampleClick(example: Example, event: Event) {
 		const { arrayBuffer, fileName } = await loadExample(example, (progress, message) => {
 			gdsStore.updateProgress(progress, message);
 		});
-
-		if (DEBUG) {
-			console.log(`[FileUpload] Example loaded: ${example.name}`);
-		}
 
 		// Sync to collaboration session (handles both pre-session and in-session cases)
 		try {
@@ -134,18 +99,10 @@ async function handleExampleClick(example: Example, event: Event) {
  * Handle file selection
  */
 async function handleFile(file: File) {
-	const fileSizeMB = (file.size / 1024 / 1024).toFixed(1);
-	if (DEBUG) {
-		console.log(`[FileUpload] Loading ${file.name} (${fileSizeMB} MB)`);
-	}
-
 	try {
 		gdsStore.setLoading(true, "Reading file...", 0);
 
 		const arrayBuffer = await file.arrayBuffer();
-		if (DEBUG) {
-			console.log(`[FileUpload] File read complete: ${arrayBuffer.byteLength} bytes`);
-		}
 
 		// Load file locally first
 		await loadGDSIIFromBuffer(arrayBuffer, file.name);
