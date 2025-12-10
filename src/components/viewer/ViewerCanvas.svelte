@@ -311,8 +311,9 @@ function handleCKeyUp(event: KeyboardEvent): void {
 		lastCKeyPressTime !== null && now - lastCKeyPressTime < DOUBLE_CLICK_INTERVAL_MS;
 
 	if (isDoubleClick) {
-		// Double-click: toggle comment panel
+		// Double-click: toggle comment panel and exit comment mode
 		commentPanelVisible = !commentPanelVisible;
+		commentModeActive = false;
 		lastCKeyPressTime = null;
 	} else {
 		// Single click: toggle comment mode
