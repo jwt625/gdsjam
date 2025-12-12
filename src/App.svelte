@@ -7,13 +7,13 @@ import HelpModal from "./components/ui/HelpModal.svelte";
 import LoadingOverlay from "./components/ui/LoadingOverlay.svelte";
 import ParticipantList from "./components/ui/ParticipantList.svelte";
 import ViewerCanvas from "./components/viewer/ViewerCanvas.svelte";
+import { EmbedAPI } from "./lib/embed/EmbedAPI";
 import { KeyboardShortcutManager } from "./lib/keyboard/KeyboardShortcutManager";
 import { loadGDSIIFromBuffer } from "./lib/utils/gdsLoader";
 import { fetchGDSIIFromURL } from "./lib/utils/urlLoader";
 import { collaborationStore } from "./stores/collaborationStore";
 import { commentStore } from "./stores/commentStore";
 import { gdsStore } from "./stores/gdsStore";
-import { EmbedAPI } from "./lib/embed/EmbedAPI";
 
 const KEYBOARD_OWNER = "App";
 const HELP_MODAL_SEEN_KEY = "gdsjam_help_modal_seen";
