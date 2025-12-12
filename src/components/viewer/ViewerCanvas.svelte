@@ -332,10 +332,21 @@ function handleCKeyUp(event: KeyboardEvent): void {
 }
 
 /**
- * Handle canvas click for comment placement
+ * Handle canvas click/tap for comment placement
+ * Unified handler for both mouse and touch (via pointer events or click)
  */
-function handleCanvasClick(event: MouseEvent): void {
+function handleCanvasClick(event: MouseEvent | PointerEvent): void {
 	if (!commentModeActive || !renderer) return;
+
+	// For touch devices in mobile mode, use the fixed crosshair button instead
+	if (
+		typeof window !== "undefined" &&
+		window.innerWidth < MOBILE_BREAKPOINT &&
+		"pointerType" in event &&
+		event.pointerType === "touch"
+	) {
+		return;
+	}
 
 	// Get click position relative to canvas
 	const rect = canvas.getBoundingClientRect();
@@ -550,8 +561,8 @@ onMount(() => {
 	// Register ESC key handler for cancelling comment mode
 	window.addEventListener("keydown", handleEscKey);
 
-	// Register canvas click handler for comment placement
-	canvas.addEventListener("click", handleCanvasClick);
+	// Register canvas pointer handler for comment placement (handles both mouse and touch)
+	canvas.addEventListener("pointerup", handleCanvasClick);
 
 	// Initialize renderer asynchronously
 	if (canvas) {
@@ -619,8 +630,8 @@ onMount(() => {
 		// Remove ESC key handler
 		window.removeEventListener("keydown", handleEscKey);
 
-		// Remove canvas click handler
-		canvas.removeEventListener("click", handleCanvasClick);
+		// Remove canvas pointer handler
+		canvas.removeEventListener("pointerup", handleCanvasClick);
 
 		// Clear any pending timers
 		if (fKeyHoldTimer) {
