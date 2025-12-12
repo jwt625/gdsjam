@@ -359,7 +359,7 @@ function triggerFileInput() {
 		display: flex;
 		flex-direction: column;
 		gap: 1.5rem;
-		max-width: 600px;
+		max-width: 1400px; /* Increased for desktop/tablet */
 		width: 100%;
 	}
 
@@ -381,6 +381,19 @@ function triggerFileInput() {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
 		gap: 0.75rem;
+	}
+
+	/* Responsive grid adjustments for different screen sizes */
+	@media (min-width: 1200px) {
+		.examples-grid {
+			grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+		}
+	}
+
+	@media (min-width: 768px) and (max-width: 1199px) {
+		.examples-grid {
+			grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+		}
 	}
 
 	.example-card {
@@ -506,6 +519,12 @@ function triggerFileInput() {
 	}
 
 	/* Mobile-first responsive adjustments */
+	@media (max-width: 767px) {
+		.file-upload-container {
+			max-width: 600px; /* Narrower on mobile/small tablets */
+		}
+	}
+
 	@media (max-width: 480px) {
 		.examples-grid {
 			grid-template-columns: 1fr 1fr;
