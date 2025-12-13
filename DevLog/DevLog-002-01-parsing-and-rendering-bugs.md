@@ -9,8 +9,8 @@
 Multiple failure modes have been identified in GDSII file parsing and rendering:
 
 1. **Silent Failure**: Complex layouts render as blank/empty despite successful parsing
-2. **Explicit Parse Errors**: "Invalid record length: 0" errors after ENDLIB record
-3. **Missing Geometry**: Circles, ellipses, and paths not rendered in layouts
+2. **Explicit Parse Errors**: "Invalid record length: 0" errors after ENDLIB record, "Unknown record type: BGNEXTN" errors
+3. **Missing Geometry**: Entire layers disappear when they contain only PATH elements (no BOUNDARY polygons)
 
 ## Test Case: Silent Failure
 
@@ -509,7 +509,7 @@ After implementing the patch:
 1. [FIXED - VERIFIED] **Context Cell Top Cell Detection Bug** - CRITICAL: Context cells poison the reference graph, preventing real top cells from being detected
 2. [FIXED - VERIFIED] **Degenerate Geometry** - Not filtered, causes rendering artifacts and viewport zoom issues
 3. [IMPLEMENTED - NOT TESTED] **BGNEXTN/ENDEXTN Parsing** - Deprecated record types not supported by gdsii library, causes parse failures
-4. [TODO] **Missing PATH Support** - Critical for photonic/PCB layouts (separate issue)
+4. [TODO] **Missing PATH Support** - CRITICAL: Entire layers with only paths are invisible (e.g., layer 24 in TLS08C_20220725.gds with 77,220 paths)
 5. [TODO] **Possibly Insufficient Render Depth** - May cause issues on deep hierarchies (needs testing after top cell fix)
 6. [TODO] **Post-ENDLIB Parsing** - Causes explicit errors (Issue #59)
 
@@ -537,6 +537,59 @@ PATH support is essential for:
 This requires more substantial implementation but is critical for compatibility.
 
 **Note**: TLS08C_20220725.gds will parse successfully after the BGNEXTN/ENDEXTN fix, but will only show the 61,443 BOUNDARY polygons. The 80,152 PATH elements will be silently ignored until PATH support is implemented.
+
+## Third Rendering Bug: Layer 24 Missing (2025-12-13)
+
+### Problem Statement
+
+**Symptom**: Layer 24 is completely missing from the canvas and layer list when viewing TLS08C_20220725.gds
+
+**Test File**: `tests/gds/TLS08C_20220725.gds`
+
+### Analysis
+
+Using `tests/gds/read_gds.py` to inspect the file with gdstk, layer distribution analysis:
+
+**Polygon Layers** (61,443 total polygons):
+- Layers: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 25, 28, 29
+- **Note**: No layer 24 in polygon list
+
+**Path Layers** (80,152 total paths):
+- Layers: 6, 11, 23, **24**, 26, 27
+- **Layer 24**: 77,220 paths (96% of all paths in the file!)
+
+### Root Cause
+
+**Layer 24 contains ONLY PATH elements, NO BOUNDARY (polygon) elements.**
+
+Since the GDS parser does NOT support PATH records (as documented in "Missing PATH Support" section above):
+1. All 77,220 paths on layer 24 are silently ignored during parsing
+2. Layer 24 never gets added to the `layers` map (only happens when polygons are encountered)
+3. Layer 24 doesn't appear in the layer list UI
+4. Nothing renders on the canvas for layer 24
+
+This is a **perfect example** of the silent failure mode described earlier:
+- File parses without errors
+- No warnings to user that geometry was skipped
+- Entire layer appears to be "missing"
+- User has no indication that PATH support is needed
+
+### Impact
+
+**Critical for this file**: Layer 24 contains 96% of all PATH elements in the file. This is likely a critical layer (possibly metal routing, waveguides, or interconnects).
+
+**General impact**: Any layer that contains ONLY paths (no polygons) will be completely invisible in the viewer until PATH support is implemented.
+
+### Solution
+
+Implement PATH record parsing and PATH-to-polygon conversion as described in "Phase 1: PATH Support" section above. This will:
+1. Parse PATH records during file loading
+2. Convert paths to polygons using width and pathtype
+3. Add converted polygons to cells
+4. Ensure layers with only paths appear in layer list
+5. Render path-based geometry on canvas
+
+**Priority**: HIGH - This affects a major portion of the test file and likely many real-world GDS files.
 
 ## Development Guidelines and Coding Standards
 
