@@ -360,8 +360,17 @@ export class MinimapRenderer {
 						graphics.lineTo(pt.x, pt.y);
 					}
 				}
-				graphics.closePath();
-				graphics.fill({ color, alpha: 0.8 });
+
+				// Polylines (2 points - zero-width paths) are rendered as lines
+				const isPolyline = polygon.points.length === 2;
+
+				if (!isPolyline) {
+					graphics.closePath();
+					graphics.fill({ color, alpha: 0.8 });
+				} else {
+					// Render polylines as stroked lines
+					graphics.stroke({ color, width: 1, alpha: 0.8 });
+				}
 			}
 
 			this.stats.polygonCount++;

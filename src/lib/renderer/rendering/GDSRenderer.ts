@@ -421,9 +421,15 @@ export class GDSRenderer {
 					graphics.lineTo(pt.x, pt.y);
 				}
 			}
-			graphics.closePath();
 
-			if (fillMode) {
+			// Polylines (2 points - zero-width paths) are rendered as lines, not filled polygons
+			const isPolyline = polygon.points.length === 2;
+
+			if (!isPolyline) {
+				graphics.closePath();
+			}
+
+			if (fillMode && !isPolyline) {
 				graphics.fill({ color, alpha: 0.7 });
 			} else {
 				graphics.stroke({ color, width: strokeWidthDB, alpha: 1.0 });

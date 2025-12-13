@@ -16,6 +16,7 @@ import type {
 } from "../../types/gds";
 import { DEBUG_PARSER } from "../debug";
 import { generateUUID } from "../utils/uuid";
+import { pathToPolygon } from "./pathToPolygon";
 
 /**
  * Custom parseGDS wrapper that handles deprecated BGNEXTN and ENDEXTN records
@@ -318,6 +319,9 @@ function calculateBoundingBox(points: Point[]): BoundingBox {
  */
 export type ParseProgressCallback = (progress: number, message: string) => void;
 
+/**
+ * Detect file format and provide helpful error messages
+ */
 /**
  * Detect file format and provide helpful error messages
  */
@@ -732,6 +736,18 @@ async function buildGDSDocument(
 	let currentLayer = 0;
 	let currentDatatype = 0;
 
+	// PATH support: track current path being parsed
+	let currentPath: Partial<{
+		id: string;
+		points: Point[];
+		layer: number;
+		datatype: number;
+		width: number;
+		pathtype: number;
+	}> | null = null;
+	let currentPathWidth = 0;
+	let currentPathType = 0;
+
 	let polygonCount = 0;
 	let instanceCount = 0;
 
@@ -793,10 +809,20 @@ async function buildGDSDocument(
 				};
 				break;
 
+			case RecordType.PATH: // Begin path
+				currentPath = {
+					id: generateUUID(),
+					points: [],
+				};
+				break;
+
 			case RecordType.LAYER:
 				currentLayer = data as number;
 				if (currentPolygon) {
 					currentPolygon.layer = currentLayer;
+				}
+				if (currentPath) {
+					currentPath.layer = currentLayer;
 				}
 				break;
 
@@ -804,6 +830,23 @@ async function buildGDSDocument(
 				currentDatatype = data as number;
 				if (currentPolygon) {
 					currentPolygon.datatype = currentDatatype;
+				}
+				if (currentPath) {
+					currentPath.datatype = currentDatatype;
+				}
+				break;
+
+			case RecordType.WIDTH:
+				currentPathWidth = data as number;
+				if (currentPath) {
+					currentPath.width = currentPathWidth;
+				}
+				break;
+
+			case RecordType.PATHTYPE:
+				currentPathType = data as number;
+				if (currentPath) {
+					currentPath.pathtype = currentPathType;
 				}
 				break;
 
@@ -819,6 +862,16 @@ async function buildGDSDocument(
 
 					currentPolygon.points = points;
 					currentPolygon.boundingBox = calculateBoundingBox(points);
+				} else if (currentPath && Array.isArray(data)) {
+					// PATH XY data: centerline/spine points
+					const points: Point[] = [];
+					for (const coord of data) {
+						if (Array.isArray(coord) && coord.length >= 2) {
+							points.push({ x: coord[0], y: coord[1] });
+						}
+					}
+					currentPath.points = points;
+					// Note: Don't calculate bbox yet - will do after path-to-polygon conversion
 				} else if (currentInstance && Array.isArray(data) && data.length >= 1) {
 					// For instances, XY contains the position
 					// Check if it's nested array format [[x, y]] or flat format [x, y]
@@ -875,6 +928,70 @@ async function buildGDSDocument(
 					}
 
 					currentPolygon = null;
+				} else if (currentPath && currentCell && currentPath.points) {
+					// PATH handling: convert to polygon
+					// Validate path has required fields
+					if (currentPath.layer === undefined) {
+						currentPath.layer = currentLayer || 0;
+					}
+					if (currentPath.datatype === undefined) {
+						currentPath.datatype = currentDatatype || 0;
+					}
+					if (currentPath.width === undefined) {
+						currentPath.width = currentPathWidth || 0;
+					}
+					if (currentPath.pathtype === undefined) {
+						currentPath.pathtype = currentPathType || 0;
+					}
+
+					// Convert path to polygon (or polyline for zero-width paths)
+					const polygonPoints = pathToPolygon(
+						currentPath.points,
+						currentPath.width,
+						currentPath.pathtype,
+					);
+
+					// Accept both polygons (3+ points) and polylines (2 points for zero-width paths)
+					if (polygonPoints.length >= 2) {
+						// Create polygon from converted path
+						// Note: For zero-width paths, this will be a polyline (2 points)
+						const polygon: Polygon = {
+							id: currentPath.id!,
+							points: polygonPoints,
+							layer: currentPath.layer,
+							datatype: currentPath.datatype,
+							boundingBox: calculateBoundingBox(polygonPoints),
+						};
+
+						// Add to cell (same as BOUNDARY polygons)
+						currentCell.polygons.push(polygon);
+						polygonCount++;
+
+						// Track layer (same as BOUNDARY)
+						const layerKey = `${polygon.layer}:${polygon.datatype}`;
+						if (!layers.has(layerKey)) {
+							layers.set(layerKey, {
+								layer: polygon.layer,
+								datatype: polygon.datatype,
+								name: `Layer ${polygon.layer}/${polygon.datatype}`,
+								color: generateLayerColor(polygon.layer, polygon.datatype),
+								visible: true,
+							});
+						}
+
+						if (DEBUG_PARSER) {
+							const type = polygonPoints.length === 2 ? "polyline" : "polygon";
+							console.log(
+								`[GDSParser] Converted PATH to ${type}: ${currentPath.points.length} spine points → ${polygonPoints.length} outline points, width=${currentPath.width}, pathtype=${currentPath.pathtype}`,
+							);
+						}
+					} else if (DEBUG_PARSER) {
+						console.log(
+							`[GDSParser] Skipping degenerate path with ${polygonPoints.length} outline points in cell ${currentCell.name}`,
+						);
+					}
+
+					currentPath = null;
 				} else if (currentInstance && currentCell) {
 					// Validate instance has required fields
 					if (!currentInstance.cellRef) {
