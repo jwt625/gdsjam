@@ -18,6 +18,236 @@ import { DEBUG_PARSER } from "../debug";
 import { generateUUID } from "../utils/uuid";
 
 /**
+ * Custom parseGDS wrapper that handles deprecated BGNEXTN and ENDEXTN records
+ * These records are used in PATH elements with custom extensions (pathtype 4)
+ * but are deprecated and not supported by the gdsii library.
+ *
+ * This wrapper manually parses the entire file record-by-record, handling
+ * deprecated records that the library doesn't support.
+ */
+function* parseGDSWithDeprecatedRecords(
+	fileData: Uint8Array,
+): Generator<{ tag: number; data: unknown }, void, unknown> {
+	const dataView = new DataView(fileData.buffer);
+	let offset = 0;
+
+	// Deprecated record types that need manual parsing
+	const BGNEXTN = 12291;
+	const ENDEXTN = 12547;
+
+	while (offset < fileData.length) {
+		// Read record header (4 bytes: 2 for length, 2 for tag)
+		if (offset + 4 > fileData.length) {
+			break;
+		}
+
+		const recordLength = dataView.getUint16(offset, false); // Big-endian
+		const tag = dataView.getUint16(offset + 2, false); // Big-endian
+
+		if (recordLength < 4) {
+			throw new GDSParseError(`Invalid record length: ${recordLength}`);
+		}
+
+		const dataLength = recordLength - 4;
+
+		// Handle deprecated records manually
+		if (tag === BGNEXTN || tag === ENDEXTN) {
+			// Parse as int32 (4 bytes of data)
+			if (dataLength === 4) {
+				const value = dataView.getInt32(offset + 4, false);
+				yield { tag, data: value };
+			} else if (dataLength === 0) {
+				// Empty record
+				yield { tag, data: null };
+			} else {
+				// Unexpected length, skip the record
+				if (DEBUG_PARSER) {
+					console.warn(
+						`[GDSParser] Unexpected length ${dataLength} for ${RecordType[tag] || tag}, skipping`,
+					);
+				}
+				yield { tag, data: null };
+			}
+			offset += recordLength;
+			continue;
+		}
+
+		// For all other records, parse using standard logic
+		// We replicate the basic parsing logic here to avoid circular dependency
+
+		let data: unknown = null;
+
+		// Parse based on record type (simplified version of what the library does)
+		switch (tag) {
+			case RecordType.HEADER:
+				if (dataLength === 2) {
+					data = { version: dataView.getInt16(offset + 4, false) };
+				}
+				break;
+
+			case RecordType.LIBNAME:
+			case RecordType.STRNAME:
+			case RecordType.SNAME:
+			case RecordType.STRING:
+				// String parser
+				{
+					let len = dataLength;
+					if (dataView.getUint8(offset + 4 + len - 1) === 0) {
+						len--;
+					}
+					const textDecoder = new TextDecoder();
+					data = textDecoder.decode(new Uint8Array(fileData.buffer, offset + 4, len));
+				}
+				break;
+
+			case RecordType.LAYER:
+			case RecordType.DATATYPE:
+			case RecordType.TEXTTYPE:
+			case RecordType.PATHTYPE:
+			case RecordType.STRANS:
+			case RecordType.PRESENTATION:
+			case RecordType.NODETYPE:
+			case RecordType.PROPATTR:
+			case RecordType.BOXTYPE:
+			case RecordType.GENERATIONS:
+			case RecordType.ELFLAGS:
+				// int16 parser
+				if (dataLength === 2) {
+					data = dataView.getInt16(offset + 4, false);
+				}
+				break;
+
+			case RecordType.WIDTH:
+			case RecordType.PLEX:
+				// int32 parser
+				if (dataLength === 4) {
+					data = dataView.getInt32(offset + 4, false);
+				}
+				break;
+
+			case RecordType.XY:
+				// XY array parser
+				if (dataLength % 8 === 0) {
+					const xy = new Array(dataLength / 8);
+					for (let i = 0; i < dataLength; i += 8) {
+						xy[i / 8] = [
+							dataView.getInt32(offset + 4 + i, false),
+							dataView.getInt32(offset + 4 + i + 4, false),
+						];
+					}
+					data = xy;
+				}
+				break;
+
+			case RecordType.COLROW:
+				// COLROW parser
+				if (dataLength === 4) {
+					data = {
+						columns: dataView.getUint16(offset + 4, false),
+						rows: dataView.getUint16(offset + 6, false),
+					};
+				}
+				break;
+
+			case RecordType.MAG:
+			case RecordType.ANGLE:
+				// Real8 parser
+				if (dataLength === 8) {
+					data = parseReal8(dataView, offset + 4);
+				}
+				break;
+
+			case RecordType.UNITS:
+				// Units parser
+				if (dataLength === 16) {
+					data = {
+						userUnit: parseReal8(dataView, offset + 4),
+						metersPerUnit: parseReal8(dataView, offset + 12),
+					};
+				}
+				break;
+
+			case RecordType.BGNLIB:
+			case RecordType.BGNSTR:
+				// Date parser
+				if (dataLength === 24) {
+					data = {
+						modTime: parseDate(dataView, offset + 4),
+						accessTime: parseDate(dataView, offset + 16),
+					};
+				}
+				break;
+
+			case RecordType.ENDLIB:
+			case RecordType.ENDSTR:
+			case RecordType.BOUNDARY:
+			case RecordType.PATH:
+			case RecordType.SREF:
+			case RecordType.AREF:
+			case RecordType.TEXT:
+			case RecordType.ENDEL:
+			case RecordType.TEXTNODE:
+			case RecordType.NODE:
+			case RecordType.BOX:
+				// Empty records
+				if (dataLength !== 0) {
+					throw new GDSParseError(`Invalid record length for ${RecordType[tag] || tag}`);
+				}
+				data = null;
+				break;
+
+			default:
+				// Unknown record type - skip it
+				if (DEBUG_PARSER) {
+					console.warn(`[GDSParser] Skipping unknown record type: ${RecordType[tag] || tag}`);
+				}
+				data = null;
+		}
+
+		yield { tag, data };
+		offset += recordLength;
+	}
+}
+
+/**
+ * Parse GDSII Real8 format (8-byte floating point)
+ */
+function parseReal8(dataView: DataView, offset: number): number {
+	if (dataView.getUint32(offset) === 0) {
+		return 0;
+	}
+	const sign = dataView.getUint8(offset) & 0x80 ? -1 : 1;
+	const exponent = (dataView.getUint8(offset) & 0x7f) - 64;
+	let base = 0;
+	for (let i = 1; i < 7; i++) {
+		const byte = dataView.getUint8(offset + i);
+		for (let bit = 0; bit < 8; bit++) {
+			if (byte & (1 << (7 - bit))) {
+				base += 2 ** (7 - bit - i * 8);
+			}
+		}
+	}
+	return base * sign * 16 ** exponent;
+}
+
+/**
+ * Parse GDSII date format
+ */
+function parseDate(dataView: DataView, offset: number): Date {
+	const year = dataView.getUint16(offset, false);
+	return new Date(
+		Date.UTC(
+			year < 1900 ? year + 1900 : year,
+			dataView.getUint16(offset + 2, false) - 1,
+			dataView.getUint16(offset + 4, false),
+			dataView.getUint16(offset + 6, false),
+			dataView.getUint16(offset + 8, false),
+			dataView.getUint16(offset + 10, false),
+		),
+	);
+}
+
+/**
  * Generate a random color for a layer
  */
 function generateLayerColor(layer: number, datatype: number): string {
@@ -214,6 +444,7 @@ function getRecordTypeName(tag: number): string {
 /**
  * Parse GDSII with enhanced error reporting
  * This wrapper catches parse errors and provides better diagnostic information
+ * Falls back to custom parser if deprecated BGNEXTN/ENDEXTN records are encountered
  */
 function parseGDSWithDiagnostics(fileData: Uint8Array): Array<{ tag: number; data: any }> {
 	const records: Array<{ tag: number; data: any }> = [];
@@ -221,6 +452,7 @@ function parseGDSWithDiagnostics(fileData: Uint8Array): Array<{ tag: number; dat
 	let lastSuccessfulTag: number | null = null;
 
 	try {
+		// Try the fast library parser first
 		for (const record of parseGDS(fileData)) {
 			records.push(record);
 			lastSuccessfulTag = record.tag;
@@ -231,6 +463,44 @@ function parseGDSWithDiagnostics(fileData: Uint8Array): Array<{ tag: number; dat
 			const errorMsg = error.message;
 			const lastRecordInfo =
 				lastSuccessfulTag !== null ? getRecordTypeName(lastSuccessfulTag) : "none";
+
+			// Check if this is a BGNEXTN/ENDEXTN error - if so, retry with custom parser
+			if (
+				errorMsg.includes("Unknown record type") &&
+				(errorMsg.includes("BGNEXTN") || errorMsg.includes("ENDEXTN"))
+			) {
+				if (DEBUG_PARSER) {
+					console.log(
+						`[GDSParser] Detected deprecated BGNEXTN/ENDEXTN records, retrying with custom parser...`,
+					);
+				}
+
+				// Retry with custom parser that handles deprecated records
+				records.length = 0; // Clear partial results
+				recordCount = 0;
+				lastSuccessfulTag = null;
+
+				try {
+					for (const record of parseGDSWithDeprecatedRecords(fileData)) {
+						records.push(record);
+						lastSuccessfulTag = record.tag;
+						recordCount++;
+					}
+
+					if (DEBUG_PARSER) {
+						console.log(
+							`[GDSParser] Successfully parsed ${recordCount} records with custom parser`,
+						);
+					}
+
+					return records;
+				} catch (retryError) {
+					// Custom parser also failed
+					throw new Error(
+						`GDSII parsing failed even with custom parser: ${retryError instanceof Error ? retryError.message : String(retryError)}`,
+					);
+				}
+			}
 
 			console.error("[GDSParser] Parse error details:", {
 				error: errorMsg,

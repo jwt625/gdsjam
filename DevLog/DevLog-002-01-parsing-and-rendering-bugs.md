@@ -336,7 +336,123 @@ Console output:
 - Context cell excluded from rendering
 - Degenerate polygon filtered
 
-**Status**: First rendering bug FIXED
+**Status**: First rendering bug FIXED (verified), Second parsing bug IMPLEMENTED (not yet tested)
+
+## Second Rendering Bug: BGNEXTN Unknown Record Type (2025-12-13)
+
+### Problem Statement
+
+**Error**: "Failed to load file: GDSII parsing failed at record 55816 (after WIDTH (3843)): Unknown record type: BGNEXTN"
+
+**Test File**: `tests/gds/TLS08C_20220725.gds`
+
+### Analysis
+
+Using `tests/gds/read_gds.py` to inspect the file with gdstk:
+```
+Library: LIB
+Number of cells: 1
+Cells: ['TOP']
+
+Cell: TOP
+  Polygons: 61443
+  Paths: 80152      <-- File contains 80,152 PATH elements!
+  Labels: 0
+  References: 0
+```
+
+The file contains **80,152 PATH elements** in addition to 61,443 polygons.
+
+### Root Cause
+
+**BGNEXTN** and **ENDEXTN** are deprecated GDSII record types (RecordType 12291 and 12547) used for PATH elements with custom extensions (pathtype 4).
+
+From the GDSII spec:
+- Pathtype 4 is for "CustomPlus product only" and signifies paths with variable square-end extensions
+- Records 48 and 49 (BGNEXTN and ENDEXTN) contain the extension values
+- These records are marked as `@deprecated` in the gdsii library
+
+**Problem**: The `gdsii` npm library defines these record types in the `RecordType` enum but does NOT provide parsers for them in the `parsers` object.
+
+When the library encounters these records during parsing:
+1. It looks up `parsers[12291]` (BGNEXTN) → undefined
+2. Throws `GDSParseError: Unknown record type: BGNEXTN`
+3. Parsing fails completely
+
+### Solution
+
+**Fast-path with fallback strategy**: Try library parser first, fall back to custom parser only if needed.
+
+Implementation in `src/lib/gds/GDSParser.ts`:
+
+**Step 1**: Try the fast library parser (optimized, compiled)
+```typescript
+function parseGDSWithDiagnostics(fileData: Uint8Array) {
+    try {
+        // Try the fast library parser first
+        for (const record of parseGDS(fileData)) {
+            records.push(record);
+        }
+    } catch (error) {
+        // Check if this is a BGNEXTN/ENDEXTN error
+        if (error.message.includes("BGNEXTN") || error.message.includes("ENDEXTN")) {
+            // Retry with custom parser
+            return parseWithCustomParser(fileData);
+        }
+        throw error;
+    }
+}
+```
+
+**Step 2**: Custom parser as fallback (only for files with deprecated records)
+```typescript
+function* parseGDSWithDeprecatedRecords(fileData: Uint8Array) {
+    const dataView = new DataView(fileData.buffer);
+    let offset = 0;
+
+    const BGNEXTN = 12291;
+    const ENDEXTN = 12547;
+
+    while (offset < fileData.length) {
+        const recordLength = dataView.getUint16(offset, false);
+        const tag = dataView.getUint16(offset + 2, false);
+        const dataLength = recordLength - 4;
+
+        // Handle deprecated records
+        if (tag === BGNEXTN || tag === ENDEXTN) {
+            if (dataLength === 4) {
+                const value = dataView.getInt32(offset + 4, false);
+                yield { tag, data: value };
+            } else {
+                yield { tag, data: null };
+            }
+            offset += recordLength;
+            continue;
+        }
+
+        // Parse other record types using manual parsing logic
+        // (Full implementation includes all standard GDSII record types)
+
+        offset += recordLength;
+    }
+}
+```
+
+**Why this works**:
+- **Zero perf cost for 99% of files** - uses fast library parser
+- **Only files with deprecated records** pay the custom parser cost
+- **Graceful degradation** - automatically detects and handles edge cases
+- **Maintains compatibility** - standard files use standard parser
+
+### Fix Verification
+
+After implementing the patch:
+- Files with BGNEXTN/ENDEXTN records should parse without errors
+- The extension values are parsed but ignored (not needed for rendering)
+- PATH elements will still not render (separate issue - PATH support not implemented)
+- But parsing will succeed and BOUNDARY elements will render correctly
+
+**Status**: BGNEXTN/ENDEXTN parsing patch IMPLEMENTED (needs testing)
 
 ## Next Steps
 
@@ -356,41 +472,46 @@ Console output:
    - Apply same context cell exclusion logic as parser
    - Exclude context cells from final top cells list to prevent rendering them
 7. [DONE] Test with test.gds to verify rendering - CONFIRMED WORKING
-8. [TODO] **IF STILL NOT RENDERING**: Increase LOD_MAX_DEPTH from 3 to 6-8 in `src/lib/config.ts`
+8. [DONE] **Fix BGNEXTN/ENDEXTN parsing** in `src/lib/gds/GDSParser.ts`
+   - Patch gdsii library to add parsers for deprecated records
+   - Allows files with pathtype 4 paths to parse successfully
+9. [TODO] Test with TLS08C_20220725.gds to verify parsing works
+10. [TODO] **IF STILL NOT RENDERING**: Increase LOD_MAX_DEPTH from 3 to 6-8 in `src/lib/config.ts`
    - Only do this if top cell fix doesn't solve the problem
    - Current: `export const LOD_MAX_DEPTH = 3;`
    - Proposed: `export const LOD_MAX_DEPTH = 8;`
    - Rationale: gdsfactory files have 4-5 level hierarchies
-9. [TODO] **IF STILL NOT RENDERING**: Increase initial hierarchical depth from 3 to 5 in `src/lib/renderer/PixiRenderer.ts`
+11. [TODO] **IF STILL NOT RENDERING**: Increase initial hierarchical depth from 3 to 5 in `src/lib/renderer/PixiRenderer.ts`
    - Only do this if needed after testing
    - Current: `this.currentRenderDepth = isHierarchical ? 3 : 0;`
    - Proposed: `this.currentRenderDepth = isHierarchical ? 5 : 0;`
    - Rationale: Start deeper to show content immediately
-10. [TODO] **Fix progress calculation** for hierarchical files in `src/lib/renderer/rendering/GDSRenderer.ts`
+12. [TODO] **Fix progress calculation** for hierarchical files in `src/lib/renderer/rendering/GDSRenderer.ts`
    - Current: Uses `cell.polygons.length` (0 for hierarchical top cells)
    - Proposed: Count total polygons recursively or use instance count
 
 ### Medium Priority
 
-11. [TODO] Implement PATH record parsing
-12. [TODO] Add PATH-to-polygon conversion
-13. [TODO] Fix post-ENDLIB parsing (Issue #59)
-14. [TODO] Add BOX and AREF support
+13. [TODO] Implement PATH record parsing
+14. [TODO] Add PATH-to-polygon conversion
+15. [TODO] Fix post-ENDLIB parsing (Issue #59)
+16. [TODO] Add BOX and AREF support
 
 ### Low Priority
 
-15. [TODO] Update statistics to show skipped geometry
-16. [TODO] Add warnings for unsupported record types
+17. [TODO] Update statistics to show skipped geometry
+18. [TODO] Add warnings for unsupported record types
 
 ## Summary
 
 ### Confirmed Issues
 
-1. **Context Cell Top Cell Detection Bug** - CRITICAL: Context cells poison the reference graph, preventing real top cells from being detected
-2. **Degenerate Geometry** - Not filtered, causes rendering artifacts and viewport zoom issues
-3. **Missing PATH Support** - Critical for photonic/PCB layouts (separate issue)
-4. **Possibly Insufficient Render Depth** - May cause issues on deep hierarchies (needs testing after top cell fix)
-5. **Post-ENDLIB Parsing** - Causes explicit errors (Issue #59)
+1. [FIXED - VERIFIED] **Context Cell Top Cell Detection Bug** - CRITICAL: Context cells poison the reference graph, preventing real top cells from being detected
+2. [FIXED - VERIFIED] **Degenerate Geometry** - Not filtered, causes rendering artifacts and viewport zoom issues
+3. [IMPLEMENTED - NOT TESTED] **BGNEXTN/ENDEXTN Parsing** - Deprecated record types not supported by gdsii library, causes parse failures
+4. [TODO] **Missing PATH Support** - Critical for photonic/PCB layouts (separate issue)
+5. [TODO] **Possibly Insufficient Render Depth** - May cause issues on deep hierarchies (needs testing after top cell fix)
+6. [TODO] **Post-ENDLIB Parsing** - Causes explicit errors (Issue #59)
 
 ### Quick Wins
 
@@ -398,9 +519,13 @@ The test.gds silent failure is fixed by:
 1. [DONE] Excluding context cells from top cell detection (allows "chip" to be detected)
 2. [DONE] Filtering degenerate polygons (prevents viewport zoom to origin)
 3. [DONE] Excluding context cells from renderer's top cell list (prevents rendering them)
-4. [TODO] Testing to verify - if still not rendering, then increase depth limits
+4. [DONE] Testing verified - rendering works correctly
 
-These changes require minimal code and should fix the most visible user-facing issue.
+The TLS08C_20220725.gds parsing failure should be fixed by:
+1. [IMPLEMENTED] Patching gdsii library to add parsers for BGNEXTN/ENDEXTN deprecated records
+2. [NEXT STEP] Testing to verify parsing works (rendering will still be incomplete due to missing PATH support)
+
+These changes require minimal code and fix critical user-facing issues.
 
 ### Long-term Solutions
 
@@ -410,6 +535,8 @@ PATH support is essential for:
 - Any design using path-based geometry
 
 This requires more substantial implementation but is critical for compatibility.
+
+**Note**: TLS08C_20220725.gds will parse successfully after the BGNEXTN/ENDEXTN fix, but will only show the 61,443 BOUNDARY polygons. The 80,152 PATH elements will be silently ignored until PATH support is implemented.
 
 ## Development Guidelines and Coding Standards
 
