@@ -18,6 +18,7 @@
 import { Container, Graphics } from "pixi.js";
 import type { BoundingBox, Cell, GDSDocument, Polygon } from "../../../types/gds";
 import { SPATIAL_TILE_SIZE } from "../../config";
+import { DEBUG_RENDERER } from "../../debug";
 import type { RTreeItem, SpatialIndex } from "../../spatial/RTree";
 
 export type RenderProgressCallback = (progress: number, message: string) => void;
@@ -63,16 +64,35 @@ export class GDSRenderer {
 		const allGraphicsItems: RTreeItem[] = [];
 
 		// Find top-level cells (cells that are not referenced by any other cell)
+		// Exclude references from context cells (e.g., $$$CONTEXT_INFO$$$) as they're just library metadata
 		const referencedCells = new Set<string>();
 		for (const cell of document.cells.values()) {
-			for (const instance of cell.instances) {
-				referencedCells.add(instance.cellRef);
+			// Skip context cells when building referenced cells set
+			const isContextCell = cell.name.includes("CONTEXT_INFO") || cell.name.startsWith("$$$");
+			if (!isContextCell) {
+				for (const instance of cell.instances) {
+					referencedCells.add(instance.cellRef);
+				}
 			}
 		}
 
-		const topCells = Array.from(document.cells.values()).filter(
-			(cell) => !referencedCells.has(cell.name),
-		);
+		// Filter out context cells from top cells list - we don't want to render them
+		const topCells = Array.from(document.cells.values()).filter((cell) => {
+			const isContextCell = cell.name.includes("CONTEXT_INFO") || cell.name.startsWith("$$$");
+			return !referencedCells.has(cell.name) && !isContextCell;
+		});
+
+		if (DEBUG_RENDERER) {
+			console.log(
+				`[GDSRenderer] Rendering with maxDepth=${options.maxDepth}, budget=${options.maxPolygonsPerRender}`,
+			);
+			console.log(`[GDSRenderer] Top cells to render: ${topCells.length}`);
+			for (const cell of topCells) {
+				console.log(
+					`[GDSRenderer]   ${cell.name}: ${cell.polygons.length} polygons, ${cell.instances.length} instances`,
+				);
+			}
+		}
 
 		// Calculate total polygon count for progress tracking
 		let totalPolygonCount = 0;
@@ -132,6 +152,12 @@ export class GDSRenderer {
 				);
 				break;
 			}
+		}
+
+		if (DEBUG_RENDERER) {
+			console.log(
+				`[GDSRenderer] Render complete: ${totalPolygons} polygons rendered, ${allGraphicsItems.length} graphics items`,
+			);
 		}
 
 		return {
