@@ -835,7 +835,7 @@ async function buildGDSDocument(
 				break;
 
 			case RecordType.ENDEL: // End element
-				if (currentPolygon && currentCell) {
+				if (currentPolygon && currentCell && currentPolygon.points) {
 					// Validate polygon has required fields
 					if (currentPolygon.layer === undefined) {
 						// Use last known layer or default to 0
@@ -846,10 +846,6 @@ async function buildGDSDocument(
 						currentPolygon.datatype = currentDatatype || 0;
 					}
 
-					// Add polygon to current cell
-					currentCell.polygons.push(currentPolygon as Polygon);
-					polygonCount++;
-				if (currentPolygon && currentCell && currentPolygon.points) {
 					// Filter degenerate polygons (< 3 unique points)
 					const uniquePoints = new Set(currentPolygon.points.map((p) => `${p.x},${p.y}`));
 
@@ -857,25 +853,25 @@ async function buildGDSDocument(
 						// Add polygon to current cell
 						currentCell.polygons.push(currentPolygon as Polygon);
 						polygonCount++;
+
+						// Track layer
+						const layerKey = `${currentPolygon.layer}:${currentPolygon.datatype}`;
+						if (!layers.has(layerKey)) {
+							layers.set(layerKey, {
+								// biome-ignore lint/style/noNonNullAssertion: Layer/datatype checked by parser
+								layer: currentPolygon.layer!,
+								// biome-ignore lint/style/noNonNullAssertion: Layer/datatype checked by parser
+								datatype: currentPolygon.datatype!,
+								name: `Layer ${currentPolygon.layer}/${currentPolygon.datatype}`,
+								// biome-ignore lint/style/noNonNullAssertion: Layer/datatype checked by parser
+								color: generateLayerColor(currentPolygon.layer!, currentPolygon.datatype!),
+								visible: true,
+							});
+						}
 					} else if (DEBUG_PARSER) {
 						console.log(
 							`[GDSParser] Skipping degenerate polygon with ${uniquePoints.size} unique points in cell ${currentCell.name}`,
 						);
-					}
-
-					// Track layer
-					const layerKey = `${currentPolygon.layer}:${currentPolygon.datatype}`;
-					if (!layers.has(layerKey)) {
-						layers.set(layerKey, {
-							// biome-ignore lint/style/noNonNullAssertion: Layer/datatype checked by parser
-							layer: currentPolygon.layer!,
-							// biome-ignore lint/style/noNonNullAssertion: Layer/datatype checked by parser
-							datatype: currentPolygon.datatype!,
-							name: `Layer ${currentPolygon.layer}/${currentPolygon.datatype}`,
-							// biome-ignore lint/style/noNonNullAssertion: Layer/datatype checked by parser
-							color: generateLayerColor(currentPolygon.layer!, currentPolygon.datatype!),
-							visible: true,
-						});
 					}
 
 					currentPolygon = null;
