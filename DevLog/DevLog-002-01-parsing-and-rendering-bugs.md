@@ -53,7 +53,7 @@ switch (tag) {
     case RecordType.LIBNAME:
     case RecordType.UNITS:
     case RecordType.BGNSTR:
-    case RecordType.BOUNDARY:  // ✓ Handled
+    case RecordType.BOUNDARY:  // Handled
     case RecordType.LAYER:
     case RecordType.DATATYPE:
     case RecordType.XY:
@@ -69,12 +69,12 @@ switch (tag) {
 ### 2. Missing Geometry Types
 
 The parser only handles:
-- ✓ `BOUNDARY` (polygons)
-- ✓ `SREF` (cell references)
-- ✗ `PATH` (paths with width)
-- ✗ `BOX` (rectangles)
-- ✗ `TEXT` (labels)
-- ✗ `AREF` (array references)
+- [YES] `BOUNDARY` (polygons)
+- [YES] `SREF` (cell references)
+- [NO] `PATH` (paths with width)
+- [NO] `BOX` (rectangles)
+- [NO] `TEXT` (labels)
+- [NO] `AREF` (array references)
 
 ### 3. Degenerate Polygon Handling
 
@@ -105,14 +105,14 @@ Files mixing BOUNDARY and PATH will:
 ## Available Record Types in gdsii Library
 
 The `gdsii` library already parses these record types:
-- ✓ `PATH` (RecordType.PATH = 2304)
-- ✓ `WIDTH` (RecordType.WIDTH = 3843)
-- ✓ `PATHTYPE` (RecordType.PATHTYPE = 8450)
-- ✓ `BOX` (RecordType.BOX = 11520)
-- ✓ `AREF` (RecordType.AREF = 2816)
-- ✓ `COLROW` (RecordType.COLROW = 4866)
-- ✓ `TEXT` (RecordType.TEXT = 3072)
-- ✓ `STRING` (RecordType.STRING = 6406)
+- `PATH` (RecordType.PATH = 2304)
+- `WIDTH` (RecordType.WIDTH = 3843)
+- `PATHTYPE` (RecordType.PATHTYPE = 8450)
+- `BOX` (RecordType.BOX = 11520)
+- `AREF` (RecordType.AREF = 2816)
+- `COLROW` (RecordType.COLROW = 4866)
+- `TEXT` (RecordType.TEXT = 3072)
+- `STRING` (RecordType.STRING = 6406)
 
 **The library parses them, but our code ignores them!**
 
@@ -271,60 +271,136 @@ For test.gds:
    - For hierarchical files, top cells have 0 polygons
    - Division by zero → progress stuck at 0%
 
+## Actual Root Cause (2025-12-13 Update)
+
+### Test Results with Debug Logging
+
+Console output when loading test.gds:
+```
+[GDSParser] Total cells: 186, Top cells: 1
+[GDSParser] Top cells: ['$$$CONTEXT_INFO$$$']
+[GDSParser]   $$$CONTEXT_INFO$$$: 1 polygons, 185 instances
+[GDSRenderer] Rendering with maxDepth=3, budget=100000
+[GDSRenderer] Top cells to render: 1
+[GDSRenderer]   $$$CONTEXT_INFO$$$: 1 polygons, 185 instances
+[GDSRenderer] Render complete: 1 polygons rendered, 1 graphics items
+```
+
+**Observed behavior**:
+- Nothing visible on canvas or minimap
+- Viewport zoomed in heavily on load (zoomed to degenerate polygon at origin)
+- Perf panel: 1 visible polygon, 1 total polygon
+- File stats: 186 cells, 416 total polygons, 702 instances
+- No errors or warnings
+
+### Corrected Root Cause Analysis
+
+**WRONG ASSUMPTION**: The DevLog initially assumed both `$$$CONTEXT_INFO$$$` and `chip` would be detected as top cells.
+
+**ACTUAL PROBLEM**: Only `$$$CONTEXT_INFO$$$` is detected as a top cell!
+
+**Why this happens**:
+1. `$$$CONTEXT_INFO$$$` cell has 185 references to ALL other cells (including "chip")
+2. Top cell detection marks any referenced cell as "not a top cell"
+3. Therefore "chip" is marked as referenced → NOT a top cell
+4. Only `$$$CONTEXT_INFO$$$` is rendered (1 degenerate polygon at origin)
+5. The real geometry in "chip" cell is never rendered
+
+**Why nothing is visible**:
+1. Only the context cell's 1 polygon is rendered
+2. That polygon is degenerate: `[[0,0], [0,0], [0,0], [0,0]]`
+3. Viewport zooms to fit this degenerate polygon (explains heavy zoom)
+4. All actual geometry is in "chip" cell which isn't being rendered at all
+
+**Conclusion**: This is NOT a depth limit issue. It's a top cell detection bug where context cells poison the reference graph.
+
+### Fix Verification (2025-12-13)
+
+After implementing fixes for parser and renderer:
+
+Console output:
+```
+[GDSParser] Skipping degenerate polygon with 1 unique points in cell $$$CONTEXT_INFO$$$
+[GDSParser] Total cells: 186, Top cells: 2
+[GDSParser] Top cells: ['$$$CONTEXT_INFO$$$', 'chip']
+[GDSParser]   $$$CONTEXT_INFO$$$: 0 polygons, 185 instances
+[GDSParser]   chip: 0 polygons, 214 instances
+[GDSRenderer] Rendering with maxDepth=3, budget=100000
+[GDSRenderer] Top cells to render: 1
+[GDSRenderer]   chip: 0 polygons, 214 instances
+```
+
+**Result**: RENDERING WORKS
+- Minimap renders correctly
+- Canvas shows geometry
+- Context cell excluded from rendering
+- Degenerate polygon filtered
+
+**Status**: First rendering bug FIXED
+
 ## Next Steps
 
 ### Immediate Fixes (High Priority)
 
-1. ✅ Copy test files to `tests/gds/`
-2. ✅ Document findings in DevLog
-3. ✅ Analyze renderer code
-4. ⬜ **Increase LOD_MAX_DEPTH** from 3 to 6-8 in `src/lib/config.ts`
+1. [DONE] Copy test files to `tests/gds/`
+2. [DONE] Document findings in DevLog
+3. [DONE] Analyze renderer code
+4. [DONE] **Fix top cell detection** in `src/lib/gds/GDSParser.ts`
+   - Exclude references FROM context cells when building referenced cells set
+   - Pattern: cells with `CONTEXT_INFO` in name or starting with `$$$`
+   - This allows "chip" to be detected as a top cell
+5. [DONE] **Filter degenerate polygons** during parsing in `src/lib/gds/GDSParser.ts`
+   - Check if polygon has < 3 unique points
+   - Skip adding to cell.polygons array
+6. [DONE] **Fix renderer top cell detection** in `src/lib/renderer/rendering/GDSRenderer.ts`
+   - Apply same context cell exclusion logic as parser
+   - Exclude context cells from final top cells list to prevent rendering them
+7. [DONE] Test with test.gds to verify rendering - CONFIRMED WORKING
+8. [TODO] **IF STILL NOT RENDERING**: Increase LOD_MAX_DEPTH from 3 to 6-8 in `src/lib/config.ts`
+   - Only do this if top cell fix doesn't solve the problem
    - Current: `export const LOD_MAX_DEPTH = 3;`
    - Proposed: `export const LOD_MAX_DEPTH = 8;`
    - Rationale: gdsfactory files have 4-5 level hierarchies
-5. ⬜ **Increase initial hierarchical depth** from 3 to 5 in `src/lib/renderer/PixiRenderer.ts`
+9. [TODO] **IF STILL NOT RENDERING**: Increase initial hierarchical depth from 3 to 5 in `src/lib/renderer/PixiRenderer.ts`
+   - Only do this if needed after testing
    - Current: `this.currentRenderDepth = isHierarchical ? 3 : 0;`
    - Proposed: `this.currentRenderDepth = isHierarchical ? 5 : 0;`
    - Rationale: Start deeper to show content immediately
-6. ⬜ **Filter degenerate polygons** during parsing in `src/lib/gds/GDSParser.ts`
-   - Check if polygon has < 3 unique points
-   - Skip adding to cell.polygons array
-7. ⬜ **Fix progress calculation** for hierarchical files in `src/lib/renderer/rendering/GDSRenderer.ts`
+10. [TODO] **Fix progress calculation** for hierarchical files in `src/lib/renderer/rendering/GDSRenderer.ts`
    - Current: Uses `cell.polygons.length` (0 for hierarchical top cells)
    - Proposed: Count total polygons recursively or use instance count
-8. ⬜ Test with test.gds to verify rendering
 
 ### Medium Priority
 
-9. ⬜ Implement PATH record parsing
-10. ⬜ Add PATH-to-polygon conversion
-11. ⬜ Fix post-ENDLIB parsing (Issue #59)
-12. ⬜ Add BOX and AREF support
+11. [TODO] Implement PATH record parsing
+12. [TODO] Add PATH-to-polygon conversion
+13. [TODO] Fix post-ENDLIB parsing (Issue #59)
+14. [TODO] Add BOX and AREF support
 
 ### Low Priority
 
-13. ⬜ Update statistics to show skipped geometry
-14. ⬜ Add warnings for unsupported record types
-15. ⬜ Consider excluding context cells from top cell list (name pattern: `$$$*$$$`)
+15. [TODO] Update statistics to show skipped geometry
+16. [TODO] Add warnings for unsupported record types
 
 ## Summary
 
 ### Confirmed Issues
 
-1. **Missing PATH Support** - Critical for photonic/PCB layouts
-2. **Insufficient Render Depth** - Causes silent failures on deep hierarchies
-3. **Degenerate Geometry** - Not filtered, causes rendering artifacts
-4. **Context Cell Rendering** - Special cells should be excluded
+1. **Context Cell Top Cell Detection Bug** - CRITICAL: Context cells poison the reference graph, preventing real top cells from being detected
+2. **Degenerate Geometry** - Not filtered, causes rendering artifacts and viewport zoom issues
+3. **Missing PATH Support** - Critical for photonic/PCB layouts (separate issue)
+4. **Possibly Insufficient Render Depth** - May cause issues on deep hierarchies (needs testing after top cell fix)
 5. **Post-ENDLIB Parsing** - Causes explicit errors (Issue #59)
 
 ### Quick Wins
 
-The test.gds silent failure can be fixed immediately by:
-1. Increasing render depth from 3 to 6
-2. Filtering degenerate polygons
-3. Excluding `$$$*$$$` pattern cells
+The test.gds silent failure is fixed by:
+1. [DONE] Excluding context cells from top cell detection (allows "chip" to be detected)
+2. [DONE] Filtering degenerate polygons (prevents viewport zoom to origin)
+3. [DONE] Excluding context cells from renderer's top cell list (prevents rendering them)
+4. [TODO] Testing to verify - if still not rendering, then increase depth limits
 
-These changes require minimal code and will fix the most visible user-facing issue.
+These changes require minimal code and should fix the most visible user-facing issue.
 
 ### Long-term Solutions
 
@@ -336,6 +412,16 @@ PATH support is essential for:
 This requires more substantial implementation but is critical for compatibility.
 
 ## Development Guidelines and Coding Standards
+
+### Documentation Standards
+
+**CRITICAL**: NO EMOJIS IN DEVLOGS OR ANY DOCUMENTATION.
+
+#### Rules
+1. **NEVER** use emojis (checkmarks, boxes, symbols, etc.) in DevLogs
+2. Use plain text markers: [DONE], [TODO], [IN PROGRESS], [SKIPPED]
+3. Use plain text for status: YES/NO, PASS/FAIL, COMPLETE/INCOMPLETE
+4. Keep documentation professional and text-only
 
 ### Debug Logging System
 

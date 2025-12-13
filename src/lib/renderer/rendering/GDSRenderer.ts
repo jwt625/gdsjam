@@ -64,16 +64,23 @@ export class GDSRenderer {
 		const allGraphicsItems: RTreeItem[] = [];
 
 		// Find top-level cells (cells that are not referenced by any other cell)
+		// Exclude references from context cells (e.g., $$$CONTEXT_INFO$$$) as they're just library metadata
 		const referencedCells = new Set<string>();
 		for (const cell of document.cells.values()) {
-			for (const instance of cell.instances) {
-				referencedCells.add(instance.cellRef);
+			// Skip context cells when building referenced cells set
+			const isContextCell = cell.name.includes("CONTEXT_INFO") || cell.name.startsWith("$$$");
+			if (!isContextCell) {
+				for (const instance of cell.instances) {
+					referencedCells.add(instance.cellRef);
+				}
 			}
 		}
 
-		const topCells = Array.from(document.cells.values()).filter(
-			(cell) => !referencedCells.has(cell.name),
-		);
+		// Filter out context cells from top cells list - we don't want to render them
+		const topCells = Array.from(document.cells.values()).filter((cell) => {
+			const isContextCell = cell.name.includes("CONTEXT_INFO") || cell.name.startsWith("$$$");
+			return !referencedCells.has(cell.name) && !isContextCell;
+		});
 
 		if (DEBUG_RENDERER) {
 			console.log(
