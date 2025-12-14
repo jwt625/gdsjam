@@ -249,9 +249,10 @@ function handleClearCode() {
 	});
 }
 
-// Move ViewerCanvas into editor layout container
+// Move ViewerCanvas and CodeEditor into editor layout containers
 let originalViewerParent: HTMLElement | null = null;
 let viewerCanvas: HTMLElement | null = null;
+let codeEditorContainer: HTMLElement | null = null;
 
 onMount(() => {
 	// Find the ViewerCanvas element
@@ -270,6 +271,21 @@ onMount(() => {
 		}
 	}
 
+	// Find the CodeEditor container
+	codeEditorContainer = document.getElementById("code-editor-container");
+	if (codeEditorContainer) {
+		// Move CodeEditor into the appropriate container (desktop or mobile)
+		const targetContainer = isMobile
+			? document.getElementById("code-panel-mobile")
+			: document.getElementById("code-panel-desktop");
+
+		if (targetContainer) {
+			// Show the editor and move it
+			codeEditorContainer.style.display = "block";
+			targetContainer.appendChild(codeEditorContainer);
+		}
+	}
+
 	return () => {
 		// Restore ViewerCanvas to original parent on unmount
 		if (viewerCanvas && originalViewerParent) {
@@ -278,7 +294,7 @@ onMount(() => {
 	};
 });
 
-// Re-position ViewerCanvas when switching between mobile/desktop
+// Re-position ViewerCanvas and CodeEditor when switching between mobile/desktop
 $effect(() => {
 	if (!viewerCanvas) return;
 
@@ -288,6 +304,18 @@ $effect(() => {
 
 	if (targetContainer && viewerCanvas.parentElement !== targetContainer) {
 		targetContainer.appendChild(viewerCanvas);
+	}
+});
+
+$effect(() => {
+	if (!codeEditorContainer) return;
+
+	const targetContainer = isMobile
+		? document.getElementById("code-panel-mobile")
+		: document.getElementById("code-panel-desktop");
+
+	if (targetContainer && codeEditorContainer.parentElement !== targetContainer) {
+		targetContainer.appendChild(codeEditorContainer);
 	}
 });
 
@@ -349,6 +377,11 @@ const executeButtonLabel = $derived(
 		</div>
 	</div>
 
+	<!-- Single CodeEditor instance (repositioned based on mobile/desktop) -->
+	<div id="code-editor-container" style="display: none;">
+		<CodeEditor {onExecute} />
+	</div>
+
 	{#if isMobile}
 		<!-- Mobile: Three-tab layout -->
 		<div class="mobile-tabs">
@@ -380,8 +413,8 @@ const executeButtonLabel = $derived(
 
 		<div class="mobile-content">
 			<!-- Keep all panels in DOM, toggle visibility with CSS -->
-			<div class="code-panel" class:hidden={mobileActiveTab !== "code"}>
-				<CodeEditor {onExecute} />
+			<div class="code-panel" id="code-panel-mobile" class:hidden={mobileActiveTab !== "code"}>
+				<!-- CodeEditor will be positioned here via JavaScript -->
 			</div>
 			<div class="viewer-panel" id="editor-viewer-container-mobile" class:hidden={mobileActiveTab !== "viewer"}>
 				<!-- ViewerCanvas will be positioned here via JavaScript -->
@@ -393,8 +426,8 @@ const executeButtonLabel = $derived(
 	{:else}
 		<!-- Desktop: Split-panel layout -->
 		<div class="split-container">
-			<div class="left-panel" style="width: {splitPosition}%">
-				<CodeEditor {onExecute} />
+			<div class="left-panel" id="code-panel-desktop" style="width: {splitPosition}%">
+				<!-- CodeEditor will be positioned here via JavaScript -->
 			</div>
 
 			<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
@@ -636,6 +669,12 @@ const executeButtonLabel = $derived(
 .viewer-panel :global(.viewer-container) {
 	width: 100% !important;
 	height: 100% !important;
+}
+
+/* Ensure CodeEditor container fills its parent */
+:global(#code-editor-container) {
+	width: 100%;
+	height: 100%;
 }
 
 /* Hide panels when not active (keep in DOM for ViewerCanvas) */
