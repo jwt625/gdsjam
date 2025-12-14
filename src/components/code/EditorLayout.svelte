@@ -10,12 +10,22 @@
  * - Resizable split panel on desktop
  * - Tab switching on mobile
  * - Execute button with rate limit countdown
+ * - Example script selector
+ * - Python file upload
+ * - Clear code functionality
  */
 
 import { onMount } from "svelte";
+import { loadExampleScript } from "../../lib/code/exampleScripts";
+import type { ExampleScript } from "../../lib/code/types";
 import { editorStore } from "../../stores/editorStore";
 import CodeConsole from "./CodeConsole.svelte";
 import CodeEditor from "./CodeEditor.svelte";
+import ConfirmModal from "./ConfirmModal.svelte";
+import ExampleSelector from "./ExampleSelector.svelte";
+
+// Module-specific debug flag (false by default in production)
+const DEBUG_EDITOR_LAYOUT = import.meta.env.VITE_DEBUG_EDITOR_LAYOUT === "true";
 
 interface Props {
 	onExecute: () => void;
@@ -23,6 +33,9 @@ interface Props {
 }
 
 const { onExecute, onClose }: Props = $props();
+
+// File upload
+let fileInputElement: HTMLInputElement;
 
 // Mobile breakpoint
 const MOBILE_BREAKPOINT = 1024;
@@ -113,6 +126,129 @@ function handleExecute() {
 	onExecute();
 }
 
+// Confirmation modal state
+let confirmModalVisible = $state(false);
+let confirmModalMessage = $state("");
+let confirmModalAction: (() => void) | null = $state(null);
+
+function showConfirmModal(message: string, action: () => void) {
+	confirmModalMessage = message;
+	confirmModalAction = action;
+	confirmModalVisible = true;
+}
+
+function handleConfirm() {
+	if (confirmModalAction) {
+		confirmModalAction();
+	}
+	confirmModalVisible = false;
+	confirmModalAction = null;
+}
+
+function handleCancel() {
+	confirmModalVisible = false;
+	confirmModalAction = null;
+}
+
+// Track current example ID
+let currentExampleId = $state<string | null>("tunable-optical-processor");
+
+// Update current example ID when code changes
+$effect(() => {
+	const code = $editorStore.code;
+	// Try to detect which example is loaded based on content
+	// This is a simple heuristic - could be improved
+	if (code.includes("Tunable Optical Processor")) {
+		currentExampleId = "tunable-optical-processor";
+	} else if (code.includes("PIC Component Showcase")) {
+		currentExampleId = "pic-component-showcase";
+	} else if (!code) {
+		currentExampleId = null;
+	}
+});
+
+// Example selector handler
+function handleExampleSelect(example: ExampleScript) {
+	const currentCode = $editorStore.code;
+
+	// If there's existing code, confirm before loading
+	if (currentCode && currentCode.trim().length > 0) {
+		showConfirmModal(`Load "${example.name}"? This will replace your current code.`, () => {
+			loadExample(example);
+		});
+	} else {
+		loadExample(example);
+	}
+}
+
+function loadExample(example: ExampleScript) {
+	try {
+		const code = loadExampleScript(example.id);
+		if (DEBUG_EDITOR_LAYOUT)
+			console.log(`[EditorLayout] Loading example "${example.name}", code length: ${code.length}`);
+		editorStore.setCode(code);
+		currentExampleId = example.id;
+		if (DEBUG_EDITOR_LAYOUT)
+			console.log(`[EditorLayout] Example loaded, currentExampleId: ${currentExampleId}`);
+	} catch (error) {
+		if (DEBUG_EDITOR_LAYOUT) console.error("Failed to load example:", error);
+		editorStore.setExecutionError(
+			`Failed to load example: ${error instanceof Error ? error.message : String(error)}`,
+		);
+	}
+}
+
+// File upload handler
+function triggerFileUpload() {
+	fileInputElement.click();
+}
+
+async function handleFileUpload(event: Event) {
+	const target = event.target as HTMLInputElement;
+	const file = target.files?.[0];
+	if (!file) return;
+
+	// Validate file type
+	if (!file.name.endsWith(".py")) {
+		editorStore.setExecutionError("Please upload a Python (.py) file");
+		return;
+	}
+
+	try {
+		const text = await file.text();
+
+		// If there's existing code, confirm before loading
+		const currentCode = $editorStore.code;
+		if (currentCode && currentCode.trim().length > 0) {
+			showConfirmModal(`Load "${file.name}"? This will replace your current code.`, () => {
+				editorStore.setCode(text);
+				currentExampleId = null; // Not an example anymore
+			});
+		} else {
+			editorStore.setCode(text);
+			currentExampleId = null;
+		}
+	} catch (error) {
+		if (DEBUG_EDITOR_LAYOUT) console.error("Failed to read file:", error);
+		editorStore.setExecutionError(
+			`Failed to read file: ${error instanceof Error ? error.message : String(error)}`,
+		);
+	} finally {
+		// Reset file input
+		target.value = "";
+	}
+}
+
+// Clear code handler
+function handleClearCode() {
+	showConfirmModal("Clear all code? This cannot be undone.", () => {
+		if (DEBUG_EDITOR_LAYOUT) console.log("[EditorLayout] Clearing code");
+		editorStore.setCode("");
+		currentExampleId = null;
+		if (DEBUG_EDITOR_LAYOUT) console.log("[EditorLayout] Code cleared");
+	});
+}
+
 // Move ViewerCanvas into editor layout container
 let originalViewerParent: HTMLElement | null = null;
 let viewerCanvas: HTMLElement | null = null;
@@ -165,10 +301,41 @@ const executeButtonLabel = $derived(
 );
 </script>
 
+<!-- Hidden file input for Python file upload -->
+<input
+	type="file"
+	accept=".py"
+	bind:this={fileInputElement}
+	onchange={handleFileUpload}
+	style="display: none;"
+/>
+
 <div class="editor-layout" class:mobile={isMobile}>
 	<!-- Header with Execute and Close buttons -->
 	<div class="editor-header">
-		<h2 class="editor-title">Python Code Editor</h2>
+		<div class="header-left">
+			<h2 class="editor-title">Python Code Editor</h2>
+			<div class="example-controls">
+				<ExampleSelector currentExampleId={currentExampleId} onSelect={handleExampleSelect} />
+				<button class="icon-button" onclick={triggerFileUpload} type="button" title="Upload Python file">
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+						<path d="M9 1H4C3.46957 1 2.96086 1.21071 2.58579 1.58579C2.21071 1.96086 2 2.46957 2 3V13C2 13.5304 2.21071 14.0391 2.58579 14.4142C2.96086 14.7893 3.46957 15 4 15H12C12.5304 15 13.0391 14.7893 13.4142 14.4142C13.7893 14.0391 14 13.5304 14 13V6L9 1Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+						<path d="M9 1V6H14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+						<path d="M8 8.5V12.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+						<path d="M6 10.5L8 8.5L10 10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+					</svg>
+				</button>
+				<button class="icon-button" onclick={handleClearCode} type="button" title="Clear code">
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+						<path d="M2 4H14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+						<path d="M12.6667 4V13.3333C12.6667 14 12 14.6667 11.3333 14.6667H4.66667C4 14.6667 3.33333 14 3.33333 13.3333V4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+						<path d="M5.33333 4V2.66667C5.33333 2 6 1.33333 6.66667 1.33333H9.33333C10 1.33333 10.6667 2 10.6667 2.66667V4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+						<path d="M6.66667 7.33333V11.3333" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+						<path d="M9.33333 7.33333V11.3333" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+					</svg>
+				</button>
+			</div>
+		</div>
 		<div class="header-actions">
 			<button
 				class="execute-button"
@@ -268,6 +435,15 @@ const executeButtonLabel = $derived(
 	{/if}
 </div>
 
+<!-- Confirmation Modal -->
+{#if confirmModalVisible}
+	<ConfirmModal
+		message={confirmModalMessage}
+		onConfirm={handleConfirm}
+		onCancel={handleCancel}
+	/>
+{/if}
+
 <style>
 .editor-layout {
 	display: flex;
@@ -285,6 +461,15 @@ const executeButtonLabel = $derived(
 	padding: 12px 16px;
 	background: #252526;
 	border-bottom: 1px solid #3e3e42;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.header-left {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	flex-wrap: wrap;
 }
 
 .editor-title {
@@ -292,6 +477,32 @@ const executeButtonLabel = $derived(
 	font-size: 16px;
 	font-weight: 600;
 	color: #cccccc;
+}
+
+.example-controls {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.icon-button {
+	padding: 6px 10px;
+	background: transparent;
+	border: 1px solid #3e3e42;
+	border-radius: 3px;
+	font-size: 16px;
+	cursor: pointer;
+	transition: background-color 0.1s;
+	line-height: 1;
+}
+
+.icon-button:hover {
+	background: #2a2d2e;
+	border-color: #4e4e52;
+}
+
+.icon-button:active {
+	transform: translateY(1px);
 }
 
 .header-actions {

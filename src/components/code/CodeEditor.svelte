@@ -11,8 +11,11 @@
  */
 
 import type * as Monaco from "monaco-editor";
-import { onDestroy, onMount } from "svelte";
+import { onDestroy, onMount, tick } from "svelte";
 import { editorStore } from "../../stores/editorStore";
+
+// Module-specific debug flag (false by default in production)
+const DEBUG_CODE_EDITOR = import.meta.env.VITE_DEBUG_CODE_EDITOR === "true";
 
 interface Props {
 	onExecute?: () => void;
@@ -28,6 +31,11 @@ let monaco: typeof Monaco | null = null;
 const code = $derived($editorStore.code);
 
 onMount(async () => {
+	// Wait for all Svelte DOM updates to complete
+	await tick();
+	// Wait one more frame for browser layout
+	await new Promise((resolve) => requestAnimationFrame(resolve));
+
 	try {
 		// Configure Monaco environment BEFORE importing
 		// Set up proper web workers for Monaco Editor using dynamic imports
@@ -71,6 +79,12 @@ onMount(async () => {
 
 		// Create a simple model without language features to avoid worker errors
 		const model = monaco.editor.createModel(code, "python");
+
+		// Verify container is ready
+		if (!editorContainer) {
+			if (DEBUG_CODE_EDITOR) console.error("[CodeEditor] Editor container element not found");
+			return;
+		}
 
 		// Create editor instance with ALL advanced features disabled
 		editor = monaco.editor.create(editorContainer, {
@@ -119,8 +133,9 @@ onMount(async () => {
 
 		// Mark Monaco as loaded
 		editorStore.setMonacoLoaded(true);
+		if (DEBUG_CODE_EDITOR) console.log("[CodeEditor] Monaco Editor initialized successfully");
 	} catch (error) {
-		console.error("Failed to load Monaco Editor:", error);
+		if (DEBUG_CODE_EDITOR) console.error("[CodeEditor] Failed to load Monaco Editor:", error);
 	}
 });
 
@@ -133,11 +148,15 @@ onDestroy(() => {
 // Update editor value when store changes (e.g., loading example code)
 $effect(() => {
 	if (editor && code !== editor.getValue()) {
+		if (DEBUG_CODE_EDITOR)
+			console.log(`[CodeEditor] Updating editor value, new code length: ${code.length}`);
 		const position = editor.getPosition();
 		editor.setValue(code);
 		if (position) {
 			editor.setPosition(position);
 		}
+	} else if (!editor) {
+		if (DEBUG_CODE_EDITOR) console.log(`[CodeEditor] Cannot update - editor not initialized yet`);
 	}
 });
 </script>
