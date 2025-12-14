@@ -38,6 +38,9 @@ const editorModeActive = $derived($editorStore.editorModeActive);
 let embedMode = $state(false);
 let embedApi: EmbedAPI | null = null;
 
+// Rate limit countdown interval (needs cleanup on unmount)
+let rateLimitCountdownInterval: NodeJS.Timeout | null = null;
+
 /**
  * Toggle fullscreen mode (hide/show header and footer)
  */
@@ -103,11 +106,19 @@ async function handleExecuteCode(): Promise<void> {
 				const retryAfter = (result as ExecutionResult & { retryAfter?: number }).retryAfter || 60;
 				editorStore.setRateLimitCountdown(retryAfter);
 
+				// Clear existing countdown interval if any (prevent memory leak)
+				if (rateLimitCountdownInterval) {
+					clearInterval(rateLimitCountdownInterval);
+				}
+
 				// Countdown timer
-				const countdownInterval = setInterval(() => {
+				rateLimitCountdownInterval = setInterval(() => {
 					const current = $editorStore.rateLimitCountdown;
 					if (current <= 1) {
-						clearInterval(countdownInterval);
+						if (rateLimitCountdownInterval) {
+							clearInterval(rateLimitCountdownInterval);
+							rateLimitCountdownInterval = null;
+						}
 						editorStore.setRateLimitCountdown(0);
 					} else {
 						editorStore.setRateLimitCountdown(current - 1);
@@ -504,6 +515,12 @@ onDestroy(() => {
 	KeyboardShortcutManager.unregisterByOwner(KEYBOARD_OWNER);
 	embedApi?.destroy();
 	embedApi = null;
+
+	// Clean up rate limit countdown interval (prevent memory leak)
+	if (rateLimitCountdownInterval) {
+		clearInterval(rateLimitCountdownInterval);
+		rateLimitCountdownInterval = null;
+	}
 });
 </script>
 

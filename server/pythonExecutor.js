@@ -1,8 +1,8 @@
-const fs = require("fs");
-const path = require("path");
-const { spawn } = require("child_process");
-const os = require("os");
-const crypto = require("crypto");
+const fs = require("node:fs");
+const path = require("node:path");
+const { spawn } = require("node:child_process");
+const os = require("node:os");
+const crypto = require("node:crypto");
 
 // Configuration from environment
 const PYTHON_VENV_PATH = process.env.PYTHON_VENV_PATH || "/opt/gdsjam/venv";
@@ -17,8 +17,24 @@ const AUTH_TOKEN = process.env.AUTH_TOKEN;
 // Rate limiting tracker
 const executionTracker = new Map(); // Map<IP, timestamp[]>
 
+// Cleanup old rate limit entries periodically (every 5 minutes)
+setInterval(
+	() => {
+		const now = Date.now();
+		for (const [ip, timestamps] of executionTracker.entries()) {
+			const recent = timestamps.filter((t) => now - t < PYTHON_RATE_LIMIT_WINDOW);
+			if (recent.length === 0) {
+				executionTracker.delete(ip);
+			} else {
+				executionTracker.set(ip, recent);
+			}
+		}
+	},
+	5 * 60 * 1000,
+); // 5 minutes
+
 // Module whitelist - safe modules for gdsfactory workflows
-const MODULE_WHITELIST = new Set([
+const _MODULE_WHITELIST = new Set([
 	// gdsfactory and dependencies
 	"gdsfactory",
 	"gf",
@@ -112,6 +128,7 @@ const MODULE_BLACKLIST = new Set([
 function validateImports(code) {
 	// Match import statements
 	// Patterns: "import X", "from X import Y", "import X as Y", "from X.Y import Z"
+	// Also handle multi-line imports with parentheses
 	const importPatterns = [
 		/^\s*import\s+([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)/gm,
 		/^\s*from\s+([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)\s+import/gm,
@@ -120,13 +137,14 @@ function validateImports(code) {
 	const imports = new Set();
 
 	for (const pattern of importPatterns) {
-		let match;
-		while ((match = pattern.exec(code)) !== null) {
+		let match = pattern.exec(code);
+		while (match !== null) {
 			const moduleName = match[1];
 			imports.add(moduleName);
 			// Also add the root module (e.g., "matplotlib" from "matplotlib.pyplot")
 			const rootModule = moduleName.split(".")[0];
 			imports.add(rootModule);
+			match = pattern.exec(code);
 		}
 	}
 
@@ -140,12 +158,27 @@ function validateImports(code) {
 		}
 	}
 
-	// Check for dynamic imports or eval
-	if (code.includes("__import__") || code.includes("exec(") || code.includes("eval(")) {
-		return {
-			valid: false,
-			error: "Dynamic code execution (exec, eval, __import__) is not allowed",
-		};
+	// Enhanced security checks for dynamic code execution
+	// Check for various forms of exec, eval, __import__
+	const dangerousPatterns = [
+		/__import__/i,
+		/\bexec\s*\(/i,
+		/\beval\s*\(/i,
+		/\bcompile\s*\(/i,
+		/getattr\s*\(\s*__builtins__/i,
+		/getattr\s*\(\s*__import__/i,
+		/__builtins__\s*\[\s*['"]eval['"]\s*\]/i,
+		/__builtins__\s*\[\s*['"]exec['"]\s*\]/i,
+	];
+
+	for (const pattern of dangerousPatterns) {
+		if (pattern.test(code)) {
+			return {
+				valid: false,
+				error:
+					"Dynamic code execution (exec, eval, __import__, compile, or __builtins__ access) is not allowed",
+			};
+		}
 	}
 
 	return { valid: true };
@@ -217,7 +250,7 @@ function findGdsFiles(directory) {
 	try {
 		const files = fs.readdirSync(directory);
 		return files.filter((f) => f.endsWith(".gds")).map((f) => path.join(directory, f));
-	} catch (error) {
+	} catch (_error) {
 		return [];
 	}
 }
@@ -271,9 +304,13 @@ async function executePythonCode(code, clientIp) {
 				cwd: tempDir,
 				timeout: PYTHON_TIMEOUT,
 				env: {
-					...process.env,
+					// Only pass necessary environment variables (security: don't leak secrets)
+					PATH: process.env.PATH || "/usr/local/bin:/usr/bin:/bin",
 					HOME: tempDir, // Isolate home directory
 					MPLCONFIGDIR: tempDir, // Matplotlib config
+					PYTHONPATH: PYTHON_VENV_PATH,
+					// Prevent Python from writing bytecode
+					PYTHONDONTWRITEBYTECODE: "1",
 				},
 			});
 
@@ -367,11 +404,10 @@ async function executePythonCode(code, clientIp) {
 			}
 		}
 
-		// Read and validate GDS file
-		const gdsBuffer = fs.readFileSync(gdsFile);
-		const gdsSize = gdsBuffer.length;
+		// Check file size BEFORE reading into memory (security: prevent DoS)
+		const gdsStats = fs.statSync(gdsFile);
+		const gdsSize = gdsStats.size;
 
-		// Check file size
 		if (gdsSize > MAX_GDS_SIZE_BYTES) {
 			return {
 				success: false,
@@ -382,8 +418,23 @@ async function executePythonCode(code, clientIp) {
 			};
 		}
 
+		// Now read the file into memory
+		const gdsBuffer = fs.readFileSync(gdsFile);
+
 		// Compute hash and save to file storage
 		const fileHash = computeSHA256(gdsBuffer);
+
+		// Validate hash format (security: prevent path traversal)
+		if (!/^[a-f0-9]{64}$/.test(fileHash)) {
+			return {
+				success: false,
+				error: "Internal error: invalid file hash generated",
+				stdout: sanitizePath(result.stdout),
+				stderr: sanitizePath(result.stderr),
+				executionTime: (Date.now() - startTime) / 1000,
+			};
+		}
+
 		const storagePath = path.join(FILE_STORAGE_PATH, `${fileHash}.bin`);
 
 		// Check if file already exists (deduplication)
@@ -439,9 +490,7 @@ function rateLimitExecution(req, res, next) {
 	);
 
 	if (recentExecutions.length >= PYTHON_RATE_LIMIT_MAX) {
-		const waitTime = Math.ceil(
-			(PYTHON_RATE_LIMIT_WINDOW - (now - recentExecutions[0])) / 1000,
-		);
+		const waitTime = Math.ceil((PYTHON_RATE_LIMIT_WINDOW - (now - recentExecutions[0])) / 1000);
 		return res.status(429).json({
 			success: false,
 			error: `Rate limit exceeded. Maximum ${PYTHON_RATE_LIMIT_MAX} executions per minute. Try again in ${waitTime} seconds.`,
