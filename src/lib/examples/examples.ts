@@ -69,6 +69,21 @@ export const EXAMPLES: Example[] = [
 		previewOverviewUrl: `${PREVIEWS_BASE_URL}/PIC_example_20251213.png`,
 	},
 
+	{
+		id: "pic-component-showcase",
+		name: "PIC Component Showcase",
+		description: "Photonic component library showcase",
+		category: "photonics",
+		source: "other",
+		attribution: "jwt625",
+		sourceUrl: "https://huggingface.co/datasets/jwt625/gdsii",
+		license: "MIT",
+		url: `${EXAMPLES_BASE_URL}/pic_component_showcase.gds`,
+		fileSizeMB: 0.5,
+		isCompressed: false,
+		previewOverviewUrl: `${PREVIEWS_BASE_URL}/PIC_component_showcase_20251214.png`,
+	},
+
 	// ============================================
 	// DIGITAL EXAMPLES (from TinyTapeout)
 	// ============================================

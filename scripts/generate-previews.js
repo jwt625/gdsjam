@@ -36,6 +36,10 @@ const EXAMPLES = [
 		url: "https://huggingface.co/datasets/jwt625/gdsii/resolve/main/PIC_example_20251213.gds",
 	},
 	{
+		id: "pic-component-showcase",
+		url: "https://huggingface.co/datasets/jwt625/gdsii/resolve/main/pic_component_showcase.gds",
+	},
+	{
 		id: "tt02-fpga",
 		url: "https://raw.githubusercontent.com/TinyTapeout/tinytapeout-02/tt02/gds/gatecat_fpga_top.gds.gz",
 	},
