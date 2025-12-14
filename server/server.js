@@ -6,6 +6,7 @@ const cors = require("cors");
 const WebSocket = require("ws");
 const url = require("url");
 const { setupFileRoutes, getOpenAPISpec } = require("./fileStorage");
+const { setupPythonRoutes } = require("./pythonExecutor");
 
 const PORT = process.env.PORT || 4444;
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
@@ -39,6 +40,9 @@ app.use(express.urlencoded({ extended: true }));
 
 // Setup file storage routes
 setupFileRoutes(app);
+
+// Setup Python execution routes
+setupPythonRoutes(app);
 
 // OpenAPI documentation endpoints
 app.get("/api/openapi.json", (req, res) => {
