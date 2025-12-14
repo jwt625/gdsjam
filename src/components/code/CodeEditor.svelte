@@ -27,9 +27,6 @@ let editorContainer: HTMLDivElement;
 let editor: Monaco.editor.IStandaloneCodeEditor | null = null;
 let monaco: typeof Monaco | null = null;
 
-// Subscribe to code changes from store
-const code = $derived($editorStore.code);
-
 onMount(async () => {
 	try {
 		// Configure Monaco environment BEFORE importing
@@ -73,7 +70,7 @@ onMount(async () => {
 		monaco = await import("monaco-editor");
 
 		// Create a simple model without language features to avoid worker errors
-		const model = monaco.editor.createModel(code, "python");
+		const model = monaco.editor.createModel($editorStore.code, "python");
 
 		// Create editor instance with ALL advanced features disabled
 		editor = monaco.editor.create(editorContainer, {
@@ -140,6 +137,8 @@ onDestroy(() => {
 
 // Update editor value when store changes (e.g., loading example code)
 $effect(() => {
+	const code = $editorStore.code;
+
 	if (DEBUG_CODE_EDITOR) {
 		console.log(
 			`[CodeEditor] $effect triggered - editor exists: ${!!editor}, code length: ${code.length}, editor value length: ${editor?.getValue().length || 0}`,

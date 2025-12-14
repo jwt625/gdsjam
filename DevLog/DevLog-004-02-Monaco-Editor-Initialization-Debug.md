@@ -236,11 +236,11 @@ Remove ALL dual-instance guard logic:
 
 ### Status
 
-**FIXED** - Single instance architecture resolves all issues.
+**FIXED locally, BROKEN on production**
 
-### Verification
+### Verification - Local Development
 
-Tested and confirmed working:
+Tested and confirmed working locally:
 - Monaco initializes without errors
 - Editor updates when loading examples
 - Editor updates when clearing code
@@ -248,6 +248,27 @@ Tested and confirmed working:
 - Editor repositions correctly between mobile/desktop layouts
 - Code execution works
 - No race conditions or dual-instance conflicts
+
+### Production Issue (2025-12-14)
+
+**Symptoms:**
+- File load/clear/select from dropdown NOT working (code in editor stays the same)
+- Manual editing and running code DOES work properly
+- This suggests $effect reactivity is not triggering on production
+
+**Deployment Verification:**
+- GitHub Actions run #155 completed successfully at 21:05:23 UTC
+- Commit: 51b2e11 (Merge PR #66 editor-examples)
+- Build artifact verified: `code-editor-container` exists in production JS bundle
+- Production serves correct deployment (content-hash differs from local due to env vars)
+- Fastly CDN cache: 10 minute TTL, Cloudflare cache cleared
+- Code IS deployed correctly to production
+
+**Root Cause Hypothesis:**
+- Debug flags disabled in production (.env.production has VITE_DEBUG=false)
+- The $effect in CodeEditor.svelte may behave differently in production build
+- Possible Svelte 5 reactivity optimization difference between dev/prod
+- Need to investigate if $effect tracking works differently in minified production build
 
 ### Debug Logging
 
