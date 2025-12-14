@@ -30,7 +30,7 @@ export class MeasurementOverlay {
 	update(
 		measurements: Map<string, DistanceMeasurement>,
 		activeMeasurement: ActiveMeasurement | null,
-		cursorWorldPos: { x: number; y: number } | null,
+		cursorWorldPos: { worldX: number; worldY: number } | null,
 		visible: boolean,
 		containerX: number,
 		containerY: number,
@@ -89,7 +89,7 @@ export class MeasurementOverlay {
 
 		// Draw line
 		const graphics = new Graphics();
-		const lineColor = isHighlighted ? 0x00ffff : 0x00ffff; // Cyan
+		const lineColor = isHighlighted ? 0xffffff : 0xcccccc; // Light grey (matches coordinates text)
 		const lineWidth = isHighlighted ? 3 : 2;
 		const lineAlpha = isHighlighted ? 1.0 : 0.8;
 
@@ -132,22 +132,17 @@ export class MeasurementOverlay {
 	 */
 	private renderActiveMeasurement(
 		point1: { worldX: number; worldY: number },
-		point2: { x: number; y: number } | { worldX: number; worldY: number },
+		point2: { worldX: number; worldY: number },
 		containerX: number,
 		containerY: number,
 		scale: number,
 	): void {
 		const screen1 = worldToScreen(point1.worldX, point1.worldY, containerX, containerY, scale);
-
-		// Handle both cursor position (x, y) and world position (worldX, worldY)
-		const screen2 =
-			"worldX" in point2
-				? worldToScreen(point2.worldX, point2.worldY, containerX, containerY, scale)
-				: point2;
+		const screen2 = worldToScreen(point2.worldX, point2.worldY, containerX, containerY, scale);
 
 		// Draw dashed line (preview)
 		const graphics = new Graphics();
-		const lineColor = 0xffff00; // Yellow
+		const lineColor = 0xcccccc; // Light grey (matches coordinates text)
 		const lineWidth = 2;
 		const lineAlpha = 0.6;
 

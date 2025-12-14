@@ -104,7 +104,7 @@ const measurements = $derived($measurementStore.measurements);
 const activeMeasurement = $derived($measurementStore.activeMeasurement);
 const measurementsVisible = $derived($measurementStore.measurementsVisible);
 const highlightedMeasurementId = $derived($measurementStore.highlightedMeasurementId);
-let cursorWorldPos: { x: number; y: number } | null = $state(null);
+let cursorWorldPos: { worldX: number; worldY: number } | null = $state(null);
 
 // Minimap state
 let viewportBounds = $state<BoundingBox | null>(null);
@@ -722,7 +722,7 @@ function handleMouseMove(event: MouseEvent): void {
 	const worldX = (screenX - viewportState.x) / viewportState.scale;
 	const worldY = -((screenY - viewportState.y) / viewportState.scale);
 
-	cursorWorldPos = { x: worldX, y: worldY };
+	cursorWorldPos = { worldX, worldY };
 }
 
 /**

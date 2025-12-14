@@ -911,7 +911,7 @@ export class PixiRenderer {
 	updateMeasurementOverlay(
 		measurements: Map<string, import("../measurements/types").DistanceMeasurement>,
 		activeMeasurement: import("../measurements/types").ActiveMeasurement | null,
-		cursorWorldPos: { x: number; y: number } | null,
+		cursorWorldPos: { worldX: number; worldY: number } | null,
 		visible: boolean,
 		highlightedMeasurementId: string | null,
 	): void {
