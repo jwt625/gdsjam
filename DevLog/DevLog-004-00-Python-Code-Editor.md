@@ -298,9 +298,9 @@ if (result.success) {
    - Clear/reset functionality
 
 5. **UI Integration**
-   - Tab-based interface: "Upload" tab vs "Code" tab
-   - Desktop-first layout (code editor requires keyboard)
-   - Mobile: read-only code view with "Open in Desktop" prompt
+   - Hidden mode triggered by holding 'E' key (500ms hold duration)
+   - Desktop: Split-panel layout (editor left, viewer right) with resizable divider
+   - Mobile: Three-tab layout (Code / Viewer / Console) with full editing capability
 
 ### Performance Features
 
@@ -518,14 +518,19 @@ python -c "import gdsfactory as gf; print(gf.__version__)"
 
 ### Decision 4: Mobile Support
 
-**Choice:** Read-only view with desktop prompt
+**Choice:** Three-tab layout (Code / Viewer / Console) with full editing capability
 
 **Rationale:**
-- Code editing on mobile is poor UX
-- Virtual keyboard obscures editor
-- Focus on desktop experience for MVP
+- Mobile is first citizen for this project
+- Tab switching allows full-screen editing and viewing
+- Maintains all functionality on mobile
+- Consistent with DevLog-004-01 specification
 
-**Implementation:** Detect mobile, show code with "Edit on Desktop" message
+**Implementation:**
+- Breakpoint: 1024px (matches existing `MOBILE_BREAKPOINT`)
+- Tab bar: Fixed at top of editor area
+- Tabs: "Code", "Viewer", "Console"
+- FAB menu: Add "Editor Mode" toggle button
 
 ### Decision 5: Default Example
 
@@ -555,7 +560,8 @@ python -c "import gdsfactory as gf; print(gf.__version__)"
 8. Error messages are clear and actionable (stdout/stderr displayed)
 9. Rate limiting prevents abuse (10 executions per IP per minute)
 10. No regressions in existing upload/render functionality
-11. Mobile shows read-only view with desktop prompt
+11. Mobile shows three-tab layout with full editing capability
+12. Generated GDS auto-uploads to session (host only), with warning for files >10MB
 
 ## Estimated Timeline
 

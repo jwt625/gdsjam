@@ -171,28 +171,32 @@ This DevLog documents the client-side implementation of the Python code editor f
 
 ### 11. GDS File Auto-Upload
 
-**Decision:** Auto-upload generated GDS to session if user is host.
+**Decision:** Auto-upload generated GDS to session if user is host, with file size threshold.
 
 **Rationale:**
 - Server-side execution already generates file on server
 - File hash available in execution response
 - Simpler than downloading and re-uploading
+- Large files (>10MB) should require explicit user action to avoid surprising session participants
 
 **Implementation:**
-- Execution response includes `fileId` (SHA-256 hash)
+- Execution response includes `fileId` (SHA-256 hash) and `size` (bytes)
+- If file size <= 10MB: Auto-upload to session immediately
+- If file size > 10MB: Show warning toast with "Sync to Session" button
 - Use existing `FileTransfer` class to store metadata in Y.js
 - Skip file upload step (file already on server)
 
 ### 12. Comment Handling
 
-**Decision:** Do not clear comments when loading code-generated GDS (exception to file upload behavior).
+**Decision:** Clear comments when loading code-generated GDS (same as file upload behavior).
 
 **Rationale:**
-- Code may generate similar layout (iterative development)
-- Comments may still be relevant
-- User can manually clear if needed
+- Simpler implementation for MVP
+- Consistent behavior with file upload
+- Avoids complexity of tracking GDS source
+- User can manually re-add comments if needed
 
-**Fallback:** If implementation is complex, clear comments for MVP (same as file upload).
+**Future Enhancement:** Preserve comments for code-generated GDS in post-MVP.
 
 ### 13. Default Example
 
@@ -588,9 +592,10 @@ src/
 
 ### Collaboration Testing
 - [ ] Host can execute code
-- [ ] Generated GDS auto-uploads to session
+- [ ] Generated GDS auto-uploads to session (files <=10MB)
+- [ ] Large files (>10MB) show warning with manual sync button
 - [ ] Viewers receive GDS file
-- [ ] Comments not cleared on code execution
+- [ ] Comments cleared on code execution
 
 ### Error Testing
 - [ ] Server unreachable error
@@ -627,6 +632,7 @@ src/
 - Server endpoint: `POST /api/execute` (already implemented in DevLog-004-00)
 - Authentication: Bearer token from `VITE_FILE_SERVER_TOKEN`
 - Default example: 741 lines, complex photonics circuit
-- Comments NOT cleared on code execution (exception to file upload behavior)
+- Comments cleared on code execution (same as file upload behavior)
+- Auto-upload to session for files <=10MB, manual sync button for files >10MB
 
 
