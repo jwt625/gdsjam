@@ -728,12 +728,20 @@ function handleMouseMove(event: MouseEvent): void {
 /**
  * Handle touch start for measurement mode on mobile
  * Touch down = first click (place first point)
+ * Two-finger touch = auto-exit measurement mode and allow zoom
  */
 function handleMeasurementTouchStart(event: TouchEvent): void {
 	if (!renderer) return;
 
+	// Two-finger touch: exit measurement mode and allow zoom gesture
+	if (event.touches.length >= 2) {
+		measurementStore.toggleMeasurementMode(); // Exit measurement mode
+		// Don't stop propagation - let TouchController handle the zoom
+		return;
+	}
+
 	// ALWAYS stop event propagation and prevent default when in measurement mode
-	// This blocks TouchController from processing ANY touch events (including two-finger zoom)
+	// This blocks TouchController from processing ANY touch events
 	event.stopImmediatePropagation();
 	event.preventDefault();
 
@@ -764,12 +772,20 @@ function handleMeasurementTouchStart(event: TouchEvent): void {
 /**
  * Handle touch move for measurement mode on mobile
  * Drag = mouse move (update cursor position)
+ * Two-finger touch = auto-exit measurement mode and allow zoom
  */
 function handleMeasurementTouchMove(event: TouchEvent): void {
 	if (!renderer) return;
 
+	// Two-finger touch: exit measurement mode and allow zoom gesture
+	if (event.touches.length >= 2) {
+		measurementStore.toggleMeasurementMode(); // Exit measurement mode
+		// Don't stop propagation - let TouchController handle the zoom
+		return;
+	}
+
 	// ALWAYS stop event propagation and prevent default when in measurement mode
-	// This blocks TouchController from processing ANY touch events (including two-finger zoom)
+	// This blocks TouchController from processing ANY touch events
 	event.stopImmediatePropagation();
 	event.preventDefault();
 
