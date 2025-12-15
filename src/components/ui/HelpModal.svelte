@@ -16,6 +16,12 @@ interface Props {
 
 const { visible, onClose }: Props = $props();
 
+// Collapsible section state
+let measurementExpanded = $state(false);
+let commentsExpanded = $state(false);
+let mobileExpanded = $state(false);
+let collaborationExpanded = $state(false);
+
 /**
  * Handle backdrop click (close modal)
  */
@@ -95,11 +101,15 @@ $effect(() => {
 						</div>
 						<div class="shortcut-item">
 							<kbd>M</kbd>
-							<span>Toggle minimap</span>
+							<span>Toggle minimap (hold to toggle measurement mode)</span>
 						</div>
 						<div class="shortcut-item">
 							<kbd>C</kbd>
 							<span>Add comment (double-tap for panel, hold to toggle visibility)</span>
+						</div>
+						<div class="shortcut-item">
+							<kbd>Ctrl/Cmd+K</kbd>
+							<span>Clear all measurements</span>
 						</div>
 						<div class="shortcut-item">
 							<kbd>H</kbd>
@@ -119,27 +129,92 @@ $effect(() => {
 						</div>
 						<div class="shortcut-item">
 							<kbd>Esc</kbd>
-							<span>Exit fullscreen / Cancel comment mode</span>
+							<span>Exit fullscreen / Cancel comment/measurement mode</span>
 						</div>
 					</div>
 				</section>
 
-				<section>
-					<h3>Mobile/Touch</h3>
-					<ul>
-						<li>One finger to pan</li>
-						<li>Two fingers to zoom (pinch)</li>
-						<li>Use the floating action button (FAB) for controls</li>
-					</ul>
+				<section class="collapsible-section">
+					<!-- svelte-ignore a11y_click_events_have_key_events -->
+					<!-- svelte-ignore a11y_no_static_element_interactions -->
+					<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+					<h3 class="collapsible-header" onclick={() => measurementExpanded = !measurementExpanded}>
+						<svg class="chevron-icon" class:rotated={!measurementExpanded} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<polyline points="6 9 12 15 18 9"></polyline>
+						</svg>
+						Measurement Mode
+					</h3>
+					{#if measurementExpanded}
+						<ul>
+							<li><strong>Desktop:</strong> Hold M (500ms) to enter/exit measurement mode</li>
+							<li>Click first point, then click second point to measure distance</li>
+							<li>Hold <kbd>Shift</kbd> after first click to snap to horizontal, vertical, or ±45°</li>
+							<li>Click completed measurement to highlight it</li>
+							<li>Press <kbd>Ctrl/Cmd+K</kbd> to clear all measurements</li>
+							<li>Maximum 50 measurements (oldest auto-deleted when limit reached)</li>
+							<li><strong>Mobile:</strong> Use FAB menu to toggle, touch-and-drag to measure, two-finger touch to exit</li>
+						</ul>
+					{/if}
 				</section>
 
-				<section>
-					<h3>Collaboration</h3>
-					<ul>
-						<li>Click "Create Session" to start a collaborative session</li>
-						<li>Share the link or QR code with others</li>
-						<li>Host controls file loading, viewers can follow along</li>
-					</ul>
+				<section class="collapsible-section">
+					<!-- svelte-ignore a11y_click_events_have_key_events -->
+					<!-- svelte-ignore a11y_no_static_element_interactions -->
+					<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+					<h3 class="collapsible-header" onclick={() => commentsExpanded = !commentsExpanded}>
+						<svg class="chevron-icon" class:rotated={!commentsExpanded} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<polyline points="6 9 12 15 18 9"></polyline>
+						</svg>
+						Comments
+					</h3>
+					{#if commentsExpanded}
+						<ul>
+							<li><strong>Single tap C:</strong> Enter comment mode, click/tap to place comment</li>
+							<li><strong>Double tap C:</strong> Toggle comment panel (view all comments)</li>
+							<li><strong>Hold C (500ms):</strong> Toggle visibility of all comments</li>
+							<li>Comments are synced in collaboration sessions</li>
+							<li>Host can control viewer comment permissions</li>
+							<li><strong>Mobile:</strong> Use FAB menu to add comments</li>
+						</ul>
+					{/if}
+				</section>
+
+				<section class="collapsible-section">
+					<!-- svelte-ignore a11y_click_events_have_key_events -->
+					<!-- svelte-ignore a11y_no_static_element_interactions -->
+					<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+					<h3 class="collapsible-header" onclick={() => mobileExpanded = !mobileExpanded}>
+						<svg class="chevron-icon" class:rotated={!mobileExpanded} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<polyline points="6 9 12 15 18 9"></polyline>
+						</svg>
+						Mobile/Touch
+					</h3>
+					{#if mobileExpanded}
+						<ul>
+							<li>One finger to pan</li>
+							<li>Two fingers to zoom (pinch)</li>
+							<li>Use the floating action button (FAB) for controls</li>
+						</ul>
+					{/if}
+				</section>
+
+				<section class="collapsible-section">
+					<!-- svelte-ignore a11y_click_events_have_key_events -->
+					<!-- svelte-ignore a11y_no_static_element_interactions -->
+					<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+					<h3 class="collapsible-header" onclick={() => collaborationExpanded = !collaborationExpanded}>
+						<svg class="chevron-icon" class:rotated={!collaborationExpanded} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<polyline points="6 9 12 15 18 9"></polyline>
+						</svg>
+						Collaboration
+					</h3>
+					{#if collaborationExpanded}
+						<ul>
+							<li>Click "Create Session" to start a collaborative session</li>
+							<li>Share the link or QR code with others</li>
+							<li>Host controls file loading, viewers can follow along</li>
+						</ul>
+					{/if}
 				</section>
 			</div>
 
@@ -230,6 +305,37 @@ $effect(() => {
 		font-size: 1.1rem;
 		color: #e0e0e0;
 		font-weight: 600;
+	}
+
+	.collapsible-section {
+		margin-bottom: 1rem;
+	}
+
+	.collapsible-header {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		cursor: pointer;
+		user-select: none;
+		padding: 0.5rem;
+		margin: 0 -0.5rem 0.5rem -0.5rem;
+		border-radius: 4px;
+		transition: background-color 0.2s;
+	}
+
+	.collapsible-header:hover {
+		background-color: #3a3a3a;
+	}
+
+	.chevron-icon {
+		width: 1rem;
+		height: 1rem;
+		transition: transform 0.2s;
+		flex-shrink: 0;
+	}
+
+	.chevron-icon.rotated {
+		transform: rotate(-90deg);
 	}
 
 	.modal-body ul {
