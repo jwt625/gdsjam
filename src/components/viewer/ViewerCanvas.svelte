@@ -9,6 +9,7 @@ import type {
 } from "../../lib/collaboration/types";
 import { DEBUG_MEASUREMENT } from "../../lib/debug";
 import { KeyboardShortcutManager } from "../../lib/keyboard/KeyboardShortcutManager";
+import { snapToAxis } from "../../lib/measurements/utils";
 import { PixiRenderer } from "../../lib/renderer/PixiRenderer";
 import { generateUUID } from "../../lib/utils/uuid";
 import { collaborationStore } from "../../stores/collaborationStore";
@@ -722,7 +723,14 @@ function handleMouseMove(event: MouseEvent): void {
 	const worldX = (screenX - viewportState.x) / viewportState.scale;
 	const worldY = -((screenY - viewportState.y) / viewportState.scale);
 
-	cursorWorldPos = { worldX, worldY };
+	let worldPos = { worldX, worldY };
+
+	// Apply snap-to-axis if Shift is held and first point exists
+	if (event.shiftKey && activeMeasurement?.point1) {
+		worldPos = snapToAxis(activeMeasurement.point1, worldPos);
+	}
+
+	cursorWorldPos = worldPos;
 }
 
 /**
@@ -805,8 +813,16 @@ function handleMeasurementTouchMove(event: TouchEvent): void {
 	const worldX = (screenX - viewportState.x) / viewportState.scale;
 	const worldY = -((screenY - viewportState.y) / viewportState.scale);
 
+	let worldPos = { worldX, worldY };
+
+	// Apply snap-to-axis if Shift is held and first point exists
+	// Note: Shift key detection on touch events is rare but supported
+	if (event.shiftKey && activeMeasurement?.point1) {
+		worldPos = snapToAxis(activeMeasurement.point1, worldPos);
+	}
+
 	// Update cursor position for tracking
-	cursorWorldPos = { worldX, worldY };
+	cursorWorldPos = worldPos;
 }
 
 /**

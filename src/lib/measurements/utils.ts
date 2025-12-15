@@ -100,3 +100,31 @@ export function worldToScreen(
 
 	return { x: screenX, y: screenY };
 }
+
+/**
+ * Snap point2 to horizontal, vertical, or ±45° alignment with point1
+ * Snaps to the closest angle among: 0°, 45°, 90°, 135°, 180°, 225°, 270°, 315°
+ *
+ * @param point1 - First point (anchor)
+ * @param point2 - Second point (to be snapped)
+ * @returns Snapped point2 coordinates
+ */
+export function snapToAxis(point1: MeasurementPoint, point2: MeasurementPoint): MeasurementPoint {
+	const dx = point2.worldX - point1.worldX;
+	const dy = point2.worldY - point1.worldY;
+	const distance = Math.sqrt(dx * dx + dy * dy);
+
+	if (distance === 0) return point2;
+
+	// Calculate angle in radians
+	const angle = Math.atan2(dy, dx);
+
+	// Snap to nearest 45° increment
+	const snapAngle = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4);
+
+	// Calculate snapped position
+	const snappedX = point1.worldX + distance * Math.cos(snapAngle);
+	const snappedY = point1.worldY + distance * Math.sin(snapAngle);
+
+	return { worldX: snappedX, worldY: snappedY };
+}

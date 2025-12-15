@@ -1,7 +1,7 @@
 # DevLog-005-00: Measurement Mode Implementation Plan
 
 **Date**: 2025-12-14  
-**Status**: Planning  
+**Status**: Complete (Tested)  
 **Feature**: Two-point distance measurement tool
 
 ## Overview
@@ -243,3 +243,7 @@ Implementation: Add `type` field to measurement interface, update overlay render
 - commentStore.ts: Store pattern with mode management
 - MobileControls.svelte: FAB menu structure (lines 106-256)
 
+
+## Follow-up Features
+
+See DevLog-005-01-Measurement-Snap-Feature.md for Shift-key snap-to-axis enhancement.
