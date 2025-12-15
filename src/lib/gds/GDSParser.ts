@@ -873,12 +873,18 @@ async function buildGDSDocument(
 					currentPath.points = points;
 					// Note: Don't calculate bbox yet - will do after path-to-polygon conversion
 				} else if (currentInstance && Array.isArray(data) && data.length >= 1) {
-					// For instances, XY contains the position
+					// For SREF: XY contains single position
+					// For AREF: XY contains 3 points [reference, col_spacing, row_spacing]
 					// Check if it's nested array format [[x, y]] or flat format [x, y]
 					if (Array.isArray(data[0]) && data[0].length >= 2) {
-						// Nested array format: [[x, y]]
+						// Nested array format: [[x, y]] or [[x1,y1], [x2,y2], [x3,y3]]
 						currentInstance.x = data[0][0];
 						currentInstance.y = data[0][1];
+						// For AREF, store spacing vectors (total displacement, will be divided by count later)
+						if (data.length >= 3) {
+							currentInstance.arraySpacingX = data[1][0] - data[0][0];
+							currentInstance.arraySpacingY = data[2][1] - data[0][1];
+						}
 					} else if (data.length >= 2) {
 						// Flat array format: [x, y]
 						currentInstance.x = data[0];
@@ -1000,13 +1006,51 @@ async function buildGDSDocument(
 						break;
 					}
 
-					currentCell.instances.push(currentInstance as CellInstance);
-					instanceCount++;
+					// Check if this is an AREF (array reference) that needs expansion
+					if (currentInstance.arrayCols && currentInstance.arrayRows) {
+						// Expand AREF into individual instances
+						const cols = currentInstance.arrayCols;
+						const rows = currentInstance.arrayRows;
+
+						// AREF XY contains: [origin, col_end, row_end]
+						// col_spacing = (col_end - origin) / cols
+						// row_spacing = (row_end - origin) / rows
+						const colSpacingX = (currentInstance.arraySpacingX || 0) / cols;
+						const rowSpacingY = (currentInstance.arraySpacingY || 0) / rows;
+
+						const baseX = currentInstance.x || 0;
+						const baseY = currentInstance.y || 0;
+						const rotation = currentInstance.rotation || 0;
+						const mirror = currentInstance.mirror || false;
+						const magnification = currentInstance.magnification || 1.0;
+
+						for (let row = 0; row < rows; row++) {
+							for (let col = 0; col < cols; col++) {
+								const instance: CellInstance = {
+									id: generateUUID(),
+									cellRef: currentInstance.cellRef,
+									x: baseX + col * colSpacingX,
+									y: baseY + row * rowSpacingY,
+									rotation: rotation,
+									mirror: mirror,
+									magnification: magnification,
+									boundingBox: { minX: 0, minY: 0, maxX: 0, maxY: 0 },
+								};
+								currentCell.instances.push(instance);
+								instanceCount++;
+							}
+						}
+					} else {
+						// Regular SREF - add single instance
+						currentCell.instances.push(currentInstance as CellInstance);
+						instanceCount++;
+					}
 					currentInstance = null;
 				}
 				break;
 
 			case RecordType.SREF: // Structure reference (instance)
+			case RecordType.AREF: // Array reference (will be expanded to multiple instances)
 				currentInstance = {
 					id: generateUUID(),
 					cellRef: "",
@@ -1017,6 +1061,13 @@ async function buildGDSDocument(
 					magnification: 1.0,
 					boundingBox: { minX: 0, minY: 0, maxX: 0, maxY: 0 },
 				};
+				break;
+
+			case RecordType.COLROW: // Array dimensions (for AREF)
+				if (currentInstance && typeof data === "object" && data !== null) {
+					currentInstance.arrayCols = (data as { columns: number; rows: number }).columns;
+					currentInstance.arrayRows = (data as { columns: number; rows: number }).rows;
+				}
 				break;
 
 			case RecordType.SNAME: // Structure reference name

@@ -245,6 +245,18 @@ export class GDSRenderer {
 				magnification,
 			);
 
+			// Debug: Show transformed bbox for via layers
+			if (
+				DEBUG_RENDERER &&
+				(polygon.layer === 40 || polygon.layer === 43 || polygon.layer === 44)
+			) {
+				console.log(
+					`[GDSRenderer] Via layer ${polygon.layer} transformed bbox: ` +
+						`[${transformedBBox.minX.toFixed(2)}, ${transformedBBox.minY.toFixed(2)}] to ` +
+						`[${transformedBBox.maxX.toFixed(2)}, ${transformedBBox.maxY.toFixed(2)}]`,
+				);
+			}
+
 			// Calculate tile coordinates from transformed bounding box
 			const centerX = (transformedBBox.minX + transformedBBox.maxX) / 2;
 			const centerY = (transformedBBox.minY + transformedBBox.maxY) / 2;
@@ -348,6 +360,16 @@ export class GDSRenderer {
 					const newRotation = rotation + instance.rotation;
 					const newMirror = mirror !== instance.mirror;
 					const newMagnification = magnification * instance.magnification;
+
+					// Debug: Log instance transformation (first 3 instances per cell)
+					if (DEBUG_RENDERER && cell.instances.indexOf(instance) < 3) {
+						console.log(
+							`[GDSRenderer] Instance: "${cell.name}" → "${refCell.name}" | ` +
+								`inst_pos=(${instance.x.toFixed(2)}, ${instance.y.toFixed(2)}) | ` +
+								`parent_transform=(${x.toFixed(2)}, ${y.toFixed(2)}, ${rotation.toFixed(1)}°) | ` +
+								`→ final=(${newX.toFixed(2)}, ${newY.toFixed(2)}, ${newRotation.toFixed(1)}°)`,
+						);
+					}
 
 					const result = await this.renderCell(
 						refCell,
