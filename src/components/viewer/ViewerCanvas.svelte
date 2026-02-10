@@ -3,17 +3,17 @@ import { onDestroy, onMount } from "svelte";
 import { get } from "svelte/store";
 import type {
 	CollaborativeViewportState,
-	Comment,
 	CommentPermissions,
 	ParticipantViewport,
 } from "../../lib/collaboration/types";
 import { DEBUG_MEASUREMENT } from "../../lib/debug";
 import { KeyboardShortcutManager } from "../../lib/keyboard/KeyboardShortcutManager";
-import { snapToAxis } from "../../lib/measurements/utils";
 import { PixiRenderer } from "../../lib/renderer/PixiRenderer";
-import { generateUUID } from "../../lib/utils/uuid";
+import { initializeViewerRenderer } from "../../lib/viewer/initializeViewerRenderer";
 import { setupViewerCollabSync } from "../../lib/viewer/setupViewerCollabSync";
+import { ViewerCommentController } from "../../lib/viewer/ViewerCommentController";
 import { ViewerKeyModeController } from "../../lib/viewer/ViewerKeyModeController";
+import { ViewerMeasurementController } from "../../lib/viewer/ViewerMeasurementController";
 import { collaborationStore } from "../../stores/collaborationStore";
 import { commentStore } from "../../stores/commentStore";
 import { editorStore } from "../../stores/editorStore";
@@ -60,6 +60,8 @@ let layerPanelVisible = $state(
 let minimapVisible = $state(true);
 let layerStoreInitialized = false;
 let keyModeController: ViewerKeyModeController | null = null;
+let measurementController: ViewerMeasurementController | null = null;
+let commentController: ViewerCommentController | null = null;
 
 // Comment mode state
 let commentModeActive = $state(false);
@@ -208,60 +210,20 @@ function handleCanvasClick(event: MouseEvent | PointerEvent): void {
 		if (DEBUG_MEASUREMENT) {
 			console.log("[ViewerCanvas] In measurement mode, adding point");
 		}
-		// For touch devices in mobile mode, use touch-and-drag gesture instead
-		if (
-			typeof window !== "undefined" &&
-			window.innerWidth < MOBILE_BREAKPOINT &&
-			"pointerType" in event &&
-			event.pointerType === "touch"
-		) {
+		if (measurementController?.handleMeasurementCanvasClick(event)) {
 			return;
 		}
-
-		// Get click position relative to canvas
-		const rect = canvas.getBoundingClientRect();
-		const screenX = event.clientX - rect.left;
-		const screenY = event.clientY - rect.top;
-
-		// Convert screen coordinates to world coordinates
-		const viewportState = renderer.getViewportState();
-		const worldX = (screenX - viewportState.x) / viewportState.scale;
-		const worldY = -((screenY - viewportState.y) / viewportState.scale);
-
-		// Add point to measurement
-		const documentUnits = $gdsStore.document?.units || { database: 1e-9, user: 1e-6 };
-		measurementStore.addPoint(worldX, worldY, documentUnits);
 
 		return;
 	}
 
 	// Handle comment mode
 	if (commentModeActive) {
-		// For touch devices in mobile mode, use the fixed crosshair button instead
-		if (
-			typeof window !== "undefined" &&
-			window.innerWidth < MOBILE_BREAKPOINT &&
-			"pointerType" in event &&
-			event.pointerType === "touch"
-		) {
-			return;
+		const pending = commentController?.getPendingFromCanvasPointer(event, MOBILE_BREAKPOINT);
+		if (pending) {
+			pendingCommentPosition = pending;
+			showCommentModal = true;
 		}
-
-		// Get click position relative to canvas
-		const rect = canvas.getBoundingClientRect();
-		const screenX = event.clientX - rect.left;
-		const screenY = event.clientY - rect.top;
-
-		// Convert screen coordinates to world coordinates (same logic as CoordinatesDisplay)
-		// Access mainContainer properties via renderer's viewport state
-		const viewportState = renderer.getViewportState();
-		const worldX = (screenX - viewportState.x) / viewportState.scale;
-		// Y-axis is flipped (mainContainer.scale.y = -1), so negate Y coordinate
-		const worldY = -((screenY - viewportState.y) / viewportState.scale);
-
-		// Store pending position and show modal
-		pendingCommentPosition = { worldX, worldY };
-		showCommentModal = true;
 	}
 }
 
@@ -269,83 +231,9 @@ function handleCanvasClick(event: MouseEvent | PointerEvent): void {
  * Handle comment submission from modal
  */
 function handleCommentSubmit(content: string): void {
-	if (!pendingCommentPosition) return;
+	const submitted = commentController?.submitComment(content, pendingCommentPosition) ?? false;
+	if (!submitted) return;
 
-	// Check 100 comment limit
-	const currentCommentCount = comments.size;
-	if (currentCommentCount >= 100) {
-		commentStore.showToast("Comment limit reached (100 comments maximum)");
-		return;
-	}
-
-	// Get user info
-	const isInSession = $collaborationStore.isInSession;
-	const isHost = $collaborationStore.isHost;
-	let userId: string;
-	let displayName: string;
-	let color: string;
-
-	if (isInSession) {
-		// Collaboration mode: get from session manager
-		const sessionManager = collaborationStore.getSessionManager();
-		if (!sessionManager) return;
-
-		userId = sessionManager.getUserId();
-		const users = sessionManager.getConnectedUsers();
-		const currentUser = users.find((u) => u.id === userId);
-		displayName = currentUser?.displayName || "Anonymous";
-		color = currentUser?.color || "#888888";
-
-		// Check if viewer is allowed to comment
-		if (!isHost && !commentPermissions.viewersCanComment) {
-			commentStore.showToast("Commenting is disabled by the host");
-			return;
-		}
-
-		// Check rate limit
-		if (!commentStore.checkRateLimit(userId, isHost)) {
-			const rateLimit = isHost ? "10 seconds" : "1 minute";
-			commentStore.showToast(
-				`Please wait before posting another comment (${rateLimit} rate limit)`,
-			);
-			return;
-		}
-	} else {
-		// Solo mode: generate user info
-		userId = localStorage.getItem("gdsjam_userId") || generateUUID();
-		if (!localStorage.getItem("gdsjam_userId")) {
-			localStorage.setItem("gdsjam_userId", userId);
-		}
-		displayName = "You";
-		color = "#4ECDC4";
-	}
-
-	// Create comment
-	const comment: Comment = {
-		id: generateUUID(),
-		authorId: userId,
-		authorName: displayName,
-		authorColor: color,
-		content,
-		worldX: pendingCommentPosition.worldX,
-		worldY: pendingCommentPosition.worldY,
-		createdAt: Date.now(),
-		editedAt: null,
-	};
-
-	// Add to store (local state)
-	commentStore.addComment(comment, isInSession);
-
-	// Sync to Y.js if in collaboration mode
-	if (isInSession) {
-		const sessionManager = collaborationStore.getSessionManager();
-		const commentSync = sessionManager?.getCommentSync();
-		if (commentSync) {
-			commentSync.addComment(comment);
-		}
-	}
-
-	// Reset state
 	pendingCommentPosition = null;
 	showCommentModal = false;
 	commentModeActive = false;
@@ -364,14 +252,7 @@ function handleCommentCancel(): void {
  * Convert world coordinates to screen coordinates
  */
 function worldToScreen(worldX: number, worldY: number): { x: number; y: number } | null {
-	if (!renderer) return null;
-
-	const viewportState = renderer.getViewportState();
-	const screenX = worldX * viewportState.scale + viewportState.x;
-	// Y-axis is flipped in the renderer (mainContainer.scale.y = -1)
-	const screenY = -worldY * viewportState.scale + viewportState.y;
-
-	return { x: screenX, y: screenY };
+	return commentController?.worldToScreen(worldX, worldY) ?? null;
 }
 
 /**
@@ -385,20 +266,10 @@ function handleCommentBubbleClick(commentId: string): void {
  * Handle mobile comment placement (fixed crosshair at viewport center)
  */
 function handleMobilePlaceComment(): void {
-	if (!renderer || !canvas) return;
+	const pending = commentController?.getPendingFromViewportCenter();
+	if (!pending) return;
 
-	// Get viewport center in screen coordinates
-	const rect = canvas.getBoundingClientRect();
-	const centerScreenX = rect.width / 2;
-	const centerScreenY = rect.height / 2;
-
-	// Convert to world coordinates
-	const viewportState = renderer.getViewportState();
-	const worldX = (centerScreenX - viewportState.x) / viewportState.scale;
-	const worldY = -((centerScreenY - viewportState.y) / viewportState.scale);
-
-	// Store pending position and show modal
-	pendingCommentPosition = { worldX, worldY };
+	pendingCommentPosition = pending;
 	showCommentModal = true;
 }
 
@@ -406,53 +277,14 @@ function handleMobilePlaceComment(): void {
  * Handle viewport recentering from comment panel
  */
 function handleRecenterViewport(worldX: number, worldY: number): void {
-	if (!renderer || !canvas) return;
-
-	// Get canvas dimensions
-	const rect = canvas.getBoundingClientRect();
-	const centerScreenX = rect.width / 2;
-	const centerScreenY = rect.height / 2;
-
-	// Calculate new viewport position to center the comment
-	const viewportState = renderer.getViewportState();
-	const newX = centerScreenX - worldX * viewportState.scale;
-	const newY = centerScreenY + worldY * viewportState.scale; // Y-axis is flipped
-
-	// Set viewport position
-	renderer.setViewportState({
-		...viewportState,
-		x: newX,
-		y: newY,
-	});
+	commentController?.recenterViewport(worldX, worldY);
 }
 
 /**
  * Handle mouse move for measurement cursor tracking
  */
 function handleMouseMove(event: MouseEvent): void {
-	if (!measurementModeActive || !renderer) {
-		cursorWorldPos = null;
-		return;
-	}
-
-	// Get mouse position relative to canvas
-	const rect = canvas.getBoundingClientRect();
-	const screenX = event.clientX - rect.left;
-	const screenY = event.clientY - rect.top;
-
-	// Convert screen coordinates to world coordinates
-	const viewportState = renderer.getViewportState();
-	const worldX = (screenX - viewportState.x) / viewportState.scale;
-	const worldY = -((screenY - viewportState.y) / viewportState.scale);
-
-	let worldPos = { worldX, worldY };
-
-	// Apply snap-to-axis if Shift is held and first point exists
-	if (event.shiftKey && activeMeasurement?.point1) {
-		worldPos = snapToAxis(activeMeasurement.point1, worldPos);
-	}
-
-	cursorWorldPos = worldPos;
+	measurementController?.handleMouseMove(event, measurementModeActive);
 }
 
 /**
@@ -461,42 +293,7 @@ function handleMouseMove(event: MouseEvent): void {
  * Two-finger touch = auto-exit measurement mode and allow zoom
  */
 function handleMeasurementTouchStart(event: TouchEvent): void {
-	if (!renderer) return;
-
-	// Two-finger touch: exit measurement mode and allow zoom gesture
-	if (event.touches.length >= 2) {
-		measurementStore.toggleMeasurementMode(); // Exit measurement mode
-		// Don't stop propagation - let TouchController handle the zoom
-		return;
-	}
-
-	// ALWAYS stop event propagation and prevent default when in measurement mode
-	// This blocks TouchController from processing ANY touch events
-	event.stopImmediatePropagation();
-	event.preventDefault();
-
-	// Only process single-touch for measurement
-	if (event.touches.length !== 1) return;
-
-	const touch = event.touches[0];
-	if (!touch) return;
-
-	// Get touch position relative to canvas
-	const rect = canvas.getBoundingClientRect();
-	const screenX = touch.clientX - rect.left;
-	const screenY = touch.clientY - rect.top;
-
-	// Convert screen coordinates to world coordinates
-	const viewportState = renderer.getViewportState();
-	const worldX = (screenX - viewportState.x) / viewportState.scale;
-	const worldY = -((screenY - viewportState.y) / viewportState.scale);
-
-	// Add first point
-	const documentUnits = $gdsStore.document?.units || { database: 1e-9, user: 1e-6 };
-	measurementStore.addPoint(worldX, worldY, documentUnits);
-
-	// Update cursor position for tracking
-	cursorWorldPos = { worldX, worldY };
+	measurementController?.handleTouchStart(event);
 }
 
 /**
@@ -505,46 +302,7 @@ function handleMeasurementTouchStart(event: TouchEvent): void {
  * Two-finger touch = auto-exit measurement mode and allow zoom
  */
 function handleMeasurementTouchMove(event: TouchEvent): void {
-	if (!renderer) return;
-
-	// Two-finger touch: exit measurement mode and allow zoom gesture
-	if (event.touches.length >= 2) {
-		measurementStore.toggleMeasurementMode(); // Exit measurement mode
-		// Don't stop propagation - let TouchController handle the zoom
-		return;
-	}
-
-	// ALWAYS stop event propagation and prevent default when in measurement mode
-	// This blocks TouchController from processing ANY touch events
-	event.stopImmediatePropagation();
-	event.preventDefault();
-
-	// Only process single-touch for measurement
-	if (event.touches.length !== 1) return;
-
-	const touch = event.touches[0];
-	if (!touch) return;
-
-	// Get touch position relative to canvas
-	const rect = canvas.getBoundingClientRect();
-	const screenX = touch.clientX - rect.left;
-	const screenY = touch.clientY - rect.top;
-
-	// Convert screen coordinates to world coordinates
-	const viewportState = renderer.getViewportState();
-	const worldX = (screenX - viewportState.x) / viewportState.scale;
-	const worldY = -((screenY - viewportState.y) / viewportState.scale);
-
-	let worldPos = { worldX, worldY };
-
-	// Apply snap-to-axis if Shift is held and first point exists
-	// Note: Shift key detection on touch events is rare but supported
-	if (event.shiftKey && activeMeasurement?.point1) {
-		worldPos = snapToAxis(activeMeasurement.point1, worldPos);
-	}
-
-	// Update cursor position for tracking
-	cursorWorldPos = worldPos;
+	measurementController?.handleTouchMove(event);
 }
 
 /**
@@ -552,35 +310,7 @@ function handleMeasurementTouchMove(event: TouchEvent): void {
  * Let go touch = second click (place second point and complete measurement)
  */
 function handleMeasurementTouchEnd(event: TouchEvent): void {
-	if (!renderer) return;
-
-	// ALWAYS stop event propagation and prevent default when in measurement mode
-	// This blocks TouchController from processing ANY touch events (including two-finger zoom)
-	event.stopImmediatePropagation();
-	event.preventDefault();
-
-	// Only process single-touch for measurement
-	if (event.changedTouches.length !== 1) return;
-
-	const touch = event.changedTouches[0];
-	if (!touch) return;
-
-	// Get touch position relative to canvas
-	const rect = canvas.getBoundingClientRect();
-	const screenX = touch.clientX - rect.left;
-	const screenY = touch.clientY - rect.top;
-
-	// Convert screen coordinates to world coordinates
-	const viewportState = renderer.getViewportState();
-	const worldX = (screenX - viewportState.x) / viewportState.scale;
-	const worldY = -((screenY - viewportState.y) / viewportState.scale);
-
-	// Add second point (completes measurement)
-	const documentUnits = $gdsStore.document?.units || { database: 1e-9, user: 1e-6 };
-	measurementStore.addPoint(worldX, worldY, documentUnits);
-
-	// Clear cursor position
-	cursorWorldPos = null;
+	measurementController?.handleTouchEnd(event);
 }
 
 /**
@@ -639,6 +369,35 @@ onMount(() => {
 	// Register keyboard shortcuts via centralized manager
 	registerKeyboardShortcuts();
 
+	measurementController = new ViewerMeasurementController({
+		getRenderer: () => renderer,
+		getCanvas: () => canvas,
+		getDocumentUnits: () => $gdsStore.document?.units || { database: 1e-9, user: 1e-6 },
+		getActiveMeasurementPoint1: () => activeMeasurement?.point1 || null,
+		setCursorWorldPos: (point) => {
+			cursorWorldPos = point;
+		},
+		addMeasurementPoint: (worldX, worldY, units) => {
+			measurementStore.addPoint(worldX, worldY, units);
+		},
+		exitMeasurementMode: () => {
+			measurementStore.exitMeasurementMode();
+		},
+	});
+
+	commentController = new ViewerCommentController({
+		getRenderer: () => renderer,
+		getCanvas: () => canvas,
+		getCommentsCount: () => comments.size,
+		getIsInSession: () => $collaborationStore.isInSession,
+		getIsHost: () => $collaborationStore.isHost,
+		getCommentPermissions: () => commentPermissions,
+		getSessionManager: () => collaborationStore.getSessionManager(),
+		checkRateLimit: (userId, isHost) => commentStore.checkRateLimit(userId, isHost),
+		showToast: (message) => commentStore.showToast(message),
+		addComment: (comment, isInSession) => commentStore.addComment(comment, isInSession),
+	});
+
 	keyModeController = new ViewerKeyModeController({
 		isInputFocused,
 		toggleFullscreen: () => {
@@ -689,48 +448,56 @@ onMount(() => {
 	// Initialize renderer asynchronously
 	if (canvas) {
 		(async () => {
-			renderer = new PixiRenderer();
-			await renderer.init(canvas);
-
-			// Set up viewport change callback for minimap (always, regardless of session)
-			// Must be inside async block where renderer is defined
-			renderer.setOnViewportChanged((viewportState) => {
-				// Update minimap viewport bounds
-				viewportBounds = renderer?.getPublicViewportBounds() ?? null;
-
-				// Increment viewport version to trigger comment bubble position updates
-				viewportVersion++;
-
-				// Read current state from store (not captured $derived values)
-				// This ensures we get the latest state when callback executes
-				const state = get(collaborationStore);
-
-				// Skip session-related broadcasts if not in session
-				if (!state.isInSession) return;
-				const sessionManager = collaborationStore.getSessionManager();
-				if (!sessionManager) return;
-
-				// Broadcast own viewport for minimap display (all users in session)
-				sessionManager.broadcastOwnViewport(viewportState.x, viewportState.y, viewportState.scale);
-
-				// Broadcast to followers if host and broadcasting
-				if (state.isHost && state.isBroadcasting) {
-					sessionManager.broadcastViewport(viewportState.x, viewportState.y, viewportState.scale);
-				}
-			});
-
-			// Set up viewport sync callbacks
-			setupViewportSync();
-
-			if ($gdsStore.document) {
-				lastRenderedDocument = $gdsStore.document;
+			const initialDocument = $gdsStore.document;
+			if (initialDocument) {
+				lastRenderedDocument = initialDocument;
 				gdsStore.setRendering(true, "Rendering...", 0);
-				await renderer.renderGDSDocument($gdsStore.document, (progress, message) => {
+			}
+
+			const result = await initializeViewerRenderer({
+				canvas,
+				initialDocument,
+				onViewportChanged: (viewportState) => {
+					// Update minimap viewport bounds
+					viewportBounds = renderer?.getPublicViewportBounds() ?? null;
+
+					// Increment viewport version to trigger comment bubble position updates
+					viewportVersion++;
+
+					// Read current state from store (not captured $derived values)
+					// This ensures we get the latest state when callback executes
+					const state = get(collaborationStore);
+
+					// Skip session-related broadcasts if not in session
+					if (!state.isInSession) return;
+					const sessionManager = collaborationStore.getSessionManager();
+					if (!sessionManager) return;
+
+					// Broadcast own viewport for minimap display (all users in session)
+					sessionManager.broadcastOwnViewport(
+						viewportState.x,
+						viewportState.y,
+						viewportState.scale,
+					);
+
+					// Broadcast to followers if host and broadcasting
+					if (state.isHost && state.isBroadcasting) {
+						sessionManager.broadcastViewport(viewportState.x, viewportState.y, viewportState.scale);
+					}
+				},
+				onInitialRenderProgress: ({ progress, message }) => {
 					gdsStore.setRendering(true, message, progress);
 					if (progress >= 100) {
 						setTimeout(() => gdsStore.setRendering(false), 500);
 					}
-				});
+				},
+			});
+			renderer = result.renderer;
+
+			// Set up viewport sync callbacks
+			setupViewportSync();
+
+			if (result.initialDocumentRendered) {
 				// After render completes, fitToView has run - get correct viewport bounds
 				viewportBounds = renderer.getPublicViewportBounds();
 			}
@@ -761,6 +528,8 @@ onMount(() => {
 
 		keyModeController?.destroy();
 		keyModeController = null;
+		measurementController = null;
+		commentController = null;
 	};
 });
 
