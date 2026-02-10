@@ -368,21 +368,24 @@ onMount(() => {
 	// Register keyboard shortcuts via centralized manager
 	registerKeyboardShortcuts();
 
-	measurementController = new ViewerMeasurementController({
-		getRenderer: () => renderer,
-		getCanvas: () => canvas,
-		getDocumentUnits: () => $gdsStore.document?.units || { database: 1e-9, user: 1e-6 },
-		getActiveMeasurementPoint1: () => activeMeasurement?.point1 || null,
-		setCursorWorldPos: (point) => {
-			cursorWorldPos = point;
+	measurementController = new ViewerMeasurementController(
+		{
+			getRenderer: () => renderer,
+			getCanvas: () => canvas,
+			getDocumentUnits: () => $gdsStore.document?.units || { database: 1e-9, user: 1e-6 },
+			getActiveMeasurementPoint1: () => activeMeasurement?.point1 || null,
+			setCursorWorldPos: (point) => {
+				cursorWorldPos = point;
+			},
+			addMeasurementPoint: (worldX, worldY, units) => {
+				measurementStore.addPoint(worldX, worldY, units);
+			},
+			exitMeasurementMode: () => {
+				measurementStore.exitMeasurementMode();
+			},
 		},
-		addMeasurementPoint: (worldX, worldY, units) => {
-			measurementStore.addPoint(worldX, worldY, units);
-		},
-		exitMeasurementMode: () => {
-			measurementStore.exitMeasurementMode();
-		},
-	});
+		MOBILE_BREAKPOINT,
+	);
 
 	commentController = new ViewerCommentController({
 		getRenderer: () => renderer,

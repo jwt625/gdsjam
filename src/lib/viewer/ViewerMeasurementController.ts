@@ -27,9 +27,11 @@ export interface ViewerMeasurementControllerCallbacks {
  */
 export class ViewerMeasurementController {
 	private readonly callbacks: ViewerMeasurementControllerCallbacks;
+	private readonly mobileBreakpoint: number;
 
-	constructor(callbacks: ViewerMeasurementControllerCallbacks) {
+	constructor(callbacks: ViewerMeasurementControllerCallbacks, mobileBreakpoint = 1024) {
 		this.callbacks = callbacks;
+		this.mobileBreakpoint = mobileBreakpoint;
 	}
 
 	handleMeasurementCanvasClick(event: MouseEvent | PointerEvent): boolean {
@@ -38,7 +40,11 @@ export class ViewerMeasurementController {
 		if (!renderer || !canvas) return false;
 
 		// For touch devices in mobile mode, use touch-and-drag gesture instead
-		if ("pointerType" in event && event.pointerType === "touch" && window.innerWidth < 1024) {
+		if (
+			"pointerType" in event &&
+			event.pointerType === "touch" &&
+			window.innerWidth < this.mobileBreakpoint
+		) {
 			return true;
 		}
 

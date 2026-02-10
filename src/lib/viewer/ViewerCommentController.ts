@@ -187,10 +187,18 @@ export class ViewerCommentController {
 	}
 
 	private getSoloUserInfo(): SessionUserInfo {
-		let userId = localStorage.getItem("gdsjam_userId");
-		if (!userId) {
+		let userId: string | null = null;
+
+		try {
+			userId = localStorage.getItem("gdsjam_userId");
+			if (!userId) {
+				userId = generateUUID();
+				localStorage.setItem("gdsjam_userId", userId);
+			}
+		} catch (error) {
+			// localStorage disabled or quota exceeded - generate temporary ID
+			console.warn("localStorage unavailable, using temporary user ID:", error);
 			userId = generateUUID();
-			localStorage.setItem("gdsjam_userId", userId);
 		}
 
 		return {
