@@ -1237,14 +1237,21 @@ $effect(() => {
 		layerStoreInitialized = false;
 		gdsStore.setRendering(true, "Rendering...", 0);
 		(async () => {
-			await renderer.renderGDSDocument(gdsDocument, (progress, message) => {
-				gdsStore.setRendering(true, message, progress);
-				if (progress >= 100) {
-					setTimeout(() => gdsStore.setRendering(false), 500);
-				}
-			});
-			// Update viewport bounds after render completes (for minimap)
-			viewportBounds = renderer?.getPublicViewportBounds() ?? null;
+			try {
+				await renderer.renderGDSDocument(gdsDocument, (progress, message) => {
+					gdsStore.setRendering(true, message, progress);
+					if (progress >= 100) {
+						setTimeout(() => gdsStore.setRendering(false), 500);
+					}
+				});
+				// Update viewport bounds after render completes (for minimap)
+				viewportBounds = renderer?.getPublicViewportBounds() ?? null;
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				console.error("[ViewerCanvas] Render failed:", error);
+				gdsStore.setError(message);
+				gdsStore.setRendering(false);
+			}
 		})();
 	}
 });
@@ -1643,4 +1650,3 @@ function toggleMinimap() {
 		transition: none;
 	}
 </style>
-

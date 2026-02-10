@@ -665,33 +665,53 @@ export class PixiRenderer {
 		// Get scaled budget from LOD manager
 		const scaledBudget = this.lodManager.getScaledBudget();
 
-		// Render using GDSRenderer
-		const result = await this.gdsRenderer.render(
-			document,
-			{
-				maxDepth: this.currentRenderDepth,
-				maxPolygonsPerRender: scaledBudget,
-				fillMode: this.fillPolygons,
-				overrideScale,
-				layerVisibility: this.layerVisibility,
-			},
-			onProgress,
-		);
+		try {
+			// Render using GDSRenderer
+			const result = await this.gdsRenderer.render(
+				document,
+				{
+					maxDepth: this.currentRenderDepth,
+					maxPolygonsPerRender: scaledBudget,
+					fillMode: this.fillPolygons,
+					overrideScale,
+					layerVisibility: this.layerVisibility,
+				},
+				onProgress,
+			);
 
-		// Store results
-		this.allGraphicsItems = result.graphicsItems;
-		this.totalRenderedPolygons = result.totalPolygons;
+			// Store results
+			this.allGraphicsItems = result.graphicsItems;
+			this.totalRenderedPolygons = result.totalPolygons;
 
-		if (!skipFitToView) {
-			onProgress?.(90, "Fitting to view...");
-			await new Promise((resolve) => setTimeout(resolve, 0));
-			this.fitToView();
-			// Initialize zoom thresholds after fitToView
-			this.lodManager.updateZoomThresholds(this.mainContainer.scale.x);
+			if (!skipFitToView) {
+				onProgress?.(90, "Fitting to view...");
+				await new Promise((resolve) => setTimeout(resolve, 0));
+				this.fitToView();
+				// Initialize zoom thresholds after fitToView
+				this.lodManager.updateZoomThresholds(this.mainContainer.scale.x);
+			}
+			this.updateViewport();
+
+			onProgress?.(100, "Render complete!");
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			const isLikelyOOM =
+				error instanceof RangeError || /out of memory|allocation|memory/i.test(message);
+
+			// Clear partial geometry to keep app responsive after render failure
+			this.clear();
+			this.updateViewport();
+
+			if (isLikelyOOM) {
+				onProgress?.(100, "Rendering paused (memory limit reached)");
+				throw new Error(
+					"Rendering paused to prevent browser crash (memory limit reached). Try hiding layers, zooming in, or using a smaller file.",
+				);
+			}
+
+			onProgress?.(100, "Rendering failed");
+			throw error;
 		}
-		this.updateViewport();
-
-		onProgress?.(100, "Render complete!");
 	}
 
 	/**
