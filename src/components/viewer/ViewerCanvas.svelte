@@ -3,15 +3,17 @@ import { onDestroy, onMount } from "svelte";
 import { get } from "svelte/store";
 import type {
 	CollaborativeViewportState,
-	Comment,
 	CommentPermissions,
 	ParticipantViewport,
 } from "../../lib/collaboration/types";
 import { DEBUG_MEASUREMENT } from "../../lib/debug";
 import { KeyboardShortcutManager } from "../../lib/keyboard/KeyboardShortcutManager";
-import { snapToAxis } from "../../lib/measurements/utils";
 import { PixiRenderer } from "../../lib/renderer/PixiRenderer";
-import { generateUUID } from "../../lib/utils/uuid";
+import { initializeViewerRenderer } from "../../lib/viewer/initializeViewerRenderer";
+import { setupViewerCollabSync } from "../../lib/viewer/setupViewerCollabSync";
+import { ViewerCommentController } from "../../lib/viewer/ViewerCommentController";
+import { ViewerKeyModeController } from "../../lib/viewer/ViewerKeyModeController";
+import { ViewerMeasurementController } from "../../lib/viewer/ViewerMeasurementController";
 import { collaborationStore } from "../../stores/collaborationStore";
 import { commentStore } from "../../stores/commentStore";
 import { editorStore } from "../../stores/editorStore";
@@ -57,31 +59,9 @@ let layerPanelVisible = $state(
 );
 let minimapVisible = $state(true);
 let layerStoreInitialized = false;
-
-// F key hold detection for fullscreen
-const FULLSCREEN_HOLD_DURATION_MS = 500;
-let fKeyDownTime: number | null = null;
-let fKeyHoldTimer: ReturnType<typeof setTimeout> | null = null;
-let fKeyTriggeredFullscreen = false;
-
-// C key hold detection for comment visibility toggle
-const COMMENT_HOLD_DURATION_MS = 500;
-const DOUBLE_CLICK_INTERVAL_MS = 300;
-let cKeyDownTime: number | null = null;
-let cKeyHoldTimer: ReturnType<typeof setTimeout> | null = null;
-let cKeyTriggeredHold = false;
-let lastCKeyPressTime: number | null = null;
-
-// E key hold detection for editor mode
-const EDITOR_HOLD_DURATION_MS = 500;
-let eKeyDownTime: number | null = null;
-let eKeyHoldTimer: ReturnType<typeof setTimeout> | null = null;
-
-// M key hold detection for measurement mode
-const MEASUREMENT_HOLD_DURATION_MS = 500;
-let mKeyDownTime: number | null = null;
-let mKeyHoldTimer: ReturnType<typeof setTimeout> | null = null;
-let mKeyTriggeredHold = false;
+let keyModeController: ViewerKeyModeController | null = null;
+let measurementController: ViewerMeasurementController | null = null;
+let commentController: ViewerCommentController | null = null;
 
 // Comment mode state
 let commentModeActive = $state(false);
@@ -155,7 +135,7 @@ function registerKeyboardShortcuts(): void {
 			},
 			description: "Toggle layer panel",
 		},
-		// Note: M key is handled by handleMKeyDown/handleMKeyUp for hold detection
+		// Note: M key hold behavior is handled by ViewerKeyModeController
 		// Short press = toggle minimap, Hold = toggle measurement mode
 		{
 			id: "toggle-fill",
@@ -215,262 +195,6 @@ $effect(() => {
 });
 
 /**
- * Handle F key down - start hold detection timer
- * Short press (<500ms) = fit to view, Hold (>=500ms) = fullscreen
- */
-function handleFKeyDown(event: KeyboardEvent): void {
-	// Only handle F key
-	if (event.code !== "KeyF") return;
-
-	// Don't handle in input fields
-	const target = event.target as HTMLElement;
-	if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
-		return;
-	}
-
-	// Don't handle with modifiers
-	if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
-
-	// Ignore repeat events (key held down)
-	if (event.repeat) return;
-
-	// Prevent default to avoid any browser shortcuts
-	event.preventDefault();
-
-	// Record keydown time and start timer
-	fKeyDownTime = Date.now();
-	fKeyTriggeredFullscreen = false;
-
-	// Start hold detection timer
-	fKeyHoldTimer = setTimeout(() => {
-		// Hold threshold reached - toggle fullscreen
-		fKeyTriggeredFullscreen = true;
-		if (onToggleFullscreen) {
-			onToggleFullscreen(!fullscreenMode);
-		}
-	}, FULLSCREEN_HOLD_DURATION_MS);
-}
-
-/**
- * Handle F key up - if short press, trigger fit to view
- */
-function handleFKeyUp(event: KeyboardEvent): void {
-	// Only handle F key
-	if (event.code !== "KeyF") return;
-
-	// Clear the hold timer
-	if (fKeyHoldTimer) {
-		clearTimeout(fKeyHoldTimer);
-		fKeyHoldTimer = null;
-	}
-
-	// If we didn't trigger fullscreen (short press), do fit to view
-	if (!fKeyTriggeredFullscreen && fKeyDownTime !== null) {
-		const holdDuration = Date.now() - fKeyDownTime;
-		if (holdDuration < FULLSCREEN_HOLD_DURATION_MS) {
-			renderer?.fitToView();
-		}
-	}
-
-	// Reset state
-	fKeyDownTime = null;
-	fKeyTriggeredFullscreen = false;
-}
-
-/**
- * Handle C key down - start hold detection timer and double-click detection
- * Single press = toggle comment mode, Double press = toggle comment panel, Hold = show/hide all comments
- */
-function handleCKeyDown(event: KeyboardEvent): void {
-	// Only handle C key
-	if (event.code !== "KeyC") return;
-
-	// Don't handle in input fields
-	const target = event.target as HTMLElement;
-	if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
-		return;
-	}
-
-	// Don't handle with modifiers
-	if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
-
-	// Ignore repeat events (key held down)
-	if (event.repeat) return;
-
-	// Prevent default to avoid any browser shortcuts
-	event.preventDefault();
-
-	// Record keydown time and start timer
-	cKeyDownTime = Date.now();
-	cKeyTriggeredHold = false;
-
-	// Start hold detection timer
-	cKeyHoldTimer = setTimeout(() => {
-		// Hold threshold reached - toggle all comments visibility (persistent)
-		cKeyTriggeredHold = true;
-		commentStore.toggleAllCommentsVisibility();
-	}, COMMENT_HOLD_DURATION_MS);
-}
-
-/**
- * Handle C key up - if short press, toggle comment mode or panel (double-click)
- */
-function handleCKeyUp(event: KeyboardEvent): void {
-	// Only handle C key
-	if (event.code !== "KeyC") return;
-
-	// Clear the hold timer
-	if (cKeyHoldTimer) {
-		clearTimeout(cKeyHoldTimer);
-		cKeyHoldTimer = null;
-	}
-
-	// If we triggered hold, just reset the flag (visibility stays toggled)
-	if (cKeyTriggeredHold) {
-		cKeyDownTime = null;
-		cKeyTriggeredHold = false;
-		return;
-	}
-
-	// Check for double-click
-	const now = Date.now();
-	const isDoubleClick =
-		lastCKeyPressTime !== null && now - lastCKeyPressTime < DOUBLE_CLICK_INTERVAL_MS;
-
-	if (isDoubleClick) {
-		// Double-click: toggle comment panel and exit comment mode
-		commentPanelVisible = !commentPanelVisible;
-		commentModeActive = false;
-		lastCKeyPressTime = null;
-	} else {
-		// Single click: toggle comment mode
-		if (cKeyDownTime !== null) {
-			const holdDuration = now - cKeyDownTime;
-			if (holdDuration < COMMENT_HOLD_DURATION_MS) {
-				commentModeActive = !commentModeActive;
-			}
-		}
-		lastCKeyPressTime = now;
-	}
-
-	// Reset state
-	cKeyDownTime = null;
-	cKeyTriggeredHold = false;
-}
-
-/**
- * Handle E key down - start hold detection timer for editor mode
- * Hold (>=500ms) = toggle editor mode
- */
-function handleEKeyDown(event: KeyboardEvent): void {
-	// Only handle E key
-	if (event.code !== "KeyE") return;
-
-	// Don't handle in input fields
-	const target = event.target as HTMLElement;
-	if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
-		return;
-	}
-
-	// Already holding - ignore
-	if (eKeyDownTime !== null) return;
-
-	// Record key down time
-	eKeyDownTime = Date.now();
-
-	// Start hold detection timer
-	eKeyHoldTimer = setTimeout(() => {
-		// Hold threshold reached - toggle editor mode
-		onToggleEditorMode?.();
-	}, EDITOR_HOLD_DURATION_MS);
-}
-
-/**
- * Handle E key up - clear hold timer
- */
-function handleEKeyUp(event: KeyboardEvent): void {
-	// Only handle E key
-	if (event.code !== "KeyE") return;
-
-	// Clear the hold timer
-	if (eKeyHoldTimer) {
-		clearTimeout(eKeyHoldTimer);
-		eKeyHoldTimer = null;
-	}
-
-	// Reset state
-	eKeyDownTime = null;
-}
-
-/**
- * Handle M key down - start hold detection timer for measurement mode
- * Single press = toggle minimap, Hold = toggle measurement mode
- */
-function handleMKeyDown(event: KeyboardEvent): void {
-	// Only handle M key
-	if (event.code !== "KeyM") return;
-
-	// Don't handle in input fields
-	const target = event.target as HTMLElement;
-	if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
-		return;
-	}
-
-	// Don't handle with modifiers
-	if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
-
-	// Ignore repeat events (key held down)
-	if (event.repeat) return;
-
-	// Prevent default to avoid any browser shortcuts
-	event.preventDefault();
-
-	// Record keydown time and start timer
-	mKeyDownTime = Date.now();
-	mKeyTriggeredHold = false;
-
-	// Start hold detection timer
-	mKeyHoldTimer = setTimeout(() => {
-		// Hold threshold reached - toggle measurement mode
-		mKeyTriggeredHold = true;
-		measurementStore.toggleMeasurementMode();
-	}, MEASUREMENT_HOLD_DURATION_MS);
-}
-
-/**
- * Handle M key up - if short press, toggle minimap; if hold, measurement mode already toggled
- */
-function handleMKeyUp(event: KeyboardEvent): void {
-	// Only handle M key
-	if (event.code !== "KeyM") return;
-
-	// Clear the hold timer
-	if (mKeyHoldTimer) {
-		clearTimeout(mKeyHoldTimer);
-		mKeyHoldTimer = null;
-	}
-
-	// If we triggered hold, just reset the flag (measurement mode already toggled)
-	if (mKeyTriggeredHold) {
-		mKeyDownTime = null;
-		mKeyTriggeredHold = false;
-		return;
-	}
-
-	// Short press: toggle minimap
-	if (mKeyDownTime !== null) {
-		const holdDuration = Date.now() - mKeyDownTime;
-		if (holdDuration < MEASUREMENT_HOLD_DURATION_MS) {
-			minimapVisible = !minimapVisible;
-		}
-	}
-
-	// Reset state
-	mKeyDownTime = null;
-	mKeyTriggeredHold = false;
-}
-
-/**
  * Handle canvas click/tap for comment placement and measurement
  * Unified handler for both mouse and touch (via pointer events or click)
  */
@@ -486,60 +210,20 @@ function handleCanvasClick(event: MouseEvent | PointerEvent): void {
 		if (DEBUG_MEASUREMENT) {
 			console.log("[ViewerCanvas] In measurement mode, adding point");
 		}
-		// For touch devices in mobile mode, use touch-and-drag gesture instead
-		if (
-			typeof window !== "undefined" &&
-			window.innerWidth < MOBILE_BREAKPOINT &&
-			"pointerType" in event &&
-			event.pointerType === "touch"
-		) {
+		if (measurementController?.handleMeasurementCanvasClick(event)) {
 			return;
 		}
-
-		// Get click position relative to canvas
-		const rect = canvas.getBoundingClientRect();
-		const screenX = event.clientX - rect.left;
-		const screenY = event.clientY - rect.top;
-
-		// Convert screen coordinates to world coordinates
-		const viewportState = renderer.getViewportState();
-		const worldX = (screenX - viewportState.x) / viewportState.scale;
-		const worldY = -((screenY - viewportState.y) / viewportState.scale);
-
-		// Add point to measurement
-		const documentUnits = $gdsStore.document?.units || { database: 1e-9, user: 1e-6 };
-		measurementStore.addPoint(worldX, worldY, documentUnits);
 
 		return;
 	}
 
 	// Handle comment mode
 	if (commentModeActive) {
-		// For touch devices in mobile mode, use the fixed crosshair button instead
-		if (
-			typeof window !== "undefined" &&
-			window.innerWidth < MOBILE_BREAKPOINT &&
-			"pointerType" in event &&
-			event.pointerType === "touch"
-		) {
-			return;
+		const pending = commentController?.getPendingFromCanvasPointer(event, MOBILE_BREAKPOINT);
+		if (pending) {
+			pendingCommentPosition = pending;
+			showCommentModal = true;
 		}
-
-		// Get click position relative to canvas
-		const rect = canvas.getBoundingClientRect();
-		const screenX = event.clientX - rect.left;
-		const screenY = event.clientY - rect.top;
-
-		// Convert screen coordinates to world coordinates (same logic as CoordinatesDisplay)
-		// Access mainContainer properties via renderer's viewport state
-		const viewportState = renderer.getViewportState();
-		const worldX = (screenX - viewportState.x) / viewportState.scale;
-		// Y-axis is flipped (mainContainer.scale.y = -1), so negate Y coordinate
-		const worldY = -((screenY - viewportState.y) / viewportState.scale);
-
-		// Store pending position and show modal
-		pendingCommentPosition = { worldX, worldY };
-		showCommentModal = true;
 	}
 }
 
@@ -547,83 +231,9 @@ function handleCanvasClick(event: MouseEvent | PointerEvent): void {
  * Handle comment submission from modal
  */
 function handleCommentSubmit(content: string): void {
-	if (!pendingCommentPosition) return;
+	const submitted = commentController?.submitComment(content, pendingCommentPosition) ?? false;
+	if (!submitted) return;
 
-	// Check 100 comment limit
-	const currentCommentCount = comments.size;
-	if (currentCommentCount >= 100) {
-		commentStore.showToast("Comment limit reached (100 comments maximum)");
-		return;
-	}
-
-	// Get user info
-	const isInSession = $collaborationStore.isInSession;
-	const isHost = $collaborationStore.isHost;
-	let userId: string;
-	let displayName: string;
-	let color: string;
-
-	if (isInSession) {
-		// Collaboration mode: get from session manager
-		const sessionManager = collaborationStore.getSessionManager();
-		if (!sessionManager) return;
-
-		userId = sessionManager.getUserId();
-		const users = sessionManager.getConnectedUsers();
-		const currentUser = users.find((u) => u.id === userId);
-		displayName = currentUser?.displayName || "Anonymous";
-		color = currentUser?.color || "#888888";
-
-		// Check if viewer is allowed to comment
-		if (!isHost && !commentPermissions.viewersCanComment) {
-			commentStore.showToast("Commenting is disabled by the host");
-			return;
-		}
-
-		// Check rate limit
-		if (!commentStore.checkRateLimit(userId, isHost)) {
-			const rateLimit = isHost ? "10 seconds" : "1 minute";
-			commentStore.showToast(
-				`Please wait before posting another comment (${rateLimit} rate limit)`,
-			);
-			return;
-		}
-	} else {
-		// Solo mode: generate user info
-		userId = localStorage.getItem("gdsjam_userId") || generateUUID();
-		if (!localStorage.getItem("gdsjam_userId")) {
-			localStorage.setItem("gdsjam_userId", userId);
-		}
-		displayName = "You";
-		color = "#4ECDC4";
-	}
-
-	// Create comment
-	const comment: Comment = {
-		id: generateUUID(),
-		authorId: userId,
-		authorName: displayName,
-		authorColor: color,
-		content,
-		worldX: pendingCommentPosition.worldX,
-		worldY: pendingCommentPosition.worldY,
-		createdAt: Date.now(),
-		editedAt: null,
-	};
-
-	// Add to store (local state)
-	commentStore.addComment(comment, isInSession);
-
-	// Sync to Y.js if in collaboration mode
-	if (isInSession) {
-		const sessionManager = collaborationStore.getSessionManager();
-		const commentSync = sessionManager?.getCommentSync();
-		if (commentSync) {
-			commentSync.addComment(comment);
-		}
-	}
-
-	// Reset state
 	pendingCommentPosition = null;
 	showCommentModal = false;
 	commentModeActive = false;
@@ -642,14 +252,7 @@ function handleCommentCancel(): void {
  * Convert world coordinates to screen coordinates
  */
 function worldToScreen(worldX: number, worldY: number): { x: number; y: number } | null {
-	if (!renderer) return null;
-
-	const viewportState = renderer.getViewportState();
-	const screenX = worldX * viewportState.scale + viewportState.x;
-	// Y-axis is flipped in the renderer (mainContainer.scale.y = -1)
-	const screenY = -worldY * viewportState.scale + viewportState.y;
-
-	return { x: screenX, y: screenY };
+	return commentController?.worldToScreen(worldX, worldY) ?? null;
 }
 
 /**
@@ -663,20 +266,10 @@ function handleCommentBubbleClick(commentId: string): void {
  * Handle mobile comment placement (fixed crosshair at viewport center)
  */
 function handleMobilePlaceComment(): void {
-	if (!renderer || !canvas) return;
+	const pending = commentController?.getPendingFromViewportCenter();
+	if (!pending) return;
 
-	// Get viewport center in screen coordinates
-	const rect = canvas.getBoundingClientRect();
-	const centerScreenX = rect.width / 2;
-	const centerScreenY = rect.height / 2;
-
-	// Convert to world coordinates
-	const viewportState = renderer.getViewportState();
-	const worldX = (centerScreenX - viewportState.x) / viewportState.scale;
-	const worldY = -((centerScreenY - viewportState.y) / viewportState.scale);
-
-	// Store pending position and show modal
-	pendingCommentPosition = { worldX, worldY };
+	pendingCommentPosition = pending;
 	showCommentModal = true;
 }
 
@@ -684,53 +277,14 @@ function handleMobilePlaceComment(): void {
  * Handle viewport recentering from comment panel
  */
 function handleRecenterViewport(worldX: number, worldY: number): void {
-	if (!renderer || !canvas) return;
-
-	// Get canvas dimensions
-	const rect = canvas.getBoundingClientRect();
-	const centerScreenX = rect.width / 2;
-	const centerScreenY = rect.height / 2;
-
-	// Calculate new viewport position to center the comment
-	const viewportState = renderer.getViewportState();
-	const newX = centerScreenX - worldX * viewportState.scale;
-	const newY = centerScreenY + worldY * viewportState.scale; // Y-axis is flipped
-
-	// Set viewport position
-	renderer.setViewportState({
-		...viewportState,
-		x: newX,
-		y: newY,
-	});
+	commentController?.recenterViewport(worldX, worldY);
 }
 
 /**
  * Handle mouse move for measurement cursor tracking
  */
 function handleMouseMove(event: MouseEvent): void {
-	if (!measurementModeActive || !renderer) {
-		cursorWorldPos = null;
-		return;
-	}
-
-	// Get mouse position relative to canvas
-	const rect = canvas.getBoundingClientRect();
-	const screenX = event.clientX - rect.left;
-	const screenY = event.clientY - rect.top;
-
-	// Convert screen coordinates to world coordinates
-	const viewportState = renderer.getViewportState();
-	const worldX = (screenX - viewportState.x) / viewportState.scale;
-	const worldY = -((screenY - viewportState.y) / viewportState.scale);
-
-	let worldPos = { worldX, worldY };
-
-	// Apply snap-to-axis if Shift is held and first point exists
-	if (event.shiftKey && activeMeasurement?.point1) {
-		worldPos = snapToAxis(activeMeasurement.point1, worldPos);
-	}
-
-	cursorWorldPos = worldPos;
+	measurementController?.handleMouseMove(event, measurementModeActive);
 }
 
 /**
@@ -739,42 +293,7 @@ function handleMouseMove(event: MouseEvent): void {
  * Two-finger touch = auto-exit measurement mode and allow zoom
  */
 function handleMeasurementTouchStart(event: TouchEvent): void {
-	if (!renderer) return;
-
-	// Two-finger touch: exit measurement mode and allow zoom gesture
-	if (event.touches.length >= 2) {
-		measurementStore.toggleMeasurementMode(); // Exit measurement mode
-		// Don't stop propagation - let TouchController handle the zoom
-		return;
-	}
-
-	// ALWAYS stop event propagation and prevent default when in measurement mode
-	// This blocks TouchController from processing ANY touch events
-	event.stopImmediatePropagation();
-	event.preventDefault();
-
-	// Only process single-touch for measurement
-	if (event.touches.length !== 1) return;
-
-	const touch = event.touches[0];
-	if (!touch) return;
-
-	// Get touch position relative to canvas
-	const rect = canvas.getBoundingClientRect();
-	const screenX = touch.clientX - rect.left;
-	const screenY = touch.clientY - rect.top;
-
-	// Convert screen coordinates to world coordinates
-	const viewportState = renderer.getViewportState();
-	const worldX = (screenX - viewportState.x) / viewportState.scale;
-	const worldY = -((screenY - viewportState.y) / viewportState.scale);
-
-	// Add first point
-	const documentUnits = $gdsStore.document?.units || { database: 1e-9, user: 1e-6 };
-	measurementStore.addPoint(worldX, worldY, documentUnits);
-
-	// Update cursor position for tracking
-	cursorWorldPos = { worldX, worldY };
+	measurementController?.handleTouchStart(event);
 }
 
 /**
@@ -783,46 +302,7 @@ function handleMeasurementTouchStart(event: TouchEvent): void {
  * Two-finger touch = auto-exit measurement mode and allow zoom
  */
 function handleMeasurementTouchMove(event: TouchEvent): void {
-	if (!renderer) return;
-
-	// Two-finger touch: exit measurement mode and allow zoom gesture
-	if (event.touches.length >= 2) {
-		measurementStore.toggleMeasurementMode(); // Exit measurement mode
-		// Don't stop propagation - let TouchController handle the zoom
-		return;
-	}
-
-	// ALWAYS stop event propagation and prevent default when in measurement mode
-	// This blocks TouchController from processing ANY touch events
-	event.stopImmediatePropagation();
-	event.preventDefault();
-
-	// Only process single-touch for measurement
-	if (event.touches.length !== 1) return;
-
-	const touch = event.touches[0];
-	if (!touch) return;
-
-	// Get touch position relative to canvas
-	const rect = canvas.getBoundingClientRect();
-	const screenX = touch.clientX - rect.left;
-	const screenY = touch.clientY - rect.top;
-
-	// Convert screen coordinates to world coordinates
-	const viewportState = renderer.getViewportState();
-	const worldX = (screenX - viewportState.x) / viewportState.scale;
-	const worldY = -((screenY - viewportState.y) / viewportState.scale);
-
-	let worldPos = { worldX, worldY };
-
-	// Apply snap-to-axis if Shift is held and first point exists
-	// Note: Shift key detection on touch events is rare but supported
-	if (event.shiftKey && activeMeasurement?.point1) {
-		worldPos = snapToAxis(activeMeasurement.point1, worldPos);
-	}
-
-	// Update cursor position for tracking
-	cursorWorldPos = worldPos;
+	measurementController?.handleTouchMove(event);
 }
 
 /**
@@ -830,35 +310,7 @@ function handleMeasurementTouchMove(event: TouchEvent): void {
  * Let go touch = second click (place second point and complete measurement)
  */
 function handleMeasurementTouchEnd(event: TouchEvent): void {
-	if (!renderer) return;
-
-	// ALWAYS stop event propagation and prevent default when in measurement mode
-	// This blocks TouchController from processing ANY touch events (including two-finger zoom)
-	event.stopImmediatePropagation();
-	event.preventDefault();
-
-	// Only process single-touch for measurement
-	if (event.changedTouches.length !== 1) return;
-
-	const touch = event.changedTouches[0];
-	if (!touch) return;
-
-	// Get touch position relative to canvas
-	const rect = canvas.getBoundingClientRect();
-	const screenX = touch.clientX - rect.left;
-	const screenY = touch.clientY - rect.top;
-
-	// Convert screen coordinates to world coordinates
-	const viewportState = renderer.getViewportState();
-	const worldX = (screenX - viewportState.x) / viewportState.scale;
-	const worldY = -((screenY - viewportState.y) / viewportState.scale);
-
-	// Add second point (completes measurement)
-	const documentUnits = $gdsStore.document?.units || { database: 1e-9, user: 1e-6 };
-	measurementStore.addPoint(worldX, worldY, documentUnits);
-
-	// Clear cursor position
-	cursorWorldPos = null;
+	measurementController?.handleTouchEnd(event);
 }
 
 /**
@@ -878,6 +330,12 @@ function handleClearMeasurements(event: KeyboardEvent): void {
 	// Clear all measurements
 	measurementStore.clearAllMeasurements();
 	event.preventDefault();
+}
+
+function isInputFocused(event: KeyboardEvent): boolean {
+	const target = event.target as HTMLElement | null;
+	if (!target) return false;
+	return target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable;
 }
 
 /**
@@ -911,21 +369,61 @@ onMount(() => {
 	// Register keyboard shortcuts via centralized manager
 	registerKeyboardShortcuts();
 
-	// Register F key handlers for hold detection (fit view vs fullscreen)
-	window.addEventListener("keydown", handleFKeyDown);
-	window.addEventListener("keyup", handleFKeyUp);
+	measurementController = new ViewerMeasurementController({
+		getRenderer: () => renderer,
+		getCanvas: () => canvas,
+		getDocumentUnits: () => $gdsStore.document?.units || { database: 1e-9, user: 1e-6 },
+		getActiveMeasurementPoint1: () => activeMeasurement?.point1 || null,
+		setCursorWorldPos: (point) => {
+			cursorWorldPos = point;
+		},
+		addMeasurementPoint: (worldX, worldY, units) => {
+			measurementStore.addPoint(worldX, worldY, units);
+		},
+		exitMeasurementMode: () => {
+			measurementStore.exitMeasurementMode();
+		},
+	});
 
-	// Register C key handlers for comment mode
-	window.addEventListener("keydown", handleCKeyDown);
-	window.addEventListener("keyup", handleCKeyUp);
+	commentController = new ViewerCommentController({
+		getRenderer: () => renderer,
+		getCanvas: () => canvas,
+		getCommentsCount: () => comments.size,
+		getIsInSession: () => $collaborationStore.isInSession,
+		getIsHost: () => $collaborationStore.isHost,
+		getCommentPermissions: () => commentPermissions,
+		getSessionManager: () => collaborationStore.getSessionManager(),
+		checkRateLimit: (userId, isHost) => commentStore.checkRateLimit(userId, isHost),
+		showToast: (message) => commentStore.showToast(message),
+		addComment: (comment, isInSession) => commentStore.addComment(comment, isInSession),
+	});
 
-	// Register E key handlers for editor mode
-	window.addEventListener("keydown", handleEKeyDown);
-	window.addEventListener("keyup", handleEKeyUp);
+	keyModeController = new ViewerKeyModeController({
+		isInputFocused,
+		toggleFullscreen: () => {
+			if (onToggleFullscreen) {
+				onToggleFullscreen(!fullscreenMode);
+			}
+		},
+		fitToView: () => renderer?.fitToView(),
+		toggleCommentVisibility: () => commentStore.toggleAllCommentsVisibility(),
+		toggleCommentMode: () => {
+			commentModeActive = !commentModeActive;
+		},
+		toggleCommentPanel: () => {
+			commentPanelVisible = !commentPanelVisible;
+			commentModeActive = false;
+		},
+		toggleEditorMode: () => onToggleEditorMode?.(),
+		toggleMeasurementMode: () => measurementStore.toggleMeasurementMode(),
+		toggleMinimap: () => {
+			minimapVisible = !minimapVisible;
+		},
+	});
 
-	// Register M key handlers for measurement mode
-	window.addEventListener("keydown", handleMKeyDown);
-	window.addEventListener("keyup", handleMKeyUp);
+	// Register F/C/E/M key handlers for hold and double-tap behavior
+	window.addEventListener("keydown", keyModeController.handleKeyDown);
+	window.addEventListener("keyup", keyModeController.handleKeyUp);
 
 	// Register ESC key handler for cancelling modes
 	window.addEventListener("keydown", handleEscKey);
@@ -950,48 +448,56 @@ onMount(() => {
 	// Initialize renderer asynchronously
 	if (canvas) {
 		(async () => {
-			renderer = new PixiRenderer();
-			await renderer.init(canvas);
-
-			// Set up viewport change callback for minimap (always, regardless of session)
-			// Must be inside async block where renderer is defined
-			renderer.setOnViewportChanged((viewportState) => {
-				// Update minimap viewport bounds
-				viewportBounds = renderer?.getPublicViewportBounds() ?? null;
-
-				// Increment viewport version to trigger comment bubble position updates
-				viewportVersion++;
-
-				// Read current state from store (not captured $derived values)
-				// This ensures we get the latest state when callback executes
-				const state = get(collaborationStore);
-
-				// Skip session-related broadcasts if not in session
-				if (!state.isInSession) return;
-				const sessionManager = collaborationStore.getSessionManager();
-				if (!sessionManager) return;
-
-				// Broadcast own viewport for minimap display (all users in session)
-				sessionManager.broadcastOwnViewport(viewportState.x, viewportState.y, viewportState.scale);
-
-				// Broadcast to followers if host and broadcasting
-				if (state.isHost && state.isBroadcasting) {
-					sessionManager.broadcastViewport(viewportState.x, viewportState.y, viewportState.scale);
-				}
-			});
-
-			// Set up viewport sync callbacks
-			setupViewportSync();
-
-			if ($gdsStore.document) {
-				lastRenderedDocument = $gdsStore.document;
+			const initialDocument = $gdsStore.document;
+			if (initialDocument) {
+				lastRenderedDocument = initialDocument;
 				gdsStore.setRendering(true, "Rendering...", 0);
-				await renderer.renderGDSDocument($gdsStore.document, (progress, message) => {
+			}
+
+			const result = await initializeViewerRenderer({
+				canvas,
+				initialDocument,
+				onViewportChanged: (viewportState) => {
+					// Update minimap viewport bounds
+					viewportBounds = renderer?.getPublicViewportBounds() ?? null;
+
+					// Increment viewport version to trigger comment bubble position updates
+					viewportVersion++;
+
+					// Read current state from store (not captured $derived values)
+					// This ensures we get the latest state when callback executes
+					const state = get(collaborationStore);
+
+					// Skip session-related broadcasts if not in session
+					if (!state.isInSession) return;
+					const sessionManager = collaborationStore.getSessionManager();
+					if (!sessionManager) return;
+
+					// Broadcast own viewport for minimap display (all users in session)
+					sessionManager.broadcastOwnViewport(
+						viewportState.x,
+						viewportState.y,
+						viewportState.scale,
+					);
+
+					// Broadcast to followers if host and broadcasting
+					if (state.isHost && state.isBroadcasting) {
+						sessionManager.broadcastViewport(viewportState.x, viewportState.y, viewportState.scale);
+					}
+				},
+				onInitialRenderProgress: ({ progress, message }) => {
 					gdsStore.setRendering(true, message, progress);
 					if (progress >= 100) {
 						setTimeout(() => gdsStore.setRendering(false), 500);
 					}
-				});
+				},
+			});
+			renderer = result.renderer;
+
+			// Set up viewport sync callbacks
+			setupViewportSync();
+
+			if (result.initialDocumentRendered) {
 				// After render completes, fitToView has run - get correct viewport bounds
 				viewportBounds = renderer.getPublicViewportBounds();
 			}
@@ -1002,21 +508,11 @@ onMount(() => {
 		// Unregister keyboard shortcuts on unmount
 		KeyboardShortcutManager.unregisterByOwner(KEYBOARD_OWNER);
 
-		// Remove F key handlers
-		window.removeEventListener("keydown", handleFKeyDown);
-		window.removeEventListener("keyup", handleFKeyUp);
-
-		// Remove C key handlers
-		window.removeEventListener("keydown", handleCKeyDown);
-		window.removeEventListener("keyup", handleCKeyUp);
-
-		// Remove E key handlers
-		window.removeEventListener("keydown", handleEKeyDown);
-		window.removeEventListener("keyup", handleEKeyUp);
-
-		// Remove M key handlers
-		window.removeEventListener("keydown", handleMKeyDown);
-		window.removeEventListener("keyup", handleMKeyUp);
+		// Remove F/C/E/M key handlers
+		if (keyModeController) {
+			window.removeEventListener("keydown", keyModeController.handleKeyDown);
+			window.removeEventListener("keyup", keyModeController.handleKeyUp);
+		}
 
 		// Remove ESC key handler
 		window.removeEventListener("keydown", handleEscKey);
@@ -1030,23 +526,10 @@ onMount(() => {
 		// Remove mouse move handler
 		canvas.removeEventListener("mousemove", handleMouseMove);
 
-		// Clear any pending timers
-		if (fKeyHoldTimer) {
-			clearTimeout(fKeyHoldTimer);
-			fKeyHoldTimer = null;
-		}
-		if (cKeyHoldTimer) {
-			clearTimeout(cKeyHoldTimer);
-			cKeyHoldTimer = null;
-		}
-		if (eKeyHoldTimer) {
-			clearTimeout(eKeyHoldTimer);
-			eKeyHoldTimer = null;
-		}
-		if (mKeyHoldTimer) {
-			clearTimeout(mKeyHoldTimer);
-			mKeyHoldTimer = null;
-		}
+		keyModeController?.destroy();
+		keyModeController = null;
+		measurementController = null;
+		commentController = null;
 	};
 });
 
@@ -1116,9 +599,7 @@ function setupViewportSync() {
 	const sessionManager = collaborationStore.getSessionManager();
 	if (!sessionManager) return;
 
-	// Set up callbacks for viewport sync
-	sessionManager.setViewportSyncCallbacks({
-		// When host's viewport changes, apply it if we're following
+	setupViewerCollabSync(renderer, sessionManager, {
 		onHostViewportChanged: (viewport: CollaborativeViewportState) => {
 			// Read current state from store (not captured $derived values)
 			const state = get(collaborationStore);
@@ -1153,33 +634,19 @@ function setupViewportSync() {
 			// Increment viewportVersion to trigger comment bubble position updates
 			viewportVersion++;
 		},
-
-		// When broadcast state changes
 		onBroadcastStateChanged: (enabled: boolean, hostId: string | null) => {
 			collaborationStore.handleBroadcastStateChanged(enabled, hostId);
 		},
-
-		// When participant viewports change (for minimap)
 		onParticipantViewportsChanged: (viewports: ParticipantViewport[]) => {
 			participantViewports = viewports;
 		},
-	});
-
-	// Set up blocked callback for showing toast when user tries to interact while following
-	renderer.setOnViewportBlocked(() => {
-		// Read current state from store (not captured $derived values)
-		const state = get(collaborationStore);
-		if (state.isFollowing && !state.isHost) {
-			collaborationStore.showFollowToast();
-		}
-	});
-
-	// Update screen dimensions for viewport sync
-	const screen = renderer.getScreenDimensions();
-	sessionManager.getViewportSync()?.setScreenDimensions(screen.width, screen.height);
-
-	// Set up layer sync callbacks
-	sessionManager.setLayerSyncCallbacks({
+		onViewportBlocked: () => {
+			// Read current state from store (not captured $derived values)
+			const state = get(collaborationStore);
+			if (state.isFollowing && !state.isHost) {
+				collaborationStore.showFollowToast();
+			}
+		},
 		onHostLayerVisibilityChanged: (visibility: { [key: string]: boolean }) => {
 			// Apply to gdsStore (source of truth)
 			for (const [key, visible] of Object.entries(visibility)) {
@@ -1196,13 +663,9 @@ function setupViewportSync() {
 			// Notify renderer
 			window.dispatchEvent(new CustomEvent("layer-visibility-changed", { detail: { visibility } }));
 		},
-		onBroadcastStateChanged: (enabled: boolean, _hostId: string | null) => {
+		onLayerBroadcastStateChanged: (enabled: boolean, _hostId: string | null) => {
 			collaborationStore.handleLayerBroadcastStateChanged(enabled);
 		},
-	});
-
-	// Set up callbacks for fullscreen sync
-	sessionManager.setFullscreenSyncCallbacks({
 		onFullscreenStateChanged: (enabled: boolean, _hostId: string | null) => {
 			collaborationStore.handleFullscreenStateChanged(enabled, _hostId);
 			// Trigger fullscreen mode change in App.svelte via callback
@@ -1210,10 +673,6 @@ function setupViewportSync() {
 				onToggleFullscreen(enabled);
 			}
 		},
-	});
-
-	// Set up callbacks for comment sync
-	sessionManager.setCommentSyncCallbacks({
 		onCommentsChanged: (comments) => {
 			commentStore.syncFromYjs(comments);
 		},
@@ -1237,14 +696,21 @@ $effect(() => {
 		layerStoreInitialized = false;
 		gdsStore.setRendering(true, "Rendering...", 0);
 		(async () => {
-			await renderer.renderGDSDocument(gdsDocument, (progress, message) => {
-				gdsStore.setRendering(true, message, progress);
-				if (progress >= 100) {
-					setTimeout(() => gdsStore.setRendering(false), 500);
-				}
-			});
-			// Update viewport bounds after render completes (for minimap)
-			viewportBounds = renderer?.getPublicViewportBounds() ?? null;
+			try {
+				await renderer.renderGDSDocument(gdsDocument, (progress, message) => {
+					gdsStore.setRendering(true, message, progress);
+					if (progress >= 100) {
+						setTimeout(() => gdsStore.setRendering(false), 500);
+					}
+				});
+				// Update viewport bounds after render completes (for minimap)
+				viewportBounds = renderer?.getPublicViewportBounds() ?? null;
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				console.error("[ViewerCanvas] Render failed:", error);
+				gdsStore.setError(message);
+				gdsStore.setRendering(false);
+			}
 		})();
 	}
 });
@@ -1643,4 +1109,3 @@ function toggleMinimap() {
 		transition: none;
 	}
 </style>
-
