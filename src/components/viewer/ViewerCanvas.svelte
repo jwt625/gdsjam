@@ -12,6 +12,7 @@ import { KeyboardShortcutManager } from "../../lib/keyboard/KeyboardShortcutMana
 import { snapToAxis } from "../../lib/measurements/utils";
 import { PixiRenderer } from "../../lib/renderer/PixiRenderer";
 import { generateUUID } from "../../lib/utils/uuid";
+import { ViewerKeyModeController } from "../../lib/viewer/ViewerKeyModeController";
 import { collaborationStore } from "../../stores/collaborationStore";
 import { commentStore } from "../../stores/commentStore";
 import { editorStore } from "../../stores/editorStore";
@@ -57,31 +58,7 @@ let layerPanelVisible = $state(
 );
 let minimapVisible = $state(true);
 let layerStoreInitialized = false;
-
-// F key hold detection for fullscreen
-const FULLSCREEN_HOLD_DURATION_MS = 500;
-let fKeyDownTime: number | null = null;
-let fKeyHoldTimer: ReturnType<typeof setTimeout> | null = null;
-let fKeyTriggeredFullscreen = false;
-
-// C key hold detection for comment visibility toggle
-const COMMENT_HOLD_DURATION_MS = 500;
-const DOUBLE_CLICK_INTERVAL_MS = 300;
-let cKeyDownTime: number | null = null;
-let cKeyHoldTimer: ReturnType<typeof setTimeout> | null = null;
-let cKeyTriggeredHold = false;
-let lastCKeyPressTime: number | null = null;
-
-// E key hold detection for editor mode
-const EDITOR_HOLD_DURATION_MS = 500;
-let eKeyDownTime: number | null = null;
-let eKeyHoldTimer: ReturnType<typeof setTimeout> | null = null;
-
-// M key hold detection for measurement mode
-const MEASUREMENT_HOLD_DURATION_MS = 500;
-let mKeyDownTime: number | null = null;
-let mKeyHoldTimer: ReturnType<typeof setTimeout> | null = null;
-let mKeyTriggeredHold = false;
+let keyModeController: ViewerKeyModeController | null = null;
 
 // Comment mode state
 let commentModeActive = $state(false);
@@ -155,7 +132,7 @@ function registerKeyboardShortcuts(): void {
 			},
 			description: "Toggle layer panel",
 		},
-		// Note: M key is handled by handleMKeyDown/handleMKeyUp for hold detection
+		// Note: M key hold behavior is handled by ViewerKeyModeController
 		// Short press = toggle minimap, Hold = toggle measurement mode
 		{
 			id: "toggle-fill",
@@ -213,262 +190,6 @@ $effect(() => {
 		}
 	}
 });
-
-/**
- * Handle F key down - start hold detection timer
- * Short press (<500ms) = fit to view, Hold (>=500ms) = fullscreen
- */
-function handleFKeyDown(event: KeyboardEvent): void {
-	// Only handle F key
-	if (event.code !== "KeyF") return;
-
-	// Don't handle in input fields
-	const target = event.target as HTMLElement;
-	if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
-		return;
-	}
-
-	// Don't handle with modifiers
-	if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
-
-	// Ignore repeat events (key held down)
-	if (event.repeat) return;
-
-	// Prevent default to avoid any browser shortcuts
-	event.preventDefault();
-
-	// Record keydown time and start timer
-	fKeyDownTime = Date.now();
-	fKeyTriggeredFullscreen = false;
-
-	// Start hold detection timer
-	fKeyHoldTimer = setTimeout(() => {
-		// Hold threshold reached - toggle fullscreen
-		fKeyTriggeredFullscreen = true;
-		if (onToggleFullscreen) {
-			onToggleFullscreen(!fullscreenMode);
-		}
-	}, FULLSCREEN_HOLD_DURATION_MS);
-}
-
-/**
- * Handle F key up - if short press, trigger fit to view
- */
-function handleFKeyUp(event: KeyboardEvent): void {
-	// Only handle F key
-	if (event.code !== "KeyF") return;
-
-	// Clear the hold timer
-	if (fKeyHoldTimer) {
-		clearTimeout(fKeyHoldTimer);
-		fKeyHoldTimer = null;
-	}
-
-	// If we didn't trigger fullscreen (short press), do fit to view
-	if (!fKeyTriggeredFullscreen && fKeyDownTime !== null) {
-		const holdDuration = Date.now() - fKeyDownTime;
-		if (holdDuration < FULLSCREEN_HOLD_DURATION_MS) {
-			renderer?.fitToView();
-		}
-	}
-
-	// Reset state
-	fKeyDownTime = null;
-	fKeyTriggeredFullscreen = false;
-}
-
-/**
- * Handle C key down - start hold detection timer and double-click detection
- * Single press = toggle comment mode, Double press = toggle comment panel, Hold = show/hide all comments
- */
-function handleCKeyDown(event: KeyboardEvent): void {
-	// Only handle C key
-	if (event.code !== "KeyC") return;
-
-	// Don't handle in input fields
-	const target = event.target as HTMLElement;
-	if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
-		return;
-	}
-
-	// Don't handle with modifiers
-	if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
-
-	// Ignore repeat events (key held down)
-	if (event.repeat) return;
-
-	// Prevent default to avoid any browser shortcuts
-	event.preventDefault();
-
-	// Record keydown time and start timer
-	cKeyDownTime = Date.now();
-	cKeyTriggeredHold = false;
-
-	// Start hold detection timer
-	cKeyHoldTimer = setTimeout(() => {
-		// Hold threshold reached - toggle all comments visibility (persistent)
-		cKeyTriggeredHold = true;
-		commentStore.toggleAllCommentsVisibility();
-	}, COMMENT_HOLD_DURATION_MS);
-}
-
-/**
- * Handle C key up - if short press, toggle comment mode or panel (double-click)
- */
-function handleCKeyUp(event: KeyboardEvent): void {
-	// Only handle C key
-	if (event.code !== "KeyC") return;
-
-	// Clear the hold timer
-	if (cKeyHoldTimer) {
-		clearTimeout(cKeyHoldTimer);
-		cKeyHoldTimer = null;
-	}
-
-	// If we triggered hold, just reset the flag (visibility stays toggled)
-	if (cKeyTriggeredHold) {
-		cKeyDownTime = null;
-		cKeyTriggeredHold = false;
-		return;
-	}
-
-	// Check for double-click
-	const now = Date.now();
-	const isDoubleClick =
-		lastCKeyPressTime !== null && now - lastCKeyPressTime < DOUBLE_CLICK_INTERVAL_MS;
-
-	if (isDoubleClick) {
-		// Double-click: toggle comment panel and exit comment mode
-		commentPanelVisible = !commentPanelVisible;
-		commentModeActive = false;
-		lastCKeyPressTime = null;
-	} else {
-		// Single click: toggle comment mode
-		if (cKeyDownTime !== null) {
-			const holdDuration = now - cKeyDownTime;
-			if (holdDuration < COMMENT_HOLD_DURATION_MS) {
-				commentModeActive = !commentModeActive;
-			}
-		}
-		lastCKeyPressTime = now;
-	}
-
-	// Reset state
-	cKeyDownTime = null;
-	cKeyTriggeredHold = false;
-}
-
-/**
- * Handle E key down - start hold detection timer for editor mode
- * Hold (>=500ms) = toggle editor mode
- */
-function handleEKeyDown(event: KeyboardEvent): void {
-	// Only handle E key
-	if (event.code !== "KeyE") return;
-
-	// Don't handle in input fields
-	const target = event.target as HTMLElement;
-	if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
-		return;
-	}
-
-	// Already holding - ignore
-	if (eKeyDownTime !== null) return;
-
-	// Record key down time
-	eKeyDownTime = Date.now();
-
-	// Start hold detection timer
-	eKeyHoldTimer = setTimeout(() => {
-		// Hold threshold reached - toggle editor mode
-		onToggleEditorMode?.();
-	}, EDITOR_HOLD_DURATION_MS);
-}
-
-/**
- * Handle E key up - clear hold timer
- */
-function handleEKeyUp(event: KeyboardEvent): void {
-	// Only handle E key
-	if (event.code !== "KeyE") return;
-
-	// Clear the hold timer
-	if (eKeyHoldTimer) {
-		clearTimeout(eKeyHoldTimer);
-		eKeyHoldTimer = null;
-	}
-
-	// Reset state
-	eKeyDownTime = null;
-}
-
-/**
- * Handle M key down - start hold detection timer for measurement mode
- * Single press = toggle minimap, Hold = toggle measurement mode
- */
-function handleMKeyDown(event: KeyboardEvent): void {
-	// Only handle M key
-	if (event.code !== "KeyM") return;
-
-	// Don't handle in input fields
-	const target = event.target as HTMLElement;
-	if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
-		return;
-	}
-
-	// Don't handle with modifiers
-	if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
-
-	// Ignore repeat events (key held down)
-	if (event.repeat) return;
-
-	// Prevent default to avoid any browser shortcuts
-	event.preventDefault();
-
-	// Record keydown time and start timer
-	mKeyDownTime = Date.now();
-	mKeyTriggeredHold = false;
-
-	// Start hold detection timer
-	mKeyHoldTimer = setTimeout(() => {
-		// Hold threshold reached - toggle measurement mode
-		mKeyTriggeredHold = true;
-		measurementStore.toggleMeasurementMode();
-	}, MEASUREMENT_HOLD_DURATION_MS);
-}
-
-/**
- * Handle M key up - if short press, toggle minimap; if hold, measurement mode already toggled
- */
-function handleMKeyUp(event: KeyboardEvent): void {
-	// Only handle M key
-	if (event.code !== "KeyM") return;
-
-	// Clear the hold timer
-	if (mKeyHoldTimer) {
-		clearTimeout(mKeyHoldTimer);
-		mKeyHoldTimer = null;
-	}
-
-	// If we triggered hold, just reset the flag (measurement mode already toggled)
-	if (mKeyTriggeredHold) {
-		mKeyDownTime = null;
-		mKeyTriggeredHold = false;
-		return;
-	}
-
-	// Short press: toggle minimap
-	if (mKeyDownTime !== null) {
-		const holdDuration = Date.now() - mKeyDownTime;
-		if (holdDuration < MEASUREMENT_HOLD_DURATION_MS) {
-			minimapVisible = !minimapVisible;
-		}
-	}
-
-	// Reset state
-	mKeyDownTime = null;
-	mKeyTriggeredHold = false;
-}
 
 /**
  * Handle canvas click/tap for comment placement and measurement
@@ -880,6 +601,12 @@ function handleClearMeasurements(event: KeyboardEvent): void {
 	event.preventDefault();
 }
 
+function isInputFocused(event: KeyboardEvent): boolean {
+	const target = event.target as HTMLElement | null;
+	if (!target) return false;
+	return target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable;
+}
+
 /**
  * Handle ESC key to cancel comment mode and measurement mode
  */
@@ -911,21 +638,32 @@ onMount(() => {
 	// Register keyboard shortcuts via centralized manager
 	registerKeyboardShortcuts();
 
-	// Register F key handlers for hold detection (fit view vs fullscreen)
-	window.addEventListener("keydown", handleFKeyDown);
-	window.addEventListener("keyup", handleFKeyUp);
+	keyModeController = new ViewerKeyModeController({
+		isInputFocused,
+		toggleFullscreen: () => {
+			if (onToggleFullscreen) {
+				onToggleFullscreen(!fullscreenMode);
+			}
+		},
+		fitToView: () => renderer?.fitToView(),
+		toggleCommentVisibility: () => commentStore.toggleAllCommentsVisibility(),
+		toggleCommentMode: () => {
+			commentModeActive = !commentModeActive;
+		},
+		toggleCommentPanel: () => {
+			commentPanelVisible = !commentPanelVisible;
+			commentModeActive = false;
+		},
+		toggleEditorMode: () => onToggleEditorMode?.(),
+		toggleMeasurementMode: () => measurementStore.toggleMeasurementMode(),
+		toggleMinimap: () => {
+			minimapVisible = !minimapVisible;
+		},
+	});
 
-	// Register C key handlers for comment mode
-	window.addEventListener("keydown", handleCKeyDown);
-	window.addEventListener("keyup", handleCKeyUp);
-
-	// Register E key handlers for editor mode
-	window.addEventListener("keydown", handleEKeyDown);
-	window.addEventListener("keyup", handleEKeyUp);
-
-	// Register M key handlers for measurement mode
-	window.addEventListener("keydown", handleMKeyDown);
-	window.addEventListener("keyup", handleMKeyUp);
+	// Register F/C/E/M key handlers for hold and double-tap behavior
+	window.addEventListener("keydown", keyModeController.handleKeyDown);
+	window.addEventListener("keyup", keyModeController.handleKeyUp);
 
 	// Register ESC key handler for cancelling modes
 	window.addEventListener("keydown", handleEscKey);
@@ -1002,21 +740,11 @@ onMount(() => {
 		// Unregister keyboard shortcuts on unmount
 		KeyboardShortcutManager.unregisterByOwner(KEYBOARD_OWNER);
 
-		// Remove F key handlers
-		window.removeEventListener("keydown", handleFKeyDown);
-		window.removeEventListener("keyup", handleFKeyUp);
-
-		// Remove C key handlers
-		window.removeEventListener("keydown", handleCKeyDown);
-		window.removeEventListener("keyup", handleCKeyUp);
-
-		// Remove E key handlers
-		window.removeEventListener("keydown", handleEKeyDown);
-		window.removeEventListener("keyup", handleEKeyUp);
-
-		// Remove M key handlers
-		window.removeEventListener("keydown", handleMKeyDown);
-		window.removeEventListener("keyup", handleMKeyUp);
+		// Remove F/C/E/M key handlers
+		if (keyModeController) {
+			window.removeEventListener("keydown", keyModeController.handleKeyDown);
+			window.removeEventListener("keyup", keyModeController.handleKeyUp);
+		}
 
 		// Remove ESC key handler
 		window.removeEventListener("keydown", handleEscKey);
@@ -1030,23 +758,8 @@ onMount(() => {
 		// Remove mouse move handler
 		canvas.removeEventListener("mousemove", handleMouseMove);
 
-		// Clear any pending timers
-		if (fKeyHoldTimer) {
-			clearTimeout(fKeyHoldTimer);
-			fKeyHoldTimer = null;
-		}
-		if (cKeyHoldTimer) {
-			clearTimeout(cKeyHoldTimer);
-			cKeyHoldTimer = null;
-		}
-		if (eKeyHoldTimer) {
-			clearTimeout(eKeyHoldTimer);
-			eKeyHoldTimer = null;
-		}
-		if (mKeyHoldTimer) {
-			clearTimeout(mKeyHoldTimer);
-			mKeyHoldTimer = null;
-		}
+		keyModeController?.destroy();
+		keyModeController = null;
 	};
 });
 
