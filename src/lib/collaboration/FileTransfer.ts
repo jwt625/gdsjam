@@ -10,6 +10,7 @@
  */
 
 import type * as Y from "yjs";
+import { getShortLivedApiToken } from "../api/authTokenClient";
 import { computeSHA256 } from "../utils/hash";
 import type { CollaborationEvent, SessionMetadata } from "./types";
 
@@ -43,7 +44,7 @@ export class FileTransfer {
 
 		// Upload file to server
 		const fileServerUrl = import.meta.env.VITE_FILE_SERVER_URL || "https://signaling.gdsjam.com";
-		const fileServerToken = import.meta.env.VITE_FILE_SERVER_TOKEN;
+		const apiToken = await getShortLivedApiToken(fileServerUrl, ["files:write"]);
 
 		const formData = new FormData();
 		formData.append("file", new Blob([arrayBuffer]));
@@ -51,7 +52,7 @@ export class FileTransfer {
 		const response = await fetch(`${fileServerUrl}/api/files`, {
 			method: "POST",
 			headers: {
-				Authorization: `Bearer ${fileServerToken}`,
+				Authorization: `Bearer ${apiToken}`,
 			},
 			body: formData,
 		});
@@ -103,11 +104,11 @@ export class FileTransfer {
 
 		// Download file from server with retry logic
 		const fileServerUrl = import.meta.env.VITE_FILE_SERVER_URL || "https://signaling.gdsjam.com";
-		const fileServerToken = import.meta.env.VITE_FILE_SERVER_TOKEN;
+		const apiToken = await getShortLivedApiToken(fileServerUrl, ["files:read"]);
 
 		const arrayBuffer = await this.downloadWithRetry(
 			`${fileServerUrl}/api/files/${fileId}`,
-			fileServerToken,
+			apiToken,
 			3,
 		);
 
@@ -146,11 +147,11 @@ export class FileTransfer {
 		this.onProgress?.(0, "Recovering file from server...");
 
 		const fileServerUrl = import.meta.env.VITE_FILE_SERVER_URL || "https://signaling.gdsjam.com";
-		const fileServerToken = import.meta.env.VITE_FILE_SERVER_TOKEN;
+		const apiToken = await getShortLivedApiToken(fileServerUrl, ["files:read"]);
 
 		const arrayBuffer = await this.downloadWithRetry(
 			`${fileServerUrl}/api/files/${fileId}`,
-			fileServerToken,
+			apiToken,
 			3,
 		);
 

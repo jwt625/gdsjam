@@ -5,19 +5,30 @@ const express = require("express");
 const cors = require("cors");
 const WebSocket = require("ws");
 const url = require("url");
+const {
+	ALLOWED_SCOPES,
+	API_TOKEN_TTL_SECONDS,
+	AUTH_TOKEN,
+	issueShortLivedToken,
+} = require("./auth");
 const { setupFileRoutes, getOpenAPISpec } = require("./fileStorage");
 const { setupPythonRoutes } = require("./pythonExecutor");
 
 const PORT = process.env.PORT || 4444;
-const AUTH_TOKEN = process.env.AUTH_TOKEN;
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
 	? process.env.ALLOWED_ORIGINS.split(",")
 	: ["https://gdsjam.com", "http://localhost:5173", "http://localhost:4173"];
 const RATE_LIMIT_WINDOW = parseInt(process.env.RATE_LIMIT_WINDOW || "60000", 10); // 1 minute default
 const RATE_LIMIT_MAX_CONNECTIONS = parseInt(process.env.RATE_LIMIT_MAX_CONNECTIONS || "10", 10); // Max connections per IP per window
+const API_TOKEN_RATE_LIMIT_WINDOW = parseInt(
+	process.env.API_TOKEN_RATE_LIMIT_WINDOW || "60000",
+	10,
+);
+const API_TOKEN_RATE_LIMIT_MAX = parseInt(process.env.API_TOKEN_RATE_LIMIT_MAX || "30", 10);
 
 // Rate limiting: Track connections per IP
 const connectionTracker = new Map();
+const apiTokenTracker = new Map();
 
 // Room management: Track which clients are in which rooms
 // Map<roomName, Set<WebSocket>>
@@ -37,6 +48,52 @@ app.use(
 // Parse JSON and URL-encoded bodies
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+function rateLimitApiTokenIssuance(req, res, next) {
+	const clientIp = req.ip || req.socket.remoteAddress;
+	const now = Date.now();
+
+	if (!apiTokenTracker.has(clientIp)) {
+		apiTokenTracker.set(clientIp, []);
+	}
+
+	const attempts = apiTokenTracker.get(clientIp);
+	const recentAttempts = attempts.filter(
+		(timestamp) => now - timestamp < API_TOKEN_RATE_LIMIT_WINDOW,
+	);
+	if (recentAttempts.length >= API_TOKEN_RATE_LIMIT_MAX) {
+		return res.status(429).json({
+			error: `Rate limit exceeded. Maximum ${API_TOKEN_RATE_LIMIT_MAX} token requests per minute.`,
+		});
+	}
+
+	recentAttempts.push(now);
+	apiTokenTracker.set(clientIp, recentAttempts);
+	next();
+}
+
+/**
+ * Short-lived scoped API token issuance.
+ * Used by browser clients to avoid embedding long-lived AUTH_TOKEN in bundles.
+ */
+app.post("/api/auth/token", rateLimitApiTokenIssuance, (req, res) => {
+	try {
+		if (!AUTH_TOKEN) {
+			return res.status(503).json({
+				error: "Token authentication is disabled on this server",
+			});
+		}
+
+		const requestedScopes = Array.isArray(req.body?.scopes) ? req.body.scopes : [];
+		const token = issueShortLivedToken(req, requestedScopes);
+		res.json(token);
+	} catch (error) {
+		return res.status(400).json({
+			error: error instanceof Error ? error.message : "Failed to issue token",
+			allowedScopes: Array.from(ALLOWED_SCOPES),
+		});
+	}
+});
 
 // Setup file storage routes
 setupFileRoutes(app);
@@ -281,6 +338,10 @@ server.listen(PORT, "0.0.0.0", () => {
 	console.log(`Security configuration:`);
 	console.log(
 		`  - Token auth: ${AUTH_TOKEN ? "ENABLED" : "DISABLED (WARNING: anyone can connect!)"}`,
+	);
+	console.log(`  - API token TTL: ${API_TOKEN_TTL_SECONDS}s`);
+	console.log(
+		`  - API token issue limit: ${API_TOKEN_RATE_LIMIT_MAX} per ${API_TOKEN_RATE_LIMIT_WINDOW / 1000}s per IP`,
 	);
 	console.log(`  - Origin checking: ENABLED (${ALLOWED_ORIGINS.length} allowed origins)`);
 	console.log(

@@ -9,6 +9,7 @@
  * - Coordinate HostManager and ParticipantManager (facade pattern)
  */
 
+import { getShortLivedApiToken } from "../api/authTokenClient";
 import { generateUUID } from "../utils/uuid";
 import { CommentSync, type CommentSyncCallbacks } from "./CommentSync";
 import { FileTransfer } from "./FileTransfer";
@@ -111,7 +112,7 @@ export class SessionManager {
 
 			// Upload file to server
 			const fileServerUrl = import.meta.env.VITE_FILE_SERVER_URL || "https://signaling.gdsjam.com";
-			const fileServerToken = import.meta.env.VITE_FILE_SERVER_TOKEN;
+			const apiToken = await getShortLivedApiToken(fileServerUrl, ["files:write"]);
 
 			const formData = new FormData();
 			formData.append("file", new Blob([this.pendingFile.arrayBuffer]));
@@ -119,7 +120,7 @@ export class SessionManager {
 			const response = await fetch(`${fileServerUrl}/api/files`, {
 				method: "POST",
 				headers: {
-					Authorization: `Bearer ${fileServerToken}`,
+					Authorization: `Bearer ${apiToken}`,
 				},
 				body: formData,
 			});

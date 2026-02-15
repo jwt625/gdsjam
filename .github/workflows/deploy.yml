@@ -46,7 +46,6 @@ jobs:
           VITE_TURN_PASSWORD: ${{ secrets.VITE_TURN_PASSWORD }}
           # File server configuration (required for file upload/download)
           VITE_FILE_SERVER_URL: ${{ secrets.VITE_FILE_SERVER_URL }}
-          VITE_FILE_SERVER_TOKEN: ${{ secrets.VITE_FILE_SERVER_TOKEN }}
           # Debug mode (optional - defaults to .env.production value if not set)
           # To enable debug in production, add VITE_DEBUG secret with value "true"
           VITE_DEBUG: ${{ secrets.VITE_DEBUG }}
@@ -69,4 +68,3 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-
