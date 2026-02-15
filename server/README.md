@@ -61,7 +61,7 @@ POST /api/auth/token
 ```
 
 These tokens are:
-- scoped (`files:read`, `files:write`, `python:execute`)
+- scoped (`files:read`, `files:write`, `python:execute`, `turn:read`)
 - short-lived (default 5 minutes)
 - bound to client IP
 
@@ -194,6 +194,12 @@ Key settings:
 - Relay ports: 49152-65535 (UDP)
 - Domain: signaling.gdsjam.com
 - SSL certificate: /etc/letsencrypt/live/signaling.gdsjam.com/
+
+For ephemeral TURN credentials (recommended), configure coturn with TURN REST auth:
+- `use-auth-secret`
+- `static-auth-secret=<TURN_SHARED_SECRET>`
+
+The server then exposes `GET /api/turn-credentials` and clients no longer need a static TURN password in frontend env.
 
 To modify configuration:
 ```bash

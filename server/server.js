@@ -13,6 +13,7 @@ const {
 } = require("./auth");
 const { setupFileRoutes, getOpenAPISpec } = require("./fileStorage");
 const { setupPythonRoutes } = require("./pythonExecutor");
+const { setupTurnCredentialRoutes } = require("./turnCredentials");
 
 const PORT = process.env.PORT || 4444;
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
@@ -100,6 +101,9 @@ setupFileRoutes(app);
 
 // Setup Python execution routes
 setupPythonRoutes(app);
+
+// Setup TURN credential routes
+setupTurnCredentialRoutes(app);
 
 // OpenAPI documentation endpoints
 app.get("/api/openapi.json", (req, res) => {

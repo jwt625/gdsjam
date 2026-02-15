@@ -4,7 +4,7 @@ const AUTH_TOKEN = process.env.AUTH_TOKEN;
 const API_TOKEN_SECRET = process.env.API_TOKEN_SECRET || AUTH_TOKEN || "";
 const API_TOKEN_TTL_SECONDS = parseInt(process.env.API_TOKEN_TTL_SECONDS || "300", 10); // 5 min
 
-const ALLOWED_SCOPES = new Set(["files:read", "files:write", "python:execute"]);
+const ALLOWED_SCOPES = new Set(["files:read", "files:write", "python:execute", "turn:read"]);
 
 function toBase64Url(input) {
 	return Buffer.from(input)

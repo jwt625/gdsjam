@@ -144,7 +144,7 @@ export class SessionManager {
 		window.history.pushState({}, "", url.toString());
 
 		// Connect to Y.js room
-		this.yjsProvider.connect(sessionId);
+		await this.yjsProvider.connect(sessionId);
 
 		// Initialize managers for this session
 		this.hostManager.initialize(sessionId);
@@ -304,7 +304,7 @@ export class SessionManager {
 
 			// Connect to Y.js room - no need to wait for sync
 			// Host has metadata in localStorage, file is on signaling server
-			this.yjsProvider.connect(sessionId);
+			await this.yjsProvider.connect(sessionId);
 
 			// Write session data to Y.js (host is authoritative for metadata)
 			this.yjsProvider.getDoc().transact(() => {
@@ -364,7 +364,7 @@ export class SessionManager {
 			this.participantManager.setLocalAwarenessState({ isHost: false });
 
 			// Connect to Y.js room
-			this.yjsProvider.connect(sessionId);
+			await this.yjsProvider.connect(sessionId);
 
 			// Wait for Y.js to sync with peers before any document writes
 			await this.yjsProvider.waitForSync(5000);

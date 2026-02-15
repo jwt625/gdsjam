@@ -11,6 +11,7 @@
 import { Awareness } from "y-protocols/awareness.js";
 import { WebrtcProvider } from "y-webrtc";
 import * as Y from "yjs";
+import { getTurnCredentials } from "../api/turnCredentialsClient";
 import { DEBUG } from "../config";
 import type { CollaborationEventCallback } from "./types";
 
@@ -37,7 +38,7 @@ export class YjsProvider {
 	/**
 	 * Connect to a Y.js room via WebRTC
 	 */
-	connect(roomName: string): void {
+	async connect(roomName: string): Promise<void> {
 		// If already connected to this room, do nothing
 		if (this.provider && this.roomName === roomName) {
 			return;
@@ -61,9 +62,6 @@ export class YjsProvider {
 			? `${signalingUrl}?token=${signalingToken}`
 			: signalingUrl;
 
-		// Load TURN server credentials from environment
-		const turnPassword = import.meta.env.VITE_TURN_PASSWORD;
-
 		// Build ICE servers configuration
 		const iceServers: RTCIceServer[] = [
 			// STUN servers for NAT discovery
@@ -72,17 +70,29 @@ export class YjsProvider {
 			{ urls: "stun:stun2.l.google.com:19302" },
 		];
 
-		// Add TURN server if credentials are available
-		if (turnPassword) {
+		// Preferred path: fetch short-lived TURN credentials from server.
+		const turnApiBaseUrl = import.meta.env.VITE_FILE_SERVER_URL || "https://signaling.gdsjam.com";
+		const turnCredentials = await getTurnCredentials(turnApiBaseUrl).catch(() => null);
+		if (turnCredentials && turnCredentials.urls.length > 0) {
 			iceServers.push({
-				urls: [
-					"turn:signaling.gdsjam.com:3478",
-					"turn:signaling.gdsjam.com:3478?transport=tcp",
-					"turns:signaling.gdsjam.com:5349?transport=tcp",
-				],
-				username: "gdsjam",
-				credential: turnPassword,
+				urls: turnCredentials.urls,
+				username: turnCredentials.username,
+				credential: turnCredentials.credential,
 			});
+		} else {
+			// Fallback path for legacy/local setups still using static TURN credentials.
+			const turnPassword = import.meta.env.VITE_TURN_PASSWORD;
+			if (turnPassword) {
+				iceServers.push({
+					urls: [
+						"turn:signaling.gdsjam.com:3478",
+						"turn:signaling.gdsjam.com:3478?transport=tcp",
+						"turns:signaling.gdsjam.com:5349?transport=tcp",
+					],
+					username: "gdsjam",
+					credential: turnPassword,
+				});
+			}
 		}
 
 		this.provider = new WebrtcProvider(roomName, this.ydoc, {
