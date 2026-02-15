@@ -139,6 +139,23 @@ export class CommentSync {
 	}
 
 	/**
+	 * Update an existing comment in the shared array.
+	 */
+	updateComment(comment: Comment): void {
+		if (!this.commentsArray) {
+			console.error("[CommentSync] Cannot update comment - not initialized");
+			return;
+		}
+
+		const comments = this.commentsArray.toArray();
+		const index = comments.findIndex((c) => c.id === comment.id);
+		if (index !== -1) {
+			this.commentsArray.delete(index, 1);
+			this.commentsArray.insert(index, [comment]);
+		}
+	}
+
+	/**
 	 * Delete a comment from the shared array
 	 */
 	deleteComment(commentId: string): void {

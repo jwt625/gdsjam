@@ -20,13 +20,37 @@ import type {
 
 const STORAGE_KEY_PREFIX = "gdsjam_comments_";
 const DEFAULT_PERMISSIONS: CommentPermissions = {
-	viewersCanComment: false,
+	viewersCanComment: true,
 	viewerRateLimit: 1, // 1 comment per minute
 	hostRateLimit: 1, // 1 comment per 10 seconds
 };
 const TOAST_DURATION_MS = 3000; // 3 seconds
 
 let toastTimeout: ReturnType<typeof setTimeout> | null = null;
+
+function normalizeComment(raw: Comment): Comment {
+	const parentId = raw.parentId ?? null;
+	const rootId = raw.rootId ?? raw.id;
+	return {
+		...raw,
+		parentId,
+		rootId,
+		deleted: raw.deleted ?? false,
+		deletedAt: raw.deletedAt ?? null,
+	};
+}
+
+function toPersistableComments(
+	comments: Map<string, CommentWithDisplayState>,
+): Map<string, Comment> {
+	return new Map(
+		Array.from(comments.entries()).map(([id, c]) => {
+			// eslint-disable-next-line @typescript-eslint/no-unused-vars
+			const { displayState, ...commentData } = c;
+			return [id, commentData as Comment];
+		}),
+	);
+}
 
 /**
  * Create the comment store
@@ -120,7 +144,10 @@ function createCommentStore() {
 				const commentsArray: Comment[] = JSON.parse(stored);
 				// Add default display state when loading
 				const commentsMap = new Map(
-					commentsArray.map((c) => [c.id, { ...c, displayState: "preview" as const }]),
+					commentsArray.map((c) => {
+						const normalized = normalizeComment(c);
+						return [normalized.id, { ...normalized, displayState: "preview" as const }] as const;
+					}),
 				);
 
 				update((state) => ({
@@ -155,17 +182,18 @@ function createCommentStore() {
 
 				// Merge Y.js comments with existing local state
 				for (const comment of comments) {
-					const existingComment = state.comments.get(comment.id);
+					const normalized = normalizeComment(comment);
+					const existingComment = state.comments.get(normalized.id);
 					if (existingComment) {
 						// Preserve display state for existing comments
-						newCommentsMap.set(comment.id, {
-							...comment,
+						newCommentsMap.set(normalized.id, {
+							...normalized,
 							displayState: existingComment.displayState,
 						});
 					} else {
 						// New comment - default to preview state
-						newCommentsMap.set(comment.id, {
-							...comment,
+						newCommentsMap.set(normalized.id, {
+							...normalized,
 							displayState: "preview" as const,
 						});
 					}
@@ -219,22 +247,17 @@ function createCommentStore() {
 		addComment: (comment: Comment, isCollaboration: boolean = false) => {
 			update((state) => {
 				const newComments = new Map(state.comments);
+				const normalized = normalizeComment(comment);
 				// Add default display state
 				const commentWithState: CommentWithDisplayState = {
-					...comment,
+					...normalized,
 					displayState: "preview",
 				};
-				newComments.set(comment.id, commentWithState);
+				newComments.set(normalized.id, commentWithState);
 
 				// Save to localStorage if solo mode (without displayState)
 				if (!isCollaboration && state.fileIdentifier) {
-					const commentsForStorage = new Map(
-						Array.from(newComments.entries()).map(([id, c]) => {
-							// eslint-disable-next-line @typescript-eslint/no-unused-vars
-							const { displayState, ...commentData } = c;
-							return [id, commentData as Comment];
-						}),
-					);
+					const commentsForStorage = toPersistableComments(newComments);
 					commentStore.saveToLocalStorage(state.fileIdentifier, commentsForStorage);
 				}
 
@@ -255,14 +278,62 @@ function createCommentStore() {
 
 				// Save to localStorage if solo mode (without displayState)
 				if (!isCollaboration && state.fileIdentifier) {
-					const commentsForStorage = new Map(
-						Array.from(newComments.entries()).map(([id, c]) => {
-							// eslint-disable-next-line @typescript-eslint/no-unused-vars
-							const { displayState, ...commentData } = c;
-							return [id, commentData as Comment];
-						}),
-					);
+					const commentsForStorage = toPersistableComments(newComments);
 					commentStore.saveToLocalStorage(state.fileIdentifier, commentsForStorage);
+				}
+
+				return {
+					...state,
+					comments: newComments,
+				};
+			});
+		},
+
+		/**
+		 * Update a comment (for thread operations / edits / soft delete sync)
+		 */
+		updateComment: (comment: Comment, isCollaboration: boolean = false) => {
+			update((state) => {
+				const existing = state.comments.get(comment.id);
+				if (!existing) return state;
+
+				const normalized = normalizeComment(comment);
+				const newComments = new Map(state.comments);
+				newComments.set(normalized.id, {
+					...normalized,
+					displayState: existing.displayState,
+				});
+
+				if (!isCollaboration && state.fileIdentifier) {
+					commentStore.saveToLocalStorage(state.fileIdentifier, toPersistableComments(newComments));
+				}
+
+				return {
+					...state,
+					comments: newComments,
+				};
+			});
+		},
+
+		/**
+		 * Soft-delete a single comment by ID.
+		 */
+		softDeleteComment: (commentId: string, isCollaboration: boolean = false) => {
+			update((state) => {
+				const existing = state.comments.get(commentId);
+				if (!existing || existing.deleted) return state;
+
+				const newComments = new Map(state.comments);
+				newComments.set(commentId, {
+					...existing,
+					content: "[deleted]",
+					deleted: true,
+					deletedAt: Date.now(),
+					editedAt: Date.now(),
+				});
+
+				if (!isCollaboration && state.fileIdentifier) {
+					commentStore.saveToLocalStorage(state.fileIdentifier, toPersistableComments(newComments));
 				}
 
 				return {

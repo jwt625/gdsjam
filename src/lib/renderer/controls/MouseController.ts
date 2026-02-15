@@ -71,6 +71,14 @@ export class MouseController {
 
 	private onKeyDown(e: KeyboardEvent): void {
 		if (e.code === "Space") {
+			const target = e.target as HTMLElement | null;
+			const isTextInput =
+				target?.tagName === "INPUT" ||
+				target?.tagName === "TEXTAREA" ||
+				target?.isContentEditable === true;
+			if (isTextInput) {
+				return;
+			}
 			this.isSpacePressed = true;
 			e.preventDefault();
 		}

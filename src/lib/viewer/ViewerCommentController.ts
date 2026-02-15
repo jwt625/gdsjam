@@ -146,7 +146,12 @@ export class ViewerCommentController {
 			worldY: pendingPosition.worldY,
 			createdAt: Date.now(),
 			editedAt: null,
+			parentId: null,
+			rootId: "",
+			deleted: false,
+			deletedAt: null,
 		};
+		comment.rootId = comment.id;
 
 		this.callbacks.addComment(comment, isInSession);
 		if (isInSession) {

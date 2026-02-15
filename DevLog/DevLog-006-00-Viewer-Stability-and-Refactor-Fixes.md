@@ -122,3 +122,35 @@
 - No raw secret values, real tokens, passwords, private keys, or credential strings are present.
 - Mentions of environment variables (`AUTH_TOKEN`, `API_TOKEN_SECRET`, `TURN_SHARED_SECRET`, `VITE_TURN_PASSWORD`) are generic configuration identifiers only.
 - Commit hashes included are public git identifiers, not sensitive data.
+
+
+# Server rollout + manual QA
+
+## Server steps
+1. SSH in and go to repo.
+2. `git fetch origin`
+3. `git checkout refactor-viewer-stability`
+4. `git pull --ff-only origin refactor-viewer-stability`
+5. Install deps:
+   - root: `pnpm install --frozen-lockfile`
+   - server: `cd server && pnpm install --frozen-lockfile && cd ..`
+6. Ensure `server/.env` has:
+   - `AUTH_TOKEN`
+   - `API_TOKEN_SECRET`
+   - `TURN_SHARED_SECRET` (must match coturn `static-auth-secret`)
+7. Restart server (`server/stop.sh` then `server/start.sh`, or your process manager).
+8. Confirm logs show API token + TURN credential routes enabled.
+
+## Manual tests still needed
+1. Two real clients (different networks): host/join, file sync, viewport sync.
+2. TURN fallback: verify collaboration still works under restrictive NAT/firewall.
+3. Token expiry: wait past TTL, then upload/download/execute again.
+4. Restart resilience: restart server during active session and verify recovery.
+5. Cross-browser check: Chrome + Safari/Firefox collaboration sanity.
+6. Production config sanity: no long-lived frontend file token dependency.
+
+## Optional quick checks
+- `pnpm check`
+- `pnpm test --run`
+- `curl -X POST /api/auth/token` works
+- `curl /api/turn-credentials` works with issued token

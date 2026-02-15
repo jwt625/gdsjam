@@ -172,13 +172,21 @@ export interface Comment {
 	createdAt: number;
 	/** Last edit timestamp (milliseconds since epoch, null if never edited) */
 	editedAt: number | null;
+	/** Parent comment ID (null for root comments) */
+	parentId: string | null;
+	/** Root thread comment ID (same as id for root comments) */
+	rootId: string;
+	/** Soft-delete flag */
+	deleted: boolean;
+	/** Soft-delete timestamp (null if not deleted) */
+	deletedAt: number | null;
 }
 
 /**
  * Comment permissions for collaboration sessions (Issue #49)
  */
 export interface CommentPermissions {
-	/** Whether viewers can create comments (default: false) */
+	/** Whether viewers can create comments (default: true) */
 	viewersCanComment: boolean;
 	/** Rate limit for viewers (comments per minute, default: 1) */
 	viewerRateLimit: number;
