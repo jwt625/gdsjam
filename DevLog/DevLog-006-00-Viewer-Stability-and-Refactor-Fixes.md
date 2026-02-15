@@ -103,6 +103,19 @@
   - `node --check` for modified server files: pass
 - TURN hardening slice complete.
 
+### 2026-02-15 15:28
+
+- Added automated test coverage for the new security and TURN logic:
+  - `tests/api/authTokenClient.test.ts`
+  - `tests/api/turnCredentialsClient.test.ts`
+  - `tests/api/pythonExecutor.auth.test.ts`
+  - `tests/collaboration/FileTransfer.auth.test.ts`
+  - `tests/collaboration/YjsProvider.turn.test.ts`
+  - `tests/server/auth.test.ts`
+  - `tests/server/turnCredentials.test.ts`
+- Test run result:
+  - `pnpm test --run`: pass (13 files, 109 tests)
+
 ## Sensitive Data Review
 
 - Reviewed consolidated DevLog content for secrets/tokens/credentials.
