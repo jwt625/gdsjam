@@ -98,6 +98,7 @@ export class PixiRenderer {
 
 	// Callback for when viewport interaction is blocked (for showing toast)
 	private onViewportBlockedCallback: (() => void) | null = null;
+	private readonly layerVisibilityChangeHandler: EventListener;
 
 	// Flag to prevent viewport changes when following host
 	private isViewportLocked = false;
@@ -140,6 +141,9 @@ export class PixiRenderer {
 				fill: 0xcccccc,
 			},
 		});
+
+		// Use a stable function reference so add/removeEventListener pair correctly.
+		this.layerVisibilityChangeHandler = this.handleLayerVisibilityChange.bind(this);
 	}
 
 	/**
@@ -193,7 +197,7 @@ export class PixiRenderer {
 		this.coordinatesDisplay = new CoordinatesDisplay(this.coordsText);
 		this.gridOverlay = new GridOverlay(this.gridContainer, this.app);
 		this.scaleBarOverlay = new ScaleBarOverlay(this.scaleBarContainer, this.app);
-		this.measurementOverlay = new MeasurementOverlay(this.measurementContainer, this.app);
+		this.measurementOverlay = new MeasurementOverlay(this.measurementContainer);
 
 		this.app.ticker.add(this.onTick.bind(this));
 		this.mainContainer.eventMode = "static";
@@ -244,10 +248,7 @@ export class PixiRenderer {
 		this.performScaleBarUpdate();
 
 		// Listen for layer visibility changes
-		window.addEventListener(
-			"layer-visibility-changed",
-			this.handleLayerVisibilityChange.bind(this),
-		);
+		window.addEventListener("layer-visibility-changed", this.layerVisibilityChangeHandler);
 	}
 
 	/**
@@ -994,10 +995,7 @@ export class PixiRenderer {
 		}
 
 		// Remove event listener
-		window.removeEventListener(
-			"layer-visibility-changed",
-			this.handleLayerVisibilityChange.bind(this),
-		);
+		window.removeEventListener("layer-visibility-changed", this.layerVisibilityChangeHandler);
 		this.app.destroy(true, { children: true, texture: true });
 	}
 

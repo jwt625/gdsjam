@@ -9,18 +9,16 @@
  * - Handle viewport changes (measurements stay anchored to world coordinates)
  */
 
-import type { Application, Container } from "pixi.js";
+import type { Container } from "pixi.js";
 import { Graphics, Text } from "pixi.js";
 import type { ActiveMeasurement, DistanceMeasurement } from "../../measurements/types";
 import { formatDistance, worldToScreen } from "../../measurements/utils";
 
 export class MeasurementOverlay {
 	private container: Container;
-	private app: Application;
 
-	constructor(container: Container, app: Application) {
+	constructor(container: Container) {
 		this.container = container;
-		this.app = app;
 	}
 
 	/**
