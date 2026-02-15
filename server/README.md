@@ -36,7 +36,7 @@ PORT=8080 pnpm start
 
 The server implements three layers of security:
 
-### 1. Token Authentication
+### 1. Token Authentication (WebSocket + API)
 
 Set an `AUTH_TOKEN` in your `.env` file:
 
@@ -53,7 +53,19 @@ Clients must include the token in the WebSocket URL:
 ws://your-server:4444?token=your-generated-token-here
 ```
 
-**Note**: Since GDSJam is a client-side app, the token will be visible in the client code. This provides basic protection against casual abuse but is not fully secure. Anyone inspecting the client code can extract the token.
+For REST APIs (`/api/files`, `/api/execute`), browser clients should request short-lived scoped tokens:
+
+```bash
+POST /api/auth/token
+{ "scopes": ["files:read", "files:write"] }
+```
+
+These tokens are:
+- scoped (`files:read`, `files:write`, `python:execute`, `turn:read`)
+- short-lived (default 5 minutes)
+- bound to client IP
+
+Long-lived `AUTH_TOKEN` is still accepted for operational backward compatibility.
 
 ### 2. Origin Checking
 
@@ -72,6 +84,7 @@ ALLOWED_ORIGINS=https://gdsjam.com,https://yourdomain.com
 Protects against DoS attacks:
 - **Default**: 10 connections per IP per minute
 - Configurable in `server.js` (RATE_LIMIT_WINDOW, RATE_LIMIT_MAX_CONNECTIONS)
+- API token issuance is also rate-limited per IP (`API_TOKEN_RATE_LIMIT_*`)
 
 ### Security Limitations
 
@@ -181,6 +194,12 @@ Key settings:
 - Relay ports: 49152-65535 (UDP)
 - Domain: signaling.gdsjam.com
 - SSL certificate: /etc/letsencrypt/live/signaling.gdsjam.com/
+
+For ephemeral TURN credentials (recommended), configure coturn with TURN REST auth:
+- `use-auth-secret`
+- `static-auth-secret=<TURN_SHARED_SECRET>`
+
+The server then exposes `GET /api/turn-credentials` and clients no longer need a static TURN password in frontend env.
 
 To modify configuration:
 ```bash

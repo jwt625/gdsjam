@@ -5,6 +5,8 @@
  * Executes Python/gdsfactory code and returns generated GDS files.
  */
 
+import { getShortLivedApiToken } from "./authTokenClient";
+
 export interface ExecutionResult {
 	success: boolean;
 	stdout: string;
@@ -18,11 +20,9 @@ export interface ExecutionResult {
 
 export class PythonExecutor {
 	private baseUrl: string;
-	private token: string;
 
 	constructor() {
 		this.baseUrl = import.meta.env.VITE_FILE_SERVER_URL || "";
-		this.token = import.meta.env.VITE_FILE_SERVER_TOKEN || "";
 
 		// Validate that required environment variables are set
 		if (!this.baseUrl) {
@@ -49,11 +49,12 @@ export class PythonExecutor {
 		}
 
 		try {
+			const apiToken = await getShortLivedApiToken(this.baseUrl, ["python:execute"]);
 			const response = await fetch(`${this.baseUrl}/api/execute`, {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
-					Authorization: `Bearer ${this.token}`,
+					Authorization: `Bearer ${apiToken}`,
 				},
 				body: JSON.stringify({ code }),
 			});
@@ -119,13 +120,14 @@ export class PythonExecutor {
 	 */
 	async validateServer(): Promise<boolean> {
 		try {
+			const apiToken = await getShortLivedApiToken(this.baseUrl, ["python:execute"]);
 			// Simple fetch to check if server is reachable
 			// We'll just try to execute an empty script (will fail but confirms server is up)
 			const response = await fetch(`${this.baseUrl}/api/execute`, {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
-					Authorization: `Bearer ${this.token}`,
+					Authorization: `Bearer ${apiToken}`,
 				},
 				body: JSON.stringify({ code: "" }),
 			});
@@ -144,10 +146,11 @@ export class PythonExecutor {
 	 * @returns ArrayBuffer of the GDS file
 	 */
 	async downloadFile(fileId: string): Promise<ArrayBuffer> {
+		const apiToken = await getShortLivedApiToken(this.baseUrl, ["files:read"]);
 		const response = await fetch(`${this.baseUrl}/api/files/${fileId}`, {
 			method: "GET",
 			headers: {
-				Authorization: `Bearer ${this.token}`,
+				Authorization: `Bearer ${apiToken}`,
 			},
 		});
 

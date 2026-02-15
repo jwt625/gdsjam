@@ -3,6 +3,7 @@ const path = require("node:path");
 const { spawn } = require("node:child_process");
 const os = require("node:os");
 const crypto = require("node:crypto");
+const { authenticateRequest } = require("./auth");
 
 // Configuration from environment
 const PYTHON_VENV_PATH = process.env.PYTHON_VENV_PATH || "/opt/gdsjam/venv";
@@ -12,7 +13,6 @@ const PYTHON_RATE_LIMIT_MAX = parseInt(process.env.PYTHON_RATE_LIMIT_MAX || "10"
 const FILE_STORAGE_PATH = process.env.FILE_STORAGE_PATH || "/var/gdsjam/files";
 const MAX_GDS_SIZE_MB = parseInt(process.env.MAX_GDS_SIZE_MB || "100", 10);
 const MAX_GDS_SIZE_BYTES = MAX_GDS_SIZE_MB * 1024 * 1024;
-const AUTH_TOKEN = process.env.AUTH_TOKEN;
 
 // Rate limiting tracker
 const executionTracker = new Map(); // Map<IP, timestamp[]>
@@ -565,33 +565,6 @@ function rateLimitExecution(req, res, next) {
 }
 
 /**
- * Authentication middleware (reuses AUTH_TOKEN from fileStorage)
- */
-function authenticateRequest(req, res, next) {
-	if (!AUTH_TOKEN) {
-		return next(); // No auth required if token not set
-	}
-
-	const authHeader = req.headers.authorization;
-	if (!authHeader || !authHeader.startsWith("Bearer ")) {
-		return res.status(401).json({
-			success: false,
-			error: "Missing or invalid authorization header",
-		});
-	}
-
-	const token = authHeader.substring(7);
-	if (token !== AUTH_TOKEN) {
-		return res.status(401).json({
-			success: false,
-			error: "Invalid token",
-		});
-	}
-
-	next();
-}
-
-/**
  * Setup Python execution routes
  */
 function setupPythonRoutes(app) {
@@ -602,48 +575,53 @@ function setupPythonRoutes(app) {
 	 * POST /api/execute
 	 * Execute Python/gdsfactory code and return generated GDS file
 	 */
-	app.post("/api/execute", authenticateRequest, rateLimitExecution, async (req, res) => {
-		try {
-			const { code } = req.body;
+	app.post(
+		"/api/execute",
+		authenticateRequest(["python:execute"]),
+		rateLimitExecution,
+		async (req, res) => {
+			try {
+				const { code } = req.body;
 
-			if (!code || typeof code !== "string") {
-				return res.status(400).json({
+				if (!code || typeof code !== "string") {
+					return res.status(400).json({
+						success: false,
+						error: "Missing or invalid 'code' field in request body",
+					});
+				}
+
+				// Limit code size (prevent DoS with huge payloads)
+				const MAX_CODE_SIZE = 100 * 1024; // 100KB
+				if (code.length > MAX_CODE_SIZE) {
+					return res.status(400).json({
+						success: false,
+						error: `Code too large. Maximum size is ${MAX_CODE_SIZE / 1024}KB`,
+					});
+				}
+
+				const clientIp = req.ip || req.socket.remoteAddress;
+				console.log(
+					`[${new Date().toISOString()}] Python execution request from ${clientIp} (${code.length} bytes)`,
+				);
+
+				const result = await executePythonCode(code, clientIp);
+
+				if (result.success) {
+					res.json(result);
+				} else {
+					// Use 200 for execution errors (client can handle based on success field)
+					// Use 4xx/5xx for request-level errors
+					res.json(result);
+				}
+			} catch (error) {
+				console.error(`[${new Date().toISOString()}] Execute endpoint error:`, error);
+				res.status(500).json({
 					success: false,
-					error: "Missing or invalid 'code' field in request body",
+					error: "Internal server error",
 				});
 			}
-
-			// Limit code size (prevent DoS with huge payloads)
-			const MAX_CODE_SIZE = 100 * 1024; // 100KB
-			if (code.length > MAX_CODE_SIZE) {
-				return res.status(400).json({
-					success: false,
-					error: `Code too large. Maximum size is ${MAX_CODE_SIZE / 1024}KB`,
-				});
-			}
-
-			const clientIp = req.ip || req.socket.remoteAddress;
-			console.log(
-				`[${new Date().toISOString()}] Python execution request from ${clientIp} (${code.length} bytes)`,
-			);
-
-			const result = await executePythonCode(code, clientIp);
-
-			if (result.success) {
-				res.json(result);
-			} else {
-				// Use 200 for execution errors (client can handle based on success field)
-				// Use 4xx/5xx for request-level errors
-				res.json(result);
-			}
-		} catch (error) {
-			console.error(`[${new Date().toISOString()}] Execute endpoint error:`, error);
-			res.status(500).json({
-				success: false,
-				error: "Internal server error",
-			});
-		}
-	});
+		},
+	);
 
 	console.log("Python execution routes configured:");
 	console.log(`  - POST /api/execute`);

@@ -62,6 +62,7 @@ let layerStoreInitialized = false;
 let keyModeController: ViewerKeyModeController | null = null;
 let measurementController: ViewerMeasurementController | null = null;
 let commentController: ViewerCommentController | null = null;
+let viewerResizeContainer: HTMLElement | null = null;
 
 // Comment mode state
 let commentModeActive = $state(false);
@@ -312,6 +313,10 @@ function handleMeasurementTouchEnd(event: TouchEvent): void {
 	measurementController?.handleTouchEnd(event);
 }
 
+function handleViewerResize(): void {
+	renderer?.triggerResize();
+}
+
 /**
  * Handle Ctrl/Cmd+K to clear all measurements (KLayout-style)
  */
@@ -440,11 +445,9 @@ onMount(() => {
 	canvas.addEventListener("mousemove", handleMouseMove);
 
 	// Listen for custom resize event from EditorLayout
-	const viewerContainer = canvas.parentElement;
-	if (viewerContainer) {
-		viewerContainer.addEventListener("viewer-resize", () => {
-			renderer?.triggerResize();
-		});
+	viewerResizeContainer = canvas.parentElement;
+	if (viewerResizeContainer) {
+		viewerResizeContainer.addEventListener("viewer-resize", handleViewerResize);
 	}
 
 	// Initialize renderer asynchronously
@@ -527,6 +530,12 @@ onMount(() => {
 
 		// Remove mouse move handler
 		canvas.removeEventListener("mousemove", handleMouseMove);
+
+		// Remove custom resize event listener
+		if (viewerResizeContainer) {
+			viewerResizeContainer.removeEventListener("viewer-resize", handleViewerResize);
+			viewerResizeContainer = null;
+		}
 
 		keyModeController?.destroy();
 		keyModeController = null;

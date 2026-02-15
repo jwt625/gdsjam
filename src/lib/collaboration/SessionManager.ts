@@ -9,6 +9,7 @@
  * - Coordinate HostManager and ParticipantManager (facade pattern)
  */
 
+import { getShortLivedApiToken } from "../api/authTokenClient";
 import { generateUUID } from "../utils/uuid";
 import { CommentSync, type CommentSyncCallbacks } from "./CommentSync";
 import { FileTransfer } from "./FileTransfer";
@@ -111,7 +112,7 @@ export class SessionManager {
 
 			// Upload file to server
 			const fileServerUrl = import.meta.env.VITE_FILE_SERVER_URL || "https://signaling.gdsjam.com";
-			const fileServerToken = import.meta.env.VITE_FILE_SERVER_TOKEN;
+			const apiToken = await getShortLivedApiToken(fileServerUrl, ["files:write"]);
 
 			const formData = new FormData();
 			formData.append("file", new Blob([this.pendingFile.arrayBuffer]));
@@ -119,7 +120,7 @@ export class SessionManager {
 			const response = await fetch(`${fileServerUrl}/api/files`, {
 				method: "POST",
 				headers: {
-					Authorization: `Bearer ${fileServerToken}`,
+					Authorization: `Bearer ${apiToken}`,
 				},
 				body: formData,
 			});
@@ -143,7 +144,7 @@ export class SessionManager {
 		window.history.pushState({}, "", url.toString());
 
 		// Connect to Y.js room
-		this.yjsProvider.connect(sessionId);
+		await this.yjsProvider.connect(sessionId);
 
 		// Initialize managers for this session
 		this.hostManager.initialize(sessionId);
@@ -303,7 +304,7 @@ export class SessionManager {
 
 			// Connect to Y.js room - no need to wait for sync
 			// Host has metadata in localStorage, file is on signaling server
-			this.yjsProvider.connect(sessionId);
+			await this.yjsProvider.connect(sessionId);
 
 			// Write session data to Y.js (host is authoritative for metadata)
 			this.yjsProvider.getDoc().transact(() => {
@@ -363,7 +364,7 @@ export class SessionManager {
 			this.participantManager.setLocalAwarenessState({ isHost: false });
 
 			// Connect to Y.js room
-			this.yjsProvider.connect(sessionId);
+			await this.yjsProvider.connect(sessionId);
 
 			// Wait for Y.js to sync with peers before any document writes
 			await this.yjsProvider.waitForSync(5000);

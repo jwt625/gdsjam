@@ -2,11 +2,11 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const multer = require("multer");
+const { authenticateRequest } = require("./auth");
 
 const FILE_STORAGE_PATH = process.env.FILE_STORAGE_PATH || "/var/gdsjam/files";
 const MAX_FILE_SIZE_MB = parseInt(process.env.MAX_FILE_SIZE_MB || "100", 10);
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
-const AUTH_TOKEN = process.env.AUTH_TOKEN;
 
 // Rate limiting for file uploads (count-based)
 const uploadTracker = new Map(); // Map<IP, timestamp[]>
@@ -64,27 +64,6 @@ function validateFileType(buffer) {
  */
 function validateFileId(fileId) {
 	return /^[a-f0-9]{64}$/.test(fileId);
-}
-
-/**
- * Authenticate request using Bearer token
- */
-function authenticateRequest(req, res, next) {
-	if (!AUTH_TOKEN) {
-		return next(); // No auth required if token not set
-	}
-
-	const authHeader = req.headers.authorization;
-	if (!authHeader || !authHeader.startsWith("Bearer ")) {
-		return res.status(401).json({ error: "Missing or invalid authorization header" });
-	}
-
-	const token = authHeader.substring(7);
-	if (token !== AUTH_TOKEN) {
-		return res.status(401).json({ error: "Invalid token" });
-	}
-
-	next();
 }
 
 /**
@@ -170,7 +149,7 @@ function setupFileRoutes(app) {
 	 */
 	app.post(
 		"/api/files",
-		authenticateRequest,
+		authenticateRequest(["files:write"]),
 		rateLimitUploads,
 		upload.single("file"),
 		async (req, res) => {
@@ -252,7 +231,7 @@ function setupFileRoutes(app) {
 	 * GET /api/files/:fileId
 	 * Download a file by its fileId (SHA-256 hash)
 	 */
-	app.get("/api/files/:fileId", authenticateRequest, (req, res) => {
+	app.get("/api/files/:fileId", authenticateRequest(["files:read"]), (req, res) => {
 		try {
 			const { fileId } = req.params;
 
@@ -303,7 +282,7 @@ function setupFileRoutes(app) {
 	 * DELETE /api/files/:fileId
 	 * Delete a file by its fileId (optional, for manual cleanup)
 	 */
-	app.delete("/api/files/:fileId", authenticateRequest, (req, res) => {
+	app.delete("/api/files/:fileId", authenticateRequest(["files:write"]), (req, res) => {
 		try {
 			const { fileId } = req.params;
 
