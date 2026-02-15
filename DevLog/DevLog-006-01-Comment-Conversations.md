@@ -47,3 +47,9 @@
 - Validation complete:
   - `pnpm check`: 0 errors, 0 warnings
   - `pnpm test --run`: 109/109 passing
+
+### 2026-02-15 15:37
+
+- Fixed global `Space` interception conflict in viewer pan controls:
+  - `MouseController` now ignores `Space` keydown when the focused target is `INPUT`, `TEXTAREA`, or `contenteditable`.
+  - This allows normal typing (including spaces) in the threaded comment reply textarea while keeping `Space+Drag` panning behavior elsewhere.
