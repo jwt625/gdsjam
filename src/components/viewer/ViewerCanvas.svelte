@@ -74,6 +74,9 @@ let commentPanelVisible = $state(false);
 const comments = $derived($commentStore.comments);
 const allCommentsVisible = $derived($commentStore.allCommentsVisible);
 const commentPermissions = $derived($commentStore.permissions);
+const rootComments = $derived(
+	Array.from(comments.values()).filter((comment) => comment.parentId === null),
+);
 // Track viewport changes to trigger comment bubble position updates
 let viewportVersion = $state(0);
 
@@ -173,7 +176,7 @@ $effect(() => {
 						| undefined;
 
 					const permissions = commentPermissions || {
-						viewersCanComment: false,
+						viewersCanComment: true,
 						viewerRateLimit: 60000, // 1 minute
 						hostRateLimit: 10000, // 10 seconds
 					};
@@ -821,7 +824,7 @@ function toggleMinimap() {
 
 	<!-- Comment bubbles -->
 	{#if allCommentsVisible && renderer}
-		{#each Array.from(comments.values()) as comment (`${comment.id}-${viewportVersion}`)}
+		{#each rootComments as comment (`${comment.id}-${viewportVersion}`)}
 			{@const screenPos = worldToScreen(comment.worldX, comment.worldY)}
 			{#if screenPos}
 				<CommentBubble
