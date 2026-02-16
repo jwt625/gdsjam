@@ -980,7 +980,7 @@ function toggleMinimap() {
 		padding: 12px 20px;
 		background: rgba(78, 205, 196, 0.95);
 		border: 1px solid rgba(255, 255, 255, 0.3);
-		border-radius: 24px;
+		border-radius: 0;
 		color: #ffffff;
 		font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 		font-size: 14px;
@@ -1015,7 +1015,7 @@ function toggleMinimap() {
 		padding: 8px 12px;
 		background: rgba(74, 158, 255, 0.9);
 		color: white;
-		border-radius: 6px;
+		border-radius: 0;
 		font-family: system-ui, -apple-system, sans-serif;
 		font-size: 13px;
 		font-weight: 500;
@@ -1069,7 +1069,7 @@ function toggleMinimap() {
 		padding: 8px 12px;
 		background: rgba(0, 188, 212, 0.9);
 		color: white;
-		border-radius: 6px;
+		border-radius: 0;
 		font-family: system-ui, -apple-system, sans-serif;
 		font-size: 13px;
 		font-weight: 500;
@@ -1091,7 +1091,7 @@ function toggleMinimap() {
 		padding: 8px 12px;
 		background: rgba(255, 152, 0, 0.9);
 		color: white;
-		border-radius: 6px;
+		border-radius: 0;
 		font-family: system-ui, -apple-system, sans-serif;
 		font-size: 13px;
 		font-weight: 500;
@@ -1113,7 +1113,7 @@ function toggleMinimap() {
 		padding: 8px 12px;
 		background: rgba(0, 188, 212, 0.9);
 		color: white;
-		border-radius: 6px;
+		border-radius: 0;
 		font-family: system-ui, -apple-system, sans-serif;
 		font-size: 13px;
 		font-weight: 500;

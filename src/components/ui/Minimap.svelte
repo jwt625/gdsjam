@@ -406,7 +406,7 @@ onDestroy(() => {
 	.minimap-panel {
 		position: fixed;
 		background: rgba(0, 0, 0, 0.9);
-		border-radius: 4px;
+		border-radius: 0;
 		font-family: monospace;
 		font-size: 12px;
 		box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
@@ -449,7 +449,7 @@ onDestroy(() => {
 
 	.minimap-content canvas {
 		display: block;
-		border-radius: 0 0 4px 4px;
+		border-radius: 0;
 	}
 
 	.resize-handle {
@@ -460,7 +460,7 @@ onDestroy(() => {
 		height: 16px;
 		cursor: se-resize;
 		background: linear-gradient(135deg, transparent 50%, rgba(255, 255, 255, 0.3) 50%);
-		border-radius: 0 0 4px 0;
+		border-radius: 0;
 	}
 
 	.minimap-panel.collapsed {

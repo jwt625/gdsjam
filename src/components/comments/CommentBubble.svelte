@@ -89,7 +89,7 @@ function handleTimestampClick(event: MouseEvent | KeyboardEvent): void {
 	/* Dark theme styling - match other panels */
 	background: rgba(0, 0, 0, 0.9);
 	border: 1px solid #444;
-	border-radius: 4px;
+	border-radius: 0;
 
 	/* NO ANIMATIONS */
 	transition: none;
@@ -101,7 +101,7 @@ function handleTimestampClick(event: MouseEvent | KeyboardEvent): void {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	border-radius: 50%;
+	border-radius: 0;
 }
 
 .comment-bubble.preview,

@@ -157,7 +157,7 @@ $effect(() => {
 	.modal-content {
 		background: rgba(0, 0, 0, 0.95);
 		border: 1px solid #444;
-		border-radius: 4px;
+		border-radius: 0;
 		padding: 20px;
 		min-width: 400px;
 		max-width: 600px;
@@ -184,7 +184,7 @@ $effect(() => {
 		padding: 10px;
 		background: rgba(255, 255, 255, 0.05);
 		border: 1px solid #555;
-		border-radius: 4px;
+		border-radius: 0;
 		color: #fff;
 		font-family: monospace;
 		font-size: 14px;
@@ -226,7 +226,7 @@ $effect(() => {
 	button {
 		padding: 8px 16px;
 		border: 1px solid #555;
-		border-radius: 4px;
+		border-radius: 0;
 		background: rgba(255, 255, 255, 0.05);
 		color: #ccc;
 		font-family: monospace;

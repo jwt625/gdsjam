@@ -176,7 +176,7 @@ function handleClearMeasurements() {
 			<!-- Fill/Outline Toggle -->
 			<button class="menu-item" onclick={handleToggleFill} title="Toggle Fill/Outline (O)">
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-					<rect x="3" y="3" width="18" height="18" rx="2"/>
+					<rect x="3" y="3" width="18" height="18" rx="0"/>
 					<path d="M9 9h6v6H9z"/>
 				</svg>
 				<span>Fill/Outline</span>
@@ -204,8 +204,8 @@ function handleClearMeasurements() {
 			<!-- Minimap Toggle -->
 			<button class="menu-item" onclick={handleToggleMinimap} class:active={minimapVisible} title="Toggle Minimap (M)">
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-					<rect x="3" y="3" width="18" height="18" rx="2"/>
-					<rect x="13" y="13" width="6" height="6" rx="1"/>
+					<rect x="3" y="3" width="18" height="18" rx="0"/>
+					<rect x="13" y="13" width="6" height="6" rx="0"/>
 				</svg>
 				<span>Minimap</span>
 			</button>
@@ -403,7 +403,7 @@ function handleClearMeasurements() {
 		padding: 12px 16px;
 		background: rgba(30, 30, 30, 0.95);
 		border: 1px solid rgba(255, 255, 255, 0.1);
-		border-radius: 8px;
+		border-radius: 0;
 		color: #ffffff;
 		font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 		font-size: 14px;
@@ -462,7 +462,7 @@ function handleClearMeasurements() {
 		padding: 10px 14px;
 		background: rgba(20, 20, 20, 0.95);
 		border: 1px solid rgba(255, 255, 255, 0.08);
-		border-radius: 6px;
+		border-radius: 0;
 		color: rgba(255, 255, 255, 0.9);
 		font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 		font-size: 13px;
@@ -498,7 +498,7 @@ function handleClearMeasurements() {
 	.fab {
 		width: 56px;
 		height: 56px;
-		border-radius: 50%;
+		border-radius: 0;
 		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 		border: none;
 		color: white;

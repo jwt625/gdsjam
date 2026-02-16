@@ -27,3 +27,23 @@ body {
 	height: 100vh;
 	overflow: hidden;
 }
+
+/* Sharp-corner visual language across UI */
+button,
+input,
+textarea,
+select,
+[role="button"],
+[class*="panel"],
+[class*="modal"],
+[class*="container"],
+[class*="toast"],
+[class*="card"] {
+	border-radius: 0;
+}
+
+/* Remove rounded corners from icon rectangles as well */
+svg rect {
+	rx: 0 !important;
+	ry: 0 !important;
+}

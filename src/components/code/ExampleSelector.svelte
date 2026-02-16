@@ -91,7 +91,7 @@ $effect(() => {
 	padding: 4px 8px;
 	background: transparent;
 	border: 1px solid #3e3e42;
-	border-radius: 3px;
+	border-radius: 0;
 	color: #d4d4d4;
 	font-size: 13px;
 	cursor: pointer;
@@ -123,7 +123,7 @@ $effect(() => {
 	max-width: 500px;
 	background: #252526;
 	border: 1px solid #3e3e42;
-	border-radius: 3px;
+	border-radius: 0;
 	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 	z-index: 1000;
 	max-height: 400px;

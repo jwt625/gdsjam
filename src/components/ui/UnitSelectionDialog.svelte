@@ -89,7 +89,7 @@ function handleKeydown(e: KeyboardEvent) {
 	.dialog-content {
 		background: #1e1e1e;
 		border: 1px solid #3a3a3a;
-		border-radius: 8px;
+		border-radius: 0;
 		padding: 24px;
 		max-width: 500px;
 		width: 90%;
@@ -123,7 +123,7 @@ function handleKeydown(e: KeyboardEvent) {
 		padding: 12px;
 		background: #2a2a2a;
 		border: 1px solid #3a3a3a;
-		border-radius: 4px;
+		border-radius: 0;
 		cursor: pointer;
 		transition: all 0.2s;
 	}
@@ -151,7 +151,7 @@ function handleKeydown(e: KeyboardEvent) {
 	.btn {
 		padding: 10px 20px;
 		border: none;
-		border-radius: 4px;
+		border-radius: 0;
 		font-size: 14px;
 		font-weight: 500;
 		cursor: pointer;

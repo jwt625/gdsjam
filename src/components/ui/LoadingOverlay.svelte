@@ -60,7 +60,7 @@ const { message, progress }: Props = $props();
 		width: 100%;
 		height: 8px;
 		background-color: #333;
-		border-radius: 4px;
+		border-radius: 0;
 		overflow: hidden;
 		margin-bottom: 0.5rem;
 	}
@@ -77,4 +77,3 @@ const { message, progress }: Props = $props();
 		color: #888;
 	}
 </style>
-
