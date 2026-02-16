@@ -131,7 +131,7 @@ const formattedTime = $derived(
 	background: #3e3e42;
 	color: #cccccc;
 	border: none;
-	border-radius: 3px;
+	border-radius: 0;
 	cursor: pointer;
 	font-size: 11px;
 	transition: background 0.1s;
@@ -153,7 +153,7 @@ const formattedTime = $derived(
 	padding: 8px 12px;
 	border-left: 3px solid #f48771;
 	margin-bottom: 12px;
-	border-radius: 3px;
+	border-radius: 0;
 }
 
 .stdout pre,

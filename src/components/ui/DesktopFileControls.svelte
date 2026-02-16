@@ -181,7 +181,7 @@ $effect(() => {
 		padding: 0.5rem 0.75rem;
 		background-color: #2a2a2a;
 		border: 1px solid #444;
-		border-radius: 0.375rem;
+		border-radius: 0;
 		color: #e5e7eb;
 		font-size: 0.875rem;
 		cursor: pointer;
@@ -210,7 +210,7 @@ $effect(() => {
 		padding: 0.5rem 0.75rem;
 		background-color: #1e293b;
 		border: 1px solid #475569;
-		border-radius: 0.375rem;
+		border-radius: 0;
 		color: #94a3b8;
 		font-size: 0.875rem;
 		font-style: italic;

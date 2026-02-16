@@ -343,7 +343,7 @@ function getLayerColor(layer: number, datatype: number): string {
 		max-height: 80vh;
 		background: rgba(0, 0, 0, 0.9);
 		color: #ccc;
-		border-radius: 4px;
+		border-radius: 0;
 		font-family: monospace;
 		font-size: 12px;
 		display: flex;
@@ -410,7 +410,7 @@ function getLayerColor(layer: number, datatype: number): string {
 		background: #333;
 		color: #ccc;
 		border: 1px solid #555;
-		border-radius: 3px;
+		border-radius: 0;
 		cursor: pointer;
 		font-size: 11px;
 	}
@@ -431,7 +431,7 @@ function getLayerColor(layer: number, datatype: number): string {
 		gap: 8px;
 		padding: 4px;
 		margin: 2px 0;
-		border-radius: 3px;
+		border-radius: 0;
 		cursor: pointer;
 	}
 
@@ -440,7 +440,7 @@ function getLayerColor(layer: number, datatype: number): string {
 	.layer-color {
 		width: 16px;
 		height: 16px;
-		border-radius: 2px;
+		border-radius: 0;
 		border: 1px solid #666;
 		flex-shrink: 0;
 	}

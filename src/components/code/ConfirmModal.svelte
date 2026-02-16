@@ -73,7 +73,7 @@ function handleKeydown(event: KeyboardEvent) {
 .modal-content {
 	background: #252526;
 	border: 1px solid #3e3e42;
-	border-radius: 4px;
+	border-radius: 0;
 	padding: 24px;
 	min-width: 300px;
 	max-width: 500px;
@@ -97,7 +97,7 @@ function handleKeydown(event: KeyboardEvent) {
 .confirm-button {
 	padding: 8px 16px;
 	border: none;
-	border-radius: 3px;
+	border-radius: 0;
 	font-size: 13px;
 	cursor: pointer;
 	transition: background-color 0.1s;

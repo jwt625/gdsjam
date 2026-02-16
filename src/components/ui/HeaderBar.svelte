@@ -362,7 +362,7 @@ async function handleFileInput(event: Event) {
 		padding: 0.5rem 1rem;
 		background-color: #1a1a1a;
 		border: 1px solid #333;
-		border-radius: 6px;
+		border-radius: 0;
 	}
 
 	.session-label {
@@ -388,7 +388,7 @@ async function handleFileInput(event: Event) {
 		font-size: 0.75rem;
 		font-weight: 600;
 		padding: 0.25rem 0.5rem;
-		border-radius: 4px;
+		border-radius: 0;
 		background-color: #333;
 		color: #888;
 		text-transform: uppercase;
@@ -405,7 +405,7 @@ async function handleFileInput(event: Event) {
 		font-size: 0.875rem;
 		font-weight: 500;
 		border: none;
-		border-radius: 6px;
+		border-radius: 0;
 		cursor: pointer;
 		transition: all 0.2s;
 		white-space: nowrap;
@@ -488,7 +488,7 @@ async function handleFileInput(event: Event) {
 		padding: 1.5rem;
 		background: rgba(0, 0, 0, 0.95);
 		border: 1px solid #444;
-		border-radius: 8px;
+		border-radius: 0;
 		z-index: 1000;
 		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 		backdrop-filter: blur(4px);
@@ -526,7 +526,7 @@ async function handleFileInput(event: Event) {
 		height: auto;
 		aspect-ratio: 1;
 		border: 4px solid #fff;
-		border-radius: 8px;
+		border-radius: 0;
 		background-color: #fff;
 	}
 
@@ -587,7 +587,7 @@ async function handleFileInput(event: Event) {
 		padding: 1.5rem;
 		background: #1a1a1a;
 		border: 1px solid #444;
-		border-radius: 8px;
+		border-radius: 0;
 		z-index: 1001;
 		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 		min-width: 320px;
@@ -633,7 +633,7 @@ async function handleFileInput(event: Event) {
 		font-size: 0.875rem;
 		background: #2a2a2a;
 		border: 1px solid #444;
-		border-radius: 4px;
+		border-radius: 0;
 		color: #fff;
 		cursor: pointer;
 	}

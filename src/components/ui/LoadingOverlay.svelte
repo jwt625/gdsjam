@@ -39,7 +39,7 @@ const { message, progress }: Props = $props();
 		height: 48px;
 		border: 4px solid #333;
 		border-top-color: #4a9eff;
-		border-radius: 50%;
+		border-radius: 0;
 		animation: spin 1s linear infinite;
 		margin: 0 auto 1rem;
 	}
@@ -60,7 +60,7 @@ const { message, progress }: Props = $props();
 		width: 100%;
 		height: 8px;
 		background-color: #333;
-		border-radius: 4px;
+		border-radius: 0;
 		overflow: hidden;
 		margin-bottom: 0.5rem;
 	}

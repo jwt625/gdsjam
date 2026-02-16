@@ -26,7 +26,7 @@ const { message, onDismiss }: Props = $props();
 	.error-content {
 		background-color: #3a1a1a;
 		border: 1px solid #ff4444;
-		border-radius: 8px;
+		border-radius: 0;
 		padding: 1rem 1.5rem;
 		max-width: 500px;
 		max-height: 80vh;
@@ -53,7 +53,7 @@ const { message, onDismiss }: Props = $props();
 		background-color: #ff4444;
 		color: #fff;
 		border: none;
-		border-radius: 4px;
+		border-radius: 0;
 		padding: 0.5rem 1rem;
 		font-size: 0.875rem;
 		cursor: pointer;

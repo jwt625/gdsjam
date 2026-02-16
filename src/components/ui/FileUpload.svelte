@@ -263,12 +263,12 @@ function triggerFileInput() {
 											</svg>
 										{:else if example.category === 'digital'}
 											<svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-												<rect x="4" y="4" width="16" height="16" rx="2" stroke-width="2"/>
+												<rect x="4" y="4" width="16" height="16" rx="0" stroke-width="2"/>
 												<path stroke-width="2" d="M9 9h6M9 12h6M9 15h4"/>
 											</svg>
 										{:else}
 											<svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-												<rect x="3" y="3" width="18" height="18" rx="2" stroke-width="2"/>
+												<rect x="3" y="3" width="18" height="18" rx="0" stroke-width="2"/>
 												<path stroke-width="2" d="M3 9h18M9 21V9"/>
 											</svg>
 										{/if}
@@ -306,7 +306,7 @@ function triggerFileInput() {
 <style>
 	.file-upload {
 		border: 2px dashed #444;
-		border-radius: 8px;
+		border-radius: 0;
 		padding: 2rem;
 		text-align: center;
 		cursor: pointer;
@@ -440,7 +440,7 @@ function triggerFileInput() {
 		padding: 0;
 		background: #1a1a1a;
 		border: 1px solid #333;
-		border-radius: 8px;
+		border-radius: 0;
 		cursor: pointer;
 		text-align: left;
 		position: relative;
@@ -545,7 +545,7 @@ function triggerFileInput() {
 		height: 24px;
 		border: 2px solid #333;
 		border-top-color: #4a9eff;
-		border-radius: 50%;
+		border-radius: 0;
 		animation: spin 0.8s linear infinite;
 	}
 

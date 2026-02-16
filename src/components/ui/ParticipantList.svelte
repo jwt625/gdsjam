@@ -254,7 +254,7 @@ function cancelTransfer() {
 		max-height: 300px;
 		background: rgba(0, 0, 0, 0.9);
 		color: #ccc;
-		border-radius: 4px;
+		border-radius: 0;
 		font-family: monospace;
 		font-size: 12px;
 		/* z-index set via inline style from panelZIndexStore */
@@ -327,7 +327,7 @@ function cancelTransfer() {
 		align-items: center;
 		gap: 8px;
 		padding: 6px 4px;
-		border-radius: 3px;
+		border-radius: 0;
 	}
 
 	.participant-item:hover {
@@ -337,7 +337,7 @@ function cancelTransfer() {
 	.color-indicator {
 		width: 12px;
 		height: 12px;
-		border-radius: 50%;
+		border-radius: 0;
 		flex-shrink: 0;
 		border: 1px solid rgba(255, 255, 255, 0.2);
 	}
@@ -361,7 +361,7 @@ function cancelTransfer() {
 		font-size: 10px;
 		font-weight: 600;
 		padding: 2px 6px;
-		border-radius: 3px;
+		border-radius: 0;
 		background-color: #4a9eff;
 		color: #fff;
 		text-transform: uppercase;
@@ -370,7 +370,7 @@ function cancelTransfer() {
 	.make-host-btn {
 		font-size: 10px;
 		padding: 2px 6px;
-		border-radius: 3px;
+		border-radius: 0;
 		background: #333;
 		color: #aaa;
 		border: 1px solid #555;
@@ -438,7 +438,7 @@ function cancelTransfer() {
 	.dialog-panel {
 		background: #1a1a1a;
 		border: 1px solid #444;
-		border-radius: 8px;
+		border-radius: 0;
 		padding: 1.5rem;
 		max-width: 400px;
 		width: 90%;
@@ -472,7 +472,7 @@ function cancelTransfer() {
 		font-size: 0.875rem;
 		font-weight: 500;
 		border: none;
-		border-radius: 6px;
+		border-radius: 0;
 		cursor: pointer;
 		transition: all 0.2s;
 	}

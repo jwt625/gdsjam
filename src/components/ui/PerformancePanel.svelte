@@ -416,7 +416,7 @@ function formatDimension(um: number): string {
 		position: fixed;
 		background: rgba(0, 0, 0, 0.85);
 		border: 1px solid #444;
-		border-radius: 4px;
+		border-radius: 0;
 		padding: 12px;
 		font-family: monospace;
 		font-size: 11px;

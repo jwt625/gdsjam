@@ -242,7 +242,7 @@ $effect(() => {
 
 	.modal-content {
 		background-color: #2a2a2a;
-		border-radius: 8px;
+		border-radius: 0;
 		max-width: 700px;
 		max-height: 90vh;
 		width: 100%;
@@ -319,7 +319,7 @@ $effect(() => {
 		user-select: none;
 		padding: 0.5rem;
 		margin: 0 -0.5rem 0.5rem -0.5rem;
-		border-radius: 4px;
+		border-radius: 0;
 		transition: background-color 0.2s;
 	}
 
@@ -360,13 +360,13 @@ $effect(() => {
 		gap: 0.75rem;
 		padding: 0.5rem;
 		background-color: #1a1a1a;
-		border-radius: 4px;
+		border-radius: 0;
 	}
 
 	.shortcut-item kbd {
 		background-color: #3a3a3a;
 		border: 1px solid #4a4a4a;
-		border-radius: 4px;
+		border-radius: 0;
 		padding: 0.25rem 0.5rem;
 		font-family: monospace;
 		font-size: 0.85rem;
@@ -392,7 +392,7 @@ $effect(() => {
 		color: #e0e0e0;
 		border: 1px solid #666;
 		padding: 0.75rem 2rem;
-		border-radius: 4px;
+		border-radius: 0;
 		font-size: 1rem;
 		font-weight: 600;
 		cursor: pointer;

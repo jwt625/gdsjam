@@ -522,7 +522,7 @@ const executeButtonLabel = $derived(
 	padding: 6px 10px;
 	background: transparent;
 	border: 1px solid #3e3e42;
-	border-radius: 3px;
+	border-radius: 0;
 	font-size: 16px;
 	cursor: pointer;
 	transition: background-color 0.1s;
@@ -548,7 +548,7 @@ const executeButtonLabel = $derived(
 	background: #0e639c;
 	color: white;
 	border: none;
-	border-radius: 3px;
+	border-radius: 0;
 	cursor: pointer;
 	font-size: 13px;
 	font-weight: 500;
@@ -570,7 +570,7 @@ const executeButtonLabel = $derived(
 	background: #3e3e42;
 	color: #cccccc;
 	border: none;
-	border-radius: 3px;
+	border-radius: 0;
 	cursor: pointer;
 	font-size: 16px;
 	line-height: 1;
@@ -639,7 +639,7 @@ const executeButtonLabel = $derived(
 	background: transparent;
 	color: #cccccc;
 	border: none;
-	border-radius: 3px;
+	border-radius: 0;
 	cursor: pointer;
 	font-size: 13px;
 	transition: background 0.1s;

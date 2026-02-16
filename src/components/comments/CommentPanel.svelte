@@ -493,10 +493,10 @@ onDestroy(() => {
 						>
 							<svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 								{#if permissions.viewersCanComment}
-									<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+									<rect x="3" y="11" width="18" height="11" rx="0" ry="0"></rect>
 									<path d="M7 11V7a5 5 0 0 1 9.9-1"></path>
 								{:else}
-									<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+									<rect x="3" y="11" width="18" height="11" rx="0" ry="0"></rect>
 									<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
 								{/if}
 							</svg>
@@ -633,7 +633,7 @@ onDestroy(() => {
 	max-height: 600px;
 	background: rgba(0, 0, 0, 0.9);
 	border: 1px solid #444;
-	border-radius: 4px;
+	border-radius: 0;
 	box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
 	overflow: hidden;
 	user-select: none;
@@ -698,7 +698,7 @@ onDestroy(() => {
 	padding: 8px 12px;
 	background: rgba(40, 40, 40, 0.8);
 	border: 1px solid #555;
-	border-radius: 4px;
+	border-radius: 0;
 	color: #ccc;
 	font-size: 11px;
 	cursor: pointer;
@@ -745,7 +745,7 @@ onDestroy(() => {
 	padding: 10px;
 	background: rgba(20, 20, 20, 0.6);
 	border: 1px solid #333;
-	border-radius: 4px;
+	border-radius: 0;
 }
 
 .comment-item:hover {
@@ -773,7 +773,7 @@ onDestroy(() => {
 	padding: 0;
 	background: rgba(50, 50, 50, 0.9);
 	border: 1px solid #555;
-	border-radius: 2px;
+	border-radius: 0;
 	color: #ccc;
 	font-size: 11px;
 	cursor: pointer;
@@ -827,7 +827,7 @@ onDestroy(() => {
 	padding: 4px 8px;
 	background: rgba(40, 40, 40, 0.6);
 	border: 1px solid #444;
-	border-radius: 3px;
+	border-radius: 0;
 	color: #aaa;
 	font-size: 10px;
 	cursor: pointer;
@@ -870,7 +870,7 @@ onDestroy(() => {
 	min-height: 56px;
 	background: rgba(10, 10, 10, 0.9);
 	border: 1px solid #444;
-	border-radius: 3px;
+	border-radius: 0;
 	color: #ccc;
 	font-family: monospace;
 	font-size: 11px;
