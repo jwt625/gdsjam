@@ -39,7 +39,7 @@ const { message, progress }: Props = $props();
 		height: 48px;
 		border: 4px solid #333;
 		border-top-color: #4a9eff;
-		border-radius: 0;
+		border-radius: 50%;
 		animation: spin 1s linear infinite;
 		margin: 0 auto 1rem;
 	}
@@ -77,4 +77,3 @@ const { message, progress }: Props = $props();
 		color: #888;
 	}
 </style>
-

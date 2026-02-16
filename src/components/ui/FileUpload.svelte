@@ -545,7 +545,7 @@ function triggerFileInput() {
 		height: 24px;
 		border: 2px solid #333;
 		border-top-color: #4a9eff;
-		border-radius: 0;
+		border-radius: 50%;
 		animation: spin 0.8s linear infinite;
 	}
 
