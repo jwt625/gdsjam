@@ -4,6 +4,7 @@ on:
   release:
     types:
       - published
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -16,17 +17,17 @@ concurrency:
 
 jobs:
   build:
-    if: ${{ !github.event.release.prerelease && startsWith(github.event.release.tag_name, 'web-v') }}
+    if: ${{ (github.event_name == 'release' && !github.event.release.prerelease && startsWith(github.event.release.tag_name, 'web-v')) || (github.event_name == 'workflow_dispatch' && github.ref_type == 'tag' && startsWith(github.ref_name, 'web-v')) }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref_name }}
 
       - name: Validate release tag
         env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref_name }}
         run: |
           if [[ ! "$RELEASE_TAG" =~ ^web-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Web production releases require a web-vMAJOR.MINOR.PATCH tag; got: $RELEASE_TAG" >&2
@@ -34,6 +35,7 @@ jobs:
           fi
           echo "VITE_APP_VERSION=${RELEASE_TAG#web-}" >> "$GITHUB_ENV"
           echo "VITE_BUILD_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "VITE_RELEASE_URL=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${RELEASE_TAG}" >> "$GITHUB_ENV"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -68,8 +70,6 @@ jobs:
           # Debug mode (optional - defaults to .env.production value if not set)
           # To enable debug in production, add VITE_DEBUG secret with value "true"
           VITE_DEBUG: ${{ secrets.VITE_DEBUG }}
-          # Immutable release identity exposed in the footer and /version.json
-          VITE_RELEASE_URL: ${{ github.event.release.html_url }}
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
