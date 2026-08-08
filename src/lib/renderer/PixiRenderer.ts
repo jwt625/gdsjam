@@ -42,6 +42,11 @@ import { FPSCounter } from "./overlays/FPSCounter";
 import { GridOverlay } from "./overlays/GridOverlay";
 import { MeasurementOverlay } from "./overlays/MeasurementOverlay";
 import { ScaleBarOverlay } from "./overlays/ScaleBarOverlay";
+import {
+	type CompleteOverviewTelemetry,
+	generateCompleteOverview,
+} from "./overview/CompleteOverview";
+import { createOverviewPixiContainer } from "./overview/OverviewPixiLayer";
 import { GDSRenderer, type RenderProgressCallback } from "./rendering/GDSRenderer";
 import { ViewportManager } from "./viewport/ViewportManager";
 
@@ -77,6 +82,10 @@ export class PixiRenderer {
 	private scaleBarUpdateTimeout: number | null = null;
 	private currentDocument: GDSDocument | null = null;
 	private currentRenderScope: DocumentRenderScope | null = null;
+	private overviewContainer: Container | null = null;
+	private overviewTelemetry: CompleteOverviewTelemetry | null = null;
+	private overviewOwnerDocument: GDSDocument | null = null;
+	private overviewOwnerScopeKey: string | null = null;
 
 	// LOD metrics tracking
 	private visiblePolygonCount = 0;
@@ -438,6 +447,12 @@ export class PixiRenderer {
 		for (const [key, visible] of Object.entries(visibility)) {
 			this.layerVisibility.set(key, visible);
 		}
+		if (this.overviewContainer) {
+			for (const child of this.overviewContainer.children) {
+				const layerKey = child.label.replace("complete-overview-layer:", "");
+				child.visible = this.layerVisibility.get(layerKey) ?? true;
+			}
+		}
 
 		// If there are newly visible layers that haven't been rendered, render them
 		if (newlyVisibleLayers.length > 0) {
@@ -447,6 +462,34 @@ export class PixiRenderer {
 			// This will immediately show/hide the already-rendered graphics without re-rendering
 			this.performViewportUpdate();
 		}
+	}
+
+	private overviewScopeKey(scope: DocumentRenderScope): string {
+		const visibility = [...this.layerVisibility.entries()].sort(([left], [right]) =>
+			left.localeCompare(right),
+		);
+		return JSON.stringify({
+			topCellNames: [...scope.topCellNames].sort(),
+			bounds: scope.bounds,
+			visibility,
+		});
+	}
+
+	/** Remove an overview that belongs to a different document or render scope. */
+	private discardStaleOverview(document: GDSDocument, scopeKey: string): void {
+		if (
+			!this.overviewContainer ||
+			(this.overviewOwnerDocument === document && this.overviewOwnerScopeKey === scopeKey)
+		) {
+			return;
+		}
+		if (this.overviewContainer.parent === this.mainContainer) {
+			this.mainContainer.removeChild(this.overviewContainer);
+			this.overviewContainer.destroy({ children: true });
+		}
+		this.overviewContainer = null;
+		this.overviewOwnerDocument = null;
+		this.overviewOwnerScopeKey = null;
 	}
 
 	/**
@@ -658,6 +701,54 @@ export class PixiRenderer {
 
 		onProgress?.(0, "Preparing to render...");
 		await new Promise((resolve) => setTimeout(resolve, 0));
+		if (import.meta.env.VITE_ENABLE_COMPLETE_OVERVIEW === "true") {
+			const overviewScopeKey = this.overviewScopeKey(this.currentRenderScope);
+			const overviewStartedAt = performance.now();
+			try {
+				const artifact = generateCompleteOverview(document, this.currentRenderScope, {
+					cssSizePx: 256,
+					devicePixelRatio: window.devicePixelRatio || 1,
+					layerVisibility: this.layerVisibility,
+				});
+				this.overviewTelemetry = artifact.telemetry;
+				if (artifact.telemetry.complete) {
+					const nextOverview = createOverviewPixiContainer(artifact);
+					// Generate first, then swap. If the old overview belongs to the currently
+					// displayed container it remains visible until this point.
+					if (this.overviewContainer?.parent === this.mainContainer) {
+						this.mainContainer.removeChild(this.overviewContainer);
+						this.overviewContainer.destroy({ children: true });
+					}
+					this.overviewContainer = nextOverview;
+					this.overviewOwnerDocument = document;
+					this.overviewOwnerScopeKey = overviewScopeKey;
+					this.mainContainer.addChildAt(nextOverview, 0);
+				} else {
+					this.discardStaleOverview(document, overviewScopeKey);
+				}
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				this.overviewTelemetry = {
+					status: "failed",
+					complete: false,
+					generationTimeMs: performance.now() - overviewStartedAt,
+					byteLength: 0,
+					physicalWidth: 0,
+					physicalHeight: 0,
+					devicePixelRatio: window.devicePixelRatio || 1,
+					polygonOccurrences: 0,
+					occupiedLayerPixels: 0,
+					layerCount: 0,
+					clippedPolygonOccurrences: 0,
+					diagnostics: [message],
+				};
+				this.discardStaleOverview(document, overviewScopeKey);
+				console.warn(
+					"[CompleteOverview] Generation failed; retaining only a matching previous representation",
+					error,
+				);
+			}
+		}
 		this.clear();
 
 		// Only reset depth to 0 on initial render, not on incremental re-renders
@@ -796,8 +887,13 @@ export class PixiRenderer {
 	/**
 	 * Clear all rendered geometry
 	 */
-	clear(): void {
+	clear(preserveOverview = true): void {
+		const preservedOverview =
+			preserveOverview && this.overviewContainer?.parent === this.mainContainer
+				? this.overviewContainer
+				: null;
 		this.mainContainer.removeChildren();
+		if (preservedOverview) this.mainContainer.addChild(preservedOverview);
 		this.spatialIndex.clear();
 		this.allGraphicsItems = [];
 	}
@@ -808,7 +904,12 @@ export class PixiRenderer {
 	 * while a multiple-top document awaits an explicit selection).
 	 */
 	unloadDocument(): void {
-		this.clear();
+		this.clear(false);
+		this.overviewContainer?.destroy({ children: true });
+		this.overviewContainer = null;
+		this.overviewTelemetry = null;
+		this.overviewOwnerDocument = null;
+		this.overviewOwnerScopeKey = null;
 		this.currentDocument = null;
 		this.currentRenderScope = null;
 		this.currentRenderDepth = 0;
@@ -899,6 +1000,13 @@ export class PixiRenderer {
 	 */
 	getCurrentDocument(): GDSDocument | null {
 		return this.currentDocument;
+	}
+
+	/** Development telemetry for the explicitly gated complete-overview prototype. */
+	getCompleteOverviewTelemetry(): CompleteOverviewTelemetry | null {
+		return this.overviewTelemetry
+			? { ...this.overviewTelemetry, diagnostics: [...this.overviewTelemetry.diagnostics] }
+			: null;
 	}
 
 	/**

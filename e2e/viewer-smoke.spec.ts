@@ -36,12 +36,22 @@ test("loads a deterministic ArrayBuffer fixture and exposes render state", async
 		const diagnostics = await api.waitForRenderIdle();
 		return {
 			diagnostics,
+			overview: api.getCompleteOverviewTelemetry(),
 			digest: await api.getSemanticDigest(),
 			viewport: api.getWorldViewport(),
 		};
 	}, fixture);
 
 	expect(result.diagnostics.status).toBe("complete");
+	const expectedPhysicalEdge = 256 * (await page.evaluate(() => window.devicePixelRatio));
+	expect(result.overview).toMatchObject({
+		status: "ready",
+		complete: true,
+		physicalWidth: expectedPhysicalEdge,
+		polygonOccurrences: 2,
+		layerCount: 2,
+	});
+	expect(result.overview?.byteLength).toBeGreaterThan(0);
 	expect(result.digest.snapshot).toMatchObject({
 		fileName: "non_default_dbu.gds",
 		topCells: ["TOP_NON_DEFAULT_DBU"],

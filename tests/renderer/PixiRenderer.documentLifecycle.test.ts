@@ -1,3 +1,4 @@
+import { Container } from "pixi.js";
 import { describe, expect, it, vi } from "vitest";
 import { type DocumentRenderScope, PixiRenderer } from "../../src/lib/renderer/PixiRenderer";
 import type { GDSDocument } from "../../src/types/gds";
@@ -22,6 +23,11 @@ const document: GDSDocument = {
 interface RendererInternals {
 	currentDocument: GDSDocument | null;
 	currentRenderScope: DocumentRenderScope | null;
+	mainContainer: Container;
+	overviewContainer: Container | null;
+	overviewOwnerDocument: GDSDocument | null;
+	overviewOwnerScopeKey: string | null;
+	discardStaleOverview(document: GDSDocument, scopeKey: string): void;
 	performIncrementalRerender(): Promise<void>;
 }
 
@@ -39,5 +45,24 @@ describe("PixiRenderer document lifecycle", () => {
 		expect(renderer.getDocumentBoundingBox()).toBeNull();
 		renderer.toggleFill();
 		expect(rerender).not.toHaveBeenCalled();
+	});
+
+	it("retains a previous overview only for the same document and render scope", () => {
+		const renderer = new PixiRenderer();
+		const internals = renderer as unknown as RendererInternals;
+		const overview = new Container();
+		internals.mainContainer.addChild(overview);
+		internals.overviewContainer = overview;
+		internals.overviewOwnerDocument = document;
+		internals.overviewOwnerScopeKey = "scope-a";
+
+		internals.discardStaleOverview(document, "scope-a");
+		expect(internals.overviewContainer).toBe(overview);
+		expect(overview.parent).toBe(internals.mainContainer);
+
+		const nextDocument = { ...document, name: "next-layout" };
+		internals.discardStaleOverview(nextDocument, "scope-b");
+		expect(internals.overviewContainer).toBeNull();
+		expect(overview.parent).toBeNull();
 	});
 });
