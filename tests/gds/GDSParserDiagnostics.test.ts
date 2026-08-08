@@ -124,6 +124,26 @@ describe("GDS parser semantic elements and diagnostics", () => {
 		expect(document.diagnostics.referenceCycles.details[0]?.path).toEqual(["A", "B", "A"]);
 	});
 
+	it("counts one unresolved source AREF instead of every compatibility instance", async () => {
+		const document = await buildGDSDocument([
+			...beginCell("TOP"),
+			record(RecordType.AREF),
+			record(RecordType.SNAME, "MISSING"),
+			record(RecordType.COLROW, { columns: 3, rows: 2 }),
+			record(RecordType.XY, [
+				[0, 0],
+				[30, 0],
+				[0, 20],
+			]),
+			record(RecordType.ENDEL),
+			record(RecordType.ENDSTR),
+		]);
+
+		expect(document.cells.get("TOP")?.instances).toHaveLength(6);
+		expect(document.cells.get("TOP")?.references).toHaveLength(1);
+		expect(document.diagnostics.unresolvedReferences).toMatchObject({ count: 1 });
+	});
+
 	it("reports missing UNITS instead of silently accepting the provisional scale", async () => {
 		const document = await buildGDSDocument([
 			record(RecordType.BGNSTR),

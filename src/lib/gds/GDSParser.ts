@@ -1335,8 +1335,10 @@ export async function buildGDSDocument(
 		}
 	}
 
+	const sourceReferences = (cell: Cell): readonly CellInstance[] =>
+		cell.references ?? cell.instances;
 	for (const cell of cells.values()) {
-		for (const instance of cell.instances) {
+		for (const instance of sourceReferences(cell)) {
 			if (!cells.has(instance.cellRef)) {
 				const path = [cell.name, instance.cellRef];
 				diagnostics.unresolvedReferences.count++;
@@ -1376,7 +1378,8 @@ export async function buildGDSDocument(
 		if (fullyVisited.has(cellName)) return;
 		activeCells.add(cellName);
 		activePath.push(cellName);
-		for (const instance of cells.get(cellName)?.instances ?? []) {
+		const cell = cells.get(cellName);
+		for (const instance of cell ? sourceReferences(cell) : []) {
 			if (cells.has(instance.cellRef)) visitReferences(instance.cellRef);
 		}
 		activePath.pop();
