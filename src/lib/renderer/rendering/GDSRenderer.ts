@@ -19,9 +19,22 @@ import { Container, Graphics } from "pixi.js";
 import type { BoundingBox, Cell, GDSDocument, Polygon } from "../../../types/gds";
 import { SPATIAL_TILE_SIZE } from "../../config";
 import { DEBUG_RENDERER } from "../../debug";
+import type { RenderDiagnostics } from "../../diagnostics/renderDiagnostics";
+import {
+	type AffineTransform,
+	transformBoundingBox as applyTransformToBoundingBox,
+	transformPoint as applyTransformToPoint,
+	composeAffine,
+	fromGDSReferenceTransform,
+	IDENTITY_TRANSFORM,
+} from "../../layout/AffineTransform";
 import type { RTreeItem, SpatialIndex } from "../../spatial/RTree";
 
-export type RenderProgressCallback = (progress: number, message: string) => void;
+export type RenderProgressCallback = (
+	progress: number,
+	message: string,
+	diagnostics?: RenderDiagnostics,
+) => void;
 
 export interface RenderOptions {
 	maxDepth: number;
@@ -35,6 +48,8 @@ export interface RenderResult {
 	totalPolygons: number;
 	renderedPolygons: number;
 	graphicsItems: RTreeItem[];
+	budgetExhausted: boolean;
+	depthLimited: boolean;
 }
 
 export class GDSRenderer {
@@ -103,10 +118,17 @@ export class GDSRenderer {
 		let totalPolygons = 0;
 		let polygonBudget = options.maxPolygonsPerRender;
 		let processedPolygons = 0;
+		let budgetExhausted = false;
+		let depthLimited = false;
 
 		// Render each top cell
-		for (const cell of topCells) {
-			if (polygonBudget <= 0) break;
+		for (let topCellIndex = 0; topCellIndex < topCells.length; topCellIndex++) {
+			const cell = topCells[topCellIndex];
+			if (!cell) continue;
+			if (polygonBudget <= 0) {
+				budgetExhausted = true;
+				break;
+			}
 
 			const topCellName = cell.name;
 
@@ -118,11 +140,7 @@ export class GDSRenderer {
 			const result = await this.renderCell(
 				cell,
 				document,
-				0,
-				0,
-				0,
-				false,
-				1,
+				{ ...IDENTITY_TRANSFORM },
 				options.maxDepth,
 				polygonBudget,
 				options.fillMode,
@@ -138,6 +156,8 @@ export class GDSRenderer {
 
 			allGraphicsItems.push(...result.graphicsItems);
 			totalPolygons += result.renderedPolygons;
+			budgetExhausted ||= result.budgetExhausted;
+			depthLimited ||= result.depthLimited;
 			polygonBudget -= result.renderedPolygons;
 			processedPolygons += cell.polygons.length;
 
@@ -146,7 +166,8 @@ export class GDSRenderer {
 			onProgress?.(afterProgress, afterMessage);
 			await new Promise((resolve) => setTimeout(resolve, 0));
 
-			if (polygonBudget <= 0) {
+			if (polygonBudget <= 0 && (result.budgetExhausted || topCellIndex < topCells.length - 1)) {
+				budgetExhausted = true;
 				console.warn(
 					`[GDSRenderer] Budget exhausted (${options.maxPolygonsPerRender.toLocaleString()}), stopping render`,
 				);
@@ -156,7 +177,9 @@ export class GDSRenderer {
 
 		if (DEBUG_RENDERER) {
 			console.log(
-				`[GDSRenderer] Render complete: ${totalPolygons} polygons rendered, ${allGraphicsItems.length} graphics items`,
+				budgetExhausted
+					? `[GDSRenderer] Partial render: budget stopped at ${totalPolygons} polygons, ${allGraphicsItems.length} graphics items`
+					: `[GDSRenderer] Render complete: ${totalPolygons} polygons rendered, ${allGraphicsItems.length} graphics items`,
 			);
 		}
 
@@ -164,6 +187,8 @@ export class GDSRenderer {
 			totalPolygons,
 			renderedPolygons: totalPolygons,
 			graphicsItems: allGraphicsItems,
+			budgetExhausted,
+			depthLimited,
 		};
 	}
 
@@ -173,11 +198,7 @@ export class GDSRenderer {
 	private async renderCell(
 		cell: Cell,
 		document: GDSDocument,
-		x: number,
-		y: number,
-		rotation: number,
-		mirror: boolean,
-		magnification: number,
+		worldTransform: AffineTransform,
 		maxDepth: number,
 		polygonBudget: number,
 		fillMode: boolean,
@@ -190,7 +211,13 @@ export class GDSRenderer {
 		this.cellRenderCounts.set(cell.name, currentCount + 1);
 
 		if (polygonBudget <= 0) {
-			return { totalPolygons: 0, renderedPolygons: 0, graphicsItems: [] };
+			return {
+				totalPolygons: 0,
+				renderedPolygons: 0,
+				graphicsItems: [],
+				budgetExhausted: true,
+				depthLimited: false,
+			};
 		}
 
 		// Create container for this cell
@@ -217,6 +244,8 @@ export class GDSRenderer {
 		const totalPolygonsInCell = cell.polygons.length;
 		const directPolygonBudget = Math.min(totalPolygonsInCell, polygonBudget);
 		let renderedPolygons = 0;
+		let budgetExhausted = false;
+		let depthLimited = false;
 
 		// Render direct polygons
 		for (let i = 0; i < totalPolygonsInCell; i++) {
@@ -236,14 +265,7 @@ export class GDSRenderer {
 			if (!isVisible) continue;
 
 			// Transform the polygon's bounding box to get the actual position
-			const transformedBBox = this.transformBoundingBox(
-				polygon.boundingBox,
-				x,
-				y,
-				rotation,
-				mirror,
-				magnification,
-			);
+			const transformedBBox = applyTransformToBoundingBox(worldTransform, polygon.boundingBox);
 
 			// Debug: Show transformed bbox for via layers
 			if (
@@ -287,11 +309,7 @@ export class GDSRenderer {
 				layer.color,
 				strokeWidthDB,
 				fillMode,
-				x,
-				y,
-				rotation,
-				mirror,
-				magnification,
+				worldTransform,
 			);
 			renderedPolygons++;
 
@@ -306,6 +324,8 @@ export class GDSRenderer {
 			bounds.maxX = Math.max(bounds.maxX, transformedBBox.maxX);
 			bounds.maxY = Math.max(bounds.maxY, transformedBBox.maxY);
 		}
+		budgetExhausted ||=
+			renderedPolygons >= directPolygonBudget && directPolygonBudget < totalPolygonsInCell;
 
 		this.mainContainer.addChild(cellContainer);
 
@@ -324,7 +344,7 @@ export class GDSRenderer {
 				minY: bounds.minY,
 				maxX: bounds.maxX,
 				maxY: bounds.maxY,
-				id: `${cell.name}_${tileKey}_${x}_${y}`,
+				id: `${cell.name}_${tileKey}_${worldTransform.a}_${worldTransform.b}_${worldTransform.c}_${worldTransform.d}_${worldTransform.e}_${worldTransform.f}`,
 				type: "tile",
 				data: graphics,
 				layer,
@@ -341,44 +361,44 @@ export class GDSRenderer {
 
 		// Skip rendering instances for context info cells (they're just library references)
 		const isContextCell = cell.name.includes("CONTEXT_INFO");
+		if (maxDepth <= 0 && cell.instances.length > 0 && !isContextCell) {
+			depthLimited = true;
+		}
 
 		if (maxDepth > 0 && remainingBudget > 0 && !isContextCell) {
-			for (const instance of cell.instances) {
-				if (remainingBudget <= 0) break;
+			for (let instanceIndex = 0; instanceIndex < cell.instances.length; instanceIndex++) {
+				const instance = cell.instances[instanceIndex];
+				if (!instance) continue;
+				if (remainingBudget <= 0) {
+					budgetExhausted = true;
+					break;
+				}
 
 				const refCell = document.cells.get(instance.cellRef);
 				if (refCell) {
-					// Calculate transformed position
-					// Apply parent's rotation, mirror, and magnification to instance position
-					const rad = (rotation * Math.PI) / 180;
-					const cos = Math.cos(rad);
-					const sin = Math.sin(rad);
-					const mx = mirror ? -1 : 1;
-
-					const newX = x + (instance.x * cos * mx - instance.y * sin) * magnification;
-					const newY = y + (instance.x * sin * mx + instance.y * cos) * magnification;
-					const newRotation = rotation + instance.rotation;
-					const newMirror = mirror !== instance.mirror;
-					const newMagnification = magnification * instance.magnification;
+					const instanceTransform = fromGDSReferenceTransform({
+						x: instance.x,
+						y: instance.y,
+						rotationDegrees: instance.rotation,
+						reflectAcrossX: instance.mirror,
+						magnification: instance.magnification,
+					});
+					const childWorldTransform = composeAffine(worldTransform, instanceTransform);
 
 					// Debug: Log instance transformation (first 3 instances per cell)
 					if (DEBUG_RENDERER && cell.instances.indexOf(instance) < 3) {
 						console.log(
 							`[GDSRenderer] Instance: "${cell.name}" → "${refCell.name}" | ` +
 								`inst_pos=(${instance.x.toFixed(2)}, ${instance.y.toFixed(2)}) | ` +
-								`parent_transform=(${x.toFixed(2)}, ${y.toFixed(2)}, ${rotation.toFixed(1)}°) | ` +
-								`→ final=(${newX.toFixed(2)}, ${newY.toFixed(2)}, ${newRotation.toFixed(1)}°)`,
+								`parent_origin=(${worldTransform.e.toFixed(2)}, ${worldTransform.f.toFixed(2)}) | ` +
+								`→ final_origin=(${childWorldTransform.e.toFixed(2)}, ${childWorldTransform.f.toFixed(2)})`,
 						);
 					}
 
 					const result = await this.renderCell(
 						refCell,
 						document,
-						newX,
-						newY,
-						newRotation,
-						newMirror,
-						newMagnification,
+						childWorldTransform,
 						maxDepth - 1,
 						remainingBudget,
 						fillMode,
@@ -389,6 +409,11 @@ export class GDSRenderer {
 					graphicsItems.push(...result.graphicsItems);
 					totalPolygons += result.renderedPolygons;
 					remainingBudget -= result.renderedPolygons;
+					budgetExhausted ||= result.budgetExhausted;
+					depthLimited ||= result.depthLimited;
+					if (remainingBudget <= 0 && instanceIndex < cell.instances.length - 1) {
+						budgetExhausted = true;
+					}
 				}
 			}
 		}
@@ -397,6 +422,8 @@ export class GDSRenderer {
 			totalPolygons,
 			renderedPolygons: totalPolygons,
 			graphicsItems,
+			budgetExhausted,
+			depthLimited,
 		};
 	}
 
@@ -409,11 +436,7 @@ export class GDSRenderer {
 		colorHex: string,
 		strokeWidthDB: number,
 		fillMode: boolean,
-		x: number,
-		y: number,
-		rotation: number,
-		mirror: boolean,
-		magnification: number,
+		worldTransform: AffineTransform,
 	): void {
 		let color = Number.parseInt(colorHex.replace("#", ""), 16);
 
@@ -424,22 +447,14 @@ export class GDSRenderer {
 
 		if (polygon.points.length > 0 && polygon.points[0]) {
 			// Transform first point
-			const firstPt = this.transformPoint(
-				polygon.points[0].x,
-				polygon.points[0].y,
-				x,
-				y,
-				rotation,
-				mirror,
-				magnification,
-			);
+			const firstPt = applyTransformToPoint(worldTransform, polygon.points[0]);
 			graphics.moveTo(firstPt.x, firstPt.y);
 
 			// Transform and draw remaining points
 			for (let i = 1; i < polygon.points.length; i++) {
 				const point = polygon.points[i];
 				if (point) {
-					const pt = this.transformPoint(point.x, point.y, x, y, rotation, mirror, magnification);
+					const pt = applyTransformToPoint(worldTransform, point);
 					graphics.lineTo(pt.x, pt.y);
 				}
 			}
@@ -457,72 +472,5 @@ export class GDSRenderer {
 				graphics.stroke({ color, width: strokeWidthDB, alpha: 1.0 });
 			}
 		}
-	}
-
-	/**
-	 * Transform a single point by position, rotation, mirror, and magnification
-	 * GDS transformation order: mirror → rotate → magnify → translate
-	 */
-	private transformPoint(
-		px: number,
-		py: number,
-		x: number,
-		y: number,
-		rotation: number,
-		mirror: boolean,
-		magnification: number,
-	): { x: number; y: number } {
-		// Step 1: Mirror (flip Y-axis if mirror=true)
-		const mx = mirror ? px : px;
-		const my = mirror ? -py : py;
-
-		// Step 2: Rotate
-		const rad = (rotation * Math.PI) / 180;
-		const cos = Math.cos(rad);
-		const sin = Math.sin(rad);
-		const rx = mx * cos - my * sin;
-		const ry = mx * sin + my * cos;
-
-		// Step 3: Magnify
-		const sx = rx * magnification;
-		const sy = ry * magnification;
-
-		// Step 4: Translate
-		return { x: sx + x, y: sy + y };
-	}
-
-	/**
-	 * Transform a bounding box by transforming all 4 corners and finding the new bounds
-	 */
-	private transformBoundingBox(
-		bbox: BoundingBox,
-		x: number,
-		y: number,
-		rotation: number,
-		mirror: boolean,
-		magnification: number,
-	): BoundingBox {
-		// Transform all 4 corners
-		const corners = [
-			this.transformPoint(bbox.minX, bbox.minY, x, y, rotation, mirror, magnification),
-			this.transformPoint(bbox.maxX, bbox.minY, x, y, rotation, mirror, magnification),
-			this.transformPoint(bbox.minX, bbox.maxY, x, y, rotation, mirror, magnification),
-			this.transformPoint(bbox.maxX, bbox.maxY, x, y, rotation, mirror, magnification),
-		];
-
-		// Find the new bounding box
-		let minX = Number.POSITIVE_INFINITY;
-		let minY = Number.POSITIVE_INFINITY;
-		let maxX = Number.NEGATIVE_INFINITY;
-		let maxY = Number.NEGATIVE_INFINITY;
-
-		for (const corner of corners) {
-			minX = Math.min(minX, corner.x);
-			minY = Math.min(minY, corner.y);
-			maxX = Math.max(maxX, corner.x);
-			maxY = Math.max(maxY, corner.y);
-		}
-
-		return { minX, minY, maxX, maxY };
 	}
 }

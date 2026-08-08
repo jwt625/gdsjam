@@ -7,6 +7,7 @@ import HeaderBar from "./components/ui/HeaderBar.svelte";
 import HelpModal from "./components/ui/HelpModal.svelte";
 import LoadingOverlay from "./components/ui/LoadingOverlay.svelte";
 import ParticipantList from "./components/ui/ParticipantList.svelte";
+import RenderDiagnosticsBanner from "./components/ui/RenderDiagnosticsBanner.svelte";
 import ViewerCanvas from "./components/viewer/ViewerCanvas.svelte";
 import { type ExecutionResult, pythonExecutor } from "./lib/api/pythonExecutor";
 import { getDefaultCode } from "./lib/code/defaultExample";
@@ -539,6 +540,7 @@ onDestroy(() => {
 	{/if}
 
 	<div class="viewer-wrapper">
+		<RenderDiagnosticsBanner diagnostics={$gdsStore.renderDiagnostics} />
 		{#if !$gdsStore.document && !$gdsStore.isLoading}
 			{#if embedMode}
 				<div class="upload-overlay">

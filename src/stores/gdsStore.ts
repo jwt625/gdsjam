@@ -3,6 +3,10 @@
  */
 
 import { writable } from "svelte/store";
+import {
+	pendingRenderDiagnostics,
+	type RenderDiagnostics,
+} from "../lib/diagnostics/renderDiagnostics";
 import type { FileStatistics, GDSDocument } from "../types/gds";
 
 export interface GDSState {
@@ -14,6 +18,7 @@ export interface GDSState {
 	loadingMessage: string;
 	error: string | null;
 	fileName: string | null;
+	renderDiagnostics: RenderDiagnostics;
 }
 
 const initialState: GDSState = {
@@ -25,6 +30,7 @@ const initialState: GDSState = {
 	loadingMessage: "",
 	error: null,
 	fileName: null,
+	renderDiagnostics: pendingRenderDiagnostics(),
 };
 
 function createGDSStore() {
@@ -51,6 +57,7 @@ function createGDSStore() {
 				loadingProgress: 100,
 				loadingMessage: "Loaded successfully",
 				error: null,
+				renderDiagnostics: pendingRenderDiagnostics(),
 			}));
 		},
 
@@ -63,7 +70,13 @@ function createGDSStore() {
 				isRendering,
 				loadingMessage: message,
 				loadingProgress: progress,
+				renderDiagnostics:
+					isRendering && progress === 0 ? pendingRenderDiagnostics() : state.renderDiagnostics,
 			}));
+		},
+
+		setRenderDiagnostics: (renderDiagnostics: RenderDiagnostics) => {
+			update((state) => ({ ...state, renderDiagnostics }));
 		},
 
 		/**
@@ -76,6 +89,7 @@ function createGDSStore() {
 				loadingMessage: message,
 				loadingProgress: progress,
 				error: null,
+				renderDiagnostics: isLoading ? pendingRenderDiagnostics() : state.renderDiagnostics,
 			}));
 		},
 

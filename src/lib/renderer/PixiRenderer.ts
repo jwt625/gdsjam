@@ -28,6 +28,11 @@ import {
 	POLYGON_FILL_MODE,
 } from "../config";
 import { DEBUG_MEASUREMENT } from "../debug";
+import {
+	buildRenderDiagnostics,
+	failedRenderDiagnostics,
+	renderStatusMessage,
+} from "../diagnostics/renderDiagnostics";
 import { type RTreeItem, SpatialIndex } from "../spatial/RTree";
 import { InputController } from "./controls/InputController";
 import { LODManager } from "./lod/LODManager";
@@ -693,7 +698,13 @@ export class PixiRenderer {
 			}
 			this.updateViewport();
 
-			onProgress?.(100, "Render complete!");
+			const diagnostics = buildRenderDiagnostics(document, {
+				budgetExhausted: result.budgetExhausted,
+				depthLimited: result.depthLimited,
+				renderedPolygons: result.renderedPolygons,
+				polygonBudget: scaledBudget,
+			});
+			onProgress?.(100, renderStatusMessage(diagnostics), diagnostics);
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			const isLikelyOOM =
@@ -704,13 +715,17 @@ export class PixiRenderer {
 			this.updateViewport();
 
 			if (isLikelyOOM) {
-				onProgress?.(100, "Rendering paused (memory limit reached)");
+				onProgress?.(
+					100,
+					"Rendering paused (memory limit reached)",
+					failedRenderDiagnostics(error),
+				);
 				throw new Error(
 					"Rendering paused to prevent browser crash (memory limit reached). Try hiding layers, zooming in, or using a smaller file.",
 				);
 			}
 
-			onProgress?.(100, "Rendering failed");
+			onProgress?.(100, "Rendering failed", failedRenderDiagnostics(error));
 			throw error;
 		}
 	}

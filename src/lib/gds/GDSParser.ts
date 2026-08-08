@@ -15,6 +15,8 @@ import type {
 	Polygon,
 } from "../../types/gds";
 import { DEBUG_PARSER } from "../debug";
+import { fromGDSReferenceTransform, transformBoundingBox } from "../layout/AffineTransform";
+import { decodeGDSUnits, toLegacyDocumentUnits } from "../layout/coordinates";
 import { generateUUID } from "../utils/uuid";
 import { pathToPolygon } from "./pathToPolygon";
 
@@ -774,8 +776,18 @@ async function buildGDSDocument(
 				break;
 
 			case RecordType.UNITS:
-				if (Array.isArray(data) && data.length === 2) {
-					units = { database: data[0], user: data[1] };
+				if (
+					typeof data === "object" &&
+					data !== null &&
+					"userUnit" in data &&
+					"metersPerUnit" in data
+				) {
+					units = toLegacyDocumentUnits(
+						decodeGDSUnits({
+							userUnit: Number(data.userUnit),
+							metersPerUnit: Number(data.metersPerUnit),
+						}),
+					);
 				}
 				break;
 
@@ -880,10 +892,16 @@ async function buildGDSDocument(
 						// Nested array format: [[x, y]] or [[x1,y1], [x2,y2], [x3,y3]]
 						currentInstance.x = data[0][0];
 						currentInstance.y = data[0][1];
-						// For AREF, store spacing vectors (total displacement, will be divided by count later)
+						// Preserve both components of each complete AREF displacement vector.
 						if (data.length >= 3) {
-							currentInstance.arraySpacingX = data[1][0] - data[0][0];
-							currentInstance.arraySpacingY = data[2][1] - data[0][1];
+							currentInstance.arrayColumnVector = {
+								x: data[1][0] - data[0][0],
+								y: data[1][1] - data[0][1],
+							};
+							currentInstance.arrayRowVector = {
+								x: data[2][0] - data[0][0],
+								y: data[2][1] - data[0][1],
+							};
 						}
 					} else if (data.length >= 2) {
 						// Flat array format: [x, y]
@@ -1015,8 +1033,14 @@ async function buildGDSDocument(
 						// AREF XY contains: [origin, col_end, row_end]
 						// col_spacing = (col_end - origin) / cols
 						// row_spacing = (row_end - origin) / rows
-						const colSpacingX = (currentInstance.arraySpacingX || 0) / cols;
-						const rowSpacingY = (currentInstance.arraySpacingY || 0) / rows;
+						const columnPitch = {
+							x: (currentInstance.arrayColumnVector?.x ?? 0) / cols,
+							y: (currentInstance.arrayColumnVector?.y ?? 0) / cols,
+						};
+						const rowPitch = {
+							x: (currentInstance.arrayRowVector?.x ?? 0) / rows,
+							y: (currentInstance.arrayRowVector?.y ?? 0) / rows,
+						};
 
 						const baseX = currentInstance.x || 0;
 						const baseY = currentInstance.y || 0;
@@ -1029,11 +1053,13 @@ async function buildGDSDocument(
 								const instance: CellInstance = {
 									id: generateUUID(),
 									cellRef: currentInstance.cellRef,
-									x: baseX + col * colSpacingX,
-									y: baseY + row * rowSpacingY,
+									x: baseX + col * columnPitch.x + row * rowPitch.x,
+									y: baseY + col * columnPitch.y + row * rowPitch.y,
 									rotation: rotation,
 									mirror: mirror,
 									magnification: magnification,
+									absoluteRotation: currentInstance.absoluteRotation,
+									absoluteMagnification: currentInstance.absoluteMagnification,
 									boundingBox: { minX: 0, minY: 0, maxX: 0, maxY: 0 },
 								};
 								currentCell.instances.push(instance);
@@ -1077,9 +1103,11 @@ async function buildGDSDocument(
 				break;
 
 			case RecordType.STRANS: // Transformation flags
-				// STRANS contains transformation flags (mirror, etc.)
+				// GDS STRANS: reflection plus absolute magnification/angle flags.
 				if (currentInstance && typeof data === "number") {
 					currentInstance.mirror = (data & 0x8000) !== 0; // Bit 15 = mirror
+					currentInstance.absoluteMagnification = (data & 0x0004) !== 0; // Bit 2
+					currentInstance.absoluteRotation = (data & 0x0002) !== 0; // Bit 1
 				}
 				break;
 
@@ -1139,42 +1167,21 @@ async function buildGDSDocument(
 			// Recursively calculate referenced cell's bbox first
 			const refBBox = calculateCellBoundingBox(instance.cellRef);
 
-			// Transform the 4 corners of the referenced cell's bounding box
-			const corners = [
-				{ x: refBBox.minX, y: refBBox.minY },
-				{ x: refBBox.maxX, y: refBBox.minY },
-				{ x: refBBox.minX, y: refBBox.maxY },
-				{ x: refBBox.maxX, y: refBBox.maxY },
-			];
+			const transformed = transformBoundingBox(
+				fromGDSReferenceTransform({
+					x: instance.x,
+					y: instance.y,
+					rotationDegrees: instance.rotation,
+					reflectAcrossX: instance.mirror,
+					magnification: instance.magnification,
+				}),
+				refBBox,
+			);
 
-			// Pre-calculate rotation values outside loop
-			const rad = (instance.rotation * Math.PI) / 180;
-			const cos = Math.cos(rad);
-			const sin = Math.sin(rad);
-
-			for (const corner of corners) {
-				// Apply transformation in correct order: mirror → rotate → magnify → translate
-				// Step 1: Mirror (flip Y-axis if mirror=true)
-				const mx = instance.mirror ? corner.x : corner.x;
-				const my = instance.mirror ? -corner.y : corner.y;
-
-				// Step 2: Rotate
-				const rx = mx * cos - my * sin;
-				const ry = mx * sin + my * cos;
-
-				// Step 3: Magnify
-				const sx = rx * instance.magnification;
-				const sy = ry * instance.magnification;
-
-				// Step 4: Translate
-				const transformedX = sx + instance.x;
-				const transformedY = sy + instance.y;
-
-				minX = Math.min(minX, transformedX);
-				minY = Math.min(minY, transformedY);
-				maxX = Math.max(maxX, transformedX);
-				maxY = Math.max(maxY, transformedY);
-			}
+			minX = Math.min(minX, transformed.minX);
+			minY = Math.min(minY, transformed.minY);
+			maxX = Math.max(maxX, transformed.maxX);
+			maxY = Math.max(maxY, transformed.maxY);
 		}
 
 		cell.boundingBox = {

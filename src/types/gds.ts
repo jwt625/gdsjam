@@ -1,6 +1,7 @@
 /**
  * GDSII Type Definitions
- * Coordinate system: Micrometers (µm)
+ * Coordinate system: integer database-unit (DBU) counts in a Y-up world.
+ * Convert to physical units only at UI/API boundaries using GDSDocument.units.
  */
 
 export interface Point {
@@ -31,10 +32,12 @@ export interface CellInstance {
 	rotation: number; // Degrees
 	mirror: boolean; // Mirror across X-axis
 	magnification: number;
+	absoluteRotation?: boolean; // GDS STRANS absolute-angle flag
+	absoluteMagnification?: boolean; // GDS STRANS absolute-magnification flag
 	arrayRows?: number;
 	arrayCols?: number;
-	arraySpacingX?: number;
-	arraySpacingY?: number;
+	arrayColumnVector?: Point; // Complete origin-to-column-end displacement
+	arrayRowVector?: Point; // Complete origin-to-row-end displacement
 	boundingBox: BoundingBox;
 }
 
@@ -61,8 +64,8 @@ export interface GDSDocument {
 	topCells: string[]; // Names of top-level cells
 	boundingBox: BoundingBox;
 	units: {
-		database: number; // Database units per user unit
-		user: number; // User units in meters
+		database: number; // Physical size of one database unit, in meters
+		user: number; // Physical size of one user unit, in meters
 	};
 }
 
