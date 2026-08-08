@@ -1,10 +1,9 @@
 name: Deploy to GitHub Pages
 
 on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
+  release:
+    types:
+      - published
 
 permissions:
   contents: read
@@ -17,10 +16,22 @@ concurrency:
 
 jobs:
   build:
+    if: ${{ !github.event.release.prerelease }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Validate release tag
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Production releases require a vMAJOR.MINOR.PATCH tag; got: $RELEASE_TAG" >&2
+            exit 1
+          fi
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -30,11 +41,17 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Test
+        run: pnpm test -- --run
+
+      - name: Check
+        run: pnpm check
 
       - name: Build
         run: pnpm build
@@ -49,6 +66,10 @@ jobs:
           # Debug mode (optional - defaults to .env.production value if not set)
           # To enable debug in production, add VITE_DEBUG secret with value "true"
           VITE_DEBUG: ${{ secrets.VITE_DEBUG }}
+          # Immutable release identity exposed in the footer and /version.json
+          VITE_APP_VERSION: ${{ github.event.release.tag_name }}
+          VITE_BUILD_SHA: ${{ github.sha }}
+          VITE_RELEASE_URL: ${{ github.event.release.html_url }}
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
