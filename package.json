@@ -16,6 +16,7 @@
 		"test:e2e": "playwright test",
 		"test:e2e:install": "playwright install chromium",
 		"test:production-api": "pnpm build && node scripts/verify-production-test-api.mjs",
+		"evidence:reference-raster": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/devlog-007/reference-raster-evidence.ts",
 		"prepare": "husky",
 		"tauri": "tauri",
 		"tauri:dev": "tauri dev",
