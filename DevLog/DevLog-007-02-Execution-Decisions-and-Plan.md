@@ -288,11 +288,12 @@ This is intentionally ambitious. If integration pressure arises, mathematical co
 
 ### PR 3+
 
-- [x] Compact scene-index foundation implemented and pushed; top-cell UI integration remains in progress.
+- [x] Compact scene index, explicit top-cell selection, scoped renderer/minimap, and selected/aggregate bounds implemented and pushed.
 - [x] Playwright testability/browser-smoke foundation implemented and pushed.
 - [x] Parser diagnostics with BOX/TEXT semantics implemented and pushed.
 - [x] Parallel branches composed on an integration branch and validated together.
-- [ ] Overview prototype PR refined from oracle and benchmark results.
+- [x] High-repetition scene-index compactness and browser-visible parser diagnostics measured.
+- [ ] Complete-overview and slow reference-raster prototypes in progress on isolated branches.
 
 ### Active branches and milestone commits
 
@@ -302,24 +303,40 @@ This is intentionally ambitious. If integration pressure arises, mathematical co
 | `feature/devlog-007-parser-diagnostics` | `0452f45` | Pushed; typed parser diagnostics, BOX polygons, TEXT origin markers |
 | `feature/devlog-007-scene-index` | `473da91`, `98ad6c6` | Pushed; compact hierarchy index and memoized construction |
 | `feature/devlog-007-playwright` | `23bff59`, `c7b8b1b` | Pushed; gated browser API and deterministic desktop/iPad tests |
-| `feature/devlog-007-integration` | `0e0663c` through `da39c45` | Pushed; composed validation and compact-AREF diagnostic integration fix |
-| `feature/devlog-007-top-cell-ui` | Pending | Active stacked branch for explicit multi-top selection |
-| `feature/devlog-007-scene-benchmarks` | Pending | Active stacked branch for high-repetition compactness evidence |
-| `feature/devlog-007-parser-e2e` | Pending | Active stacked branch for browser-visible parser diagnostics |
+| `feature/devlog-007-integration` | `0e0663c` through `c5e0f88` | Pushed; all completed slices composed and validated together |
+| `feature/devlog-007-top-cell-ui` | `3de89ac`, `da966d6` | Pushed; explicit multi-top selection and stale-document protection |
+| `feature/devlog-007-scene-benchmarks` | `c1930b0` | Pushed; 100,000-placement compactness benchmark and evidence |
+| `feature/devlog-007-parser-e2e` | `1ceec99` | Pushed; browser-visible unit diagnostics and semantic BOX/TEXT digest |
+| `feature/devlog-007-overview-prototype` | Pending | Active stacked branch for a gated complete-overview prototype |
+| `feature/devlog-007-reference-raster` | Pending | Active stacked branch for an exact slow raster oracle |
 
 No pull requests have been opened. The stacked integration branch is validation evidence, not a replacement for the small review branches.
 
-### Combined validation at `da39c45`
+### Combined validation at `c5e0f88`
 
 | Check | Result |
 |---|---|
-| Vitest | 21 files, 150 tests passed |
+| Vitest | 23 files, 156 tests passed |
 | Type/Svelte check | 0 errors, 0 warnings |
-| Production build | Passed; 2,213 modules transformed in approximately 10.5 seconds |
-| Playwright | 6/6 passed across desktop Chromium and emulated iPad |
+| Production build | Passed; 2,217 modules transformed in approximately 10.6 seconds |
+| Playwright | 12/12 passed across desktop Chromium and emulated iPad |
 | Production test-API audit | 103 emitted HTML/JS/CSS assets checked; zero gated E2E markers |
 
 Integration found one contract bug not visible in either isolated branch: parser diagnostics traversed the legacy expanded AREF instances, so one unresolved AREF could be reported once per placement. Diagnostics now traverse compact source references when present; a 3 × 2 unresolved AREF is asserted as six compatibility instances, one source reference, and one diagnostic.
+
+Primary review found a second cross-lifecycle issue before the top-cell branch was pushed: clearing an unselected multi-top canvas left the previous document inside `PixiRenderer`, allowing a fill/LOD action to resurrect stale geometry. `unloadDocument()` now clears graphics/spatial state and nulls the document and render scope; a regression test covers the transition.
+
+### High-repetition scene-index evidence
+
+The committed benchmark uses 21 isolated Node processes across three scenarios for a synthetic 1,000 × 100 AREF (100,000 logical placements):
+
+| Scenario | Median scene-index time | Median incremental index heap | Scene references |
+|---|---:|---:|---:|
+| Legacy expanded only | 164.48 ms | 39,345,912 B | 100,000 |
+| Current compatibility document | 6.83 ms | 35,224 B | 1 |
+| Compact canonical document | 6.52 ms | 35,224 B | 1 |
+
+The deterministic source-representation JSON proxy is 16,708,205 B expanded versus 293 B compact, a 57,025× ratio. This is evidence for the compact scene-index boundary, **not** a parser-memory win: the current compatibility document still retains 100,000 legacy instances and measured 18,413,736 B of retained heap. Removing that adapter requires renderer migration.
 
 ## Resolved Execution Gates
 
@@ -372,3 +389,9 @@ All 15 final gates were resolved on 2026-08-08. Defaults were accepted except wh
 - Composed all parallel branches on `feature/devlog-007-integration`; 150 tests, checks, build, browser tests, and the production API audit passed together.
 - Corrected integration behavior so unresolved/cycle diagnostics traverse compact source references instead of multiplying one AREF problem across every legacy-expanded placement.
 - Started a second parallel wave for explicit top-cell UI, high-repetition scene-index benchmarks, and browser-visible parser diagnostics.
+- Added explicit multi-top selection with “Show all,” selected/aggregate bounds, renderer root scoping, and a scoped minimap. Single-top files remain automatic.
+- Added browser proof that missing/invalid units show `partial-malformed` plus provisional-scale wording and that BOX/TEXT semantic markers survive into a deterministic digest.
+- Measured the compact scene-index boundary at 100,000 logical placements. One compact AREF cuts index construction from a 100,000-reference traversal to one reference, while confirming that eager parser compatibility instances remain the dominant memory debt.
+- Fixed stale renderer state discovered during top-cell review so an unloaded render scope cannot resurrect the prior document.
+- Composed the full second wave at `c5e0f88`; 156 unit tests and 12 desktop/tablet browser tests passed together.
+- Started isolated complete-overview and slow reference-raster prototype tracks for the next renderer phase.
