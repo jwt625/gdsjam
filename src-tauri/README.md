@@ -75,6 +75,23 @@ cd src-tauri && cargo test
 cd src-tauri && cargo check
 ```
 
+## Tagged Desktop Releases
+
+Desktop releases are built only from immutable `desktop-vMAJOR.MINOR.PATCH` tags. Before tagging,
+update `version` in `src-tauri/tauri.conf.json`, merge the change to `main`, and then create the tag
+at that exact commit:
+
+```bash
+git checkout main
+git pull --ff-only
+git tag -a desktop-v0.1.0 -m "gdsjam Desktop v0.1.0"
+git push origin desktop-v0.1.0
+```
+
+The release workflow rejects tags whose version does not match the committed Tauri configuration.
+Successful platform builds upload installers to a draft GitHub Release for final inspection and
+manual publication.
+
 ### Development Mode
 
 When running `pnpm tauri:dev`:
@@ -171,4 +188,3 @@ sudo apt install libwebkit2gtk-4.1-dev libssl-dev libgtk-3-dev
 - [Tauri Documentation](https://tauri.app/)
 - [Tauri API Reference](https://tauri.app/v2/reference/javascript/api/)
 - [notify crate](https://docs.rs/notify/)
-
