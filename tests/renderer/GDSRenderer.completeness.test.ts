@@ -234,4 +234,27 @@ describe("GDSRenderer completeness", () => {
 		expect(result.graphicsItems).toHaveLength(1);
 		expect(result.graphicsItems[0]?.id).toContain("TOP_B");
 	});
+
+	it("uses document.topCells as the intentional default root scope", async () => {
+		const top = document.cells.get("TOP");
+		if (!top) throw new Error("Missing test top cell");
+		const scopedDocument: GDSDocument = {
+			...document,
+			cells: new Map([
+				["TOP_A", { ...top, name: "TOP_A", polygons: [polygon("a")] }],
+				["UNSELECTED_ROOT", { ...top, name: "UNSELECTED_ROOT", polygons: [polygon("other")] }],
+			]),
+			topCells: ["TOP_A"],
+		};
+		const renderer = new GDSRenderer(new SpatialIndex(), new Container());
+		const result = await renderer.render(scopedDocument, {
+			maxDepth: 0,
+			maxPolygonsPerRender: 10,
+			fillMode: true,
+			layerVisibility: new Map([["1:0", true]]),
+		});
+
+		expect(result.renderedPolygons).toBe(1);
+		expect(result.graphicsItems[0]?.id).toContain("TOP_A");
+	});
 });

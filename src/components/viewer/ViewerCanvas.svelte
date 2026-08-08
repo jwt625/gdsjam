@@ -722,7 +722,7 @@ $effect(() => {
 	const gdsDocument = $gdsStore.document;
 	const renderDocument = $gdsStore.renderDocument;
 	if (renderer?.isReady() && !renderDocument) {
-		if (lastRenderedDocument) renderer.clear();
+		renderer.unloadDocument();
 		lastRenderedDocument = null;
 		return;
 	}
