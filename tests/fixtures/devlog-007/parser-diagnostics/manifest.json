@@ -1,0 +1,13 @@
+{
+  "fixtures": {
+    "invalid_units.gds": {
+      "bytes": 228,
+      "sha256": "cf3f281e2130c460ab41c29aaecbd0f4be816385869b21eed7dbe329168cacde"
+    },
+    "missing_units.gds": {
+      "bytes": 208,
+      "sha256": "5bbb57d2b590160f89a05e4f8a9ccdd8effaacb2f31c802effdbfeb3ea0ee722"
+    }
+  },
+  "generator": "scripts/devlog-007/generate_parser_e2e_fixtures.py"
+}

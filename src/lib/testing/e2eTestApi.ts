@@ -32,6 +32,22 @@ export interface SemanticDigest {
 		layers: string[];
 		bounds: BoundingBox | null;
 		units: { database: number; user: number } | null;
+		semanticElements: {
+			boxes: Array<{
+				cellName: string;
+				layer: number;
+				boxType: number;
+				bounds: BoundingBox;
+			}>;
+			textMarkers: Array<{
+				cellName: string;
+				content: string;
+				layer: number;
+				textType: number;
+				origin: { x: number; y: number };
+				representation: "origin-marker";
+			}>;
+		};
 	};
 }
 
@@ -79,6 +95,10 @@ async function sha256(value: string): Promise<string> {
 	const bytes = new TextEncoder().encode(value);
 	const digest = await crypto.subtle.digest("SHA-256", bytes);
 	return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function compareStrings(a: string, b: string): number {
+	return a < b ? -1 : a > b ? 1 : 0;
 }
 
 export function installE2ETestApi(getRenderer: () => PixiRenderer | null): () => void {
@@ -169,6 +189,9 @@ export function installE2ETestApi(getRenderer: () => PixiRenderer | null): () =>
 		async getSemanticDigest() {
 			const state = get(gdsStore);
 			const document = state.document;
+			const cells = document
+				? Array.from(document.cells.values()).sort((a, b) => compareStrings(a.name, b.name))
+				: [];
 			const snapshot: SemanticDigest["snapshot"] = {
 				fileName: state.fileName,
 				topCells: document ? [...document.topCells].sort() : [],
@@ -185,6 +208,49 @@ export function installE2ETestApi(getRenderer: () => PixiRenderer | null): () =>
 				layers: document ? Array.from(document.layers.keys()).sort() : [],
 				bounds: document ? { ...document.boundingBox } : null,
 				units: document ? { ...document.units } : null,
+				semanticElements: {
+					boxes: cells
+						.flatMap((cell) =>
+							cell.polygons
+								.filter((polygon) => polygon.sourceType === "box")
+								.map((polygon) => ({
+									cellName: cell.name,
+									layer: polygon.layer,
+									boxType: polygon.boxType ?? polygon.datatype,
+									bounds: { ...polygon.boundingBox },
+								})),
+						)
+						.sort(
+							(a, b) =>
+								compareStrings(a.cellName, b.cellName) ||
+								a.layer - b.layer ||
+								a.boxType - b.boxType ||
+								a.bounds.minX - b.bounds.minX ||
+								a.bounds.minY - b.bounds.minY ||
+								a.bounds.maxX - b.bounds.maxX ||
+								a.bounds.maxY - b.bounds.maxY,
+						),
+					textMarkers: cells
+						.flatMap((cell) =>
+							cell.texts.map((label) => ({
+								cellName: cell.name,
+								content: label.content,
+								layer: label.layer,
+								textType: label.textType,
+								origin: { ...label.origin },
+								representation: label.boundsKind,
+							})),
+						)
+						.sort(
+							(a, b) =>
+								compareStrings(a.cellName, b.cellName) ||
+								a.layer - b.layer ||
+								a.textType - b.textType ||
+								compareStrings(a.content, b.content) ||
+								a.origin.x - b.origin.x ||
+								a.origin.y - b.origin.y,
+						),
+				},
 			};
 			return { sha256: await sha256(JSON.stringify(snapshot)), snapshot };
 		},

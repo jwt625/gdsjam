@@ -13,3 +13,7 @@ failure under ignored Playwright output directories.
 The test API must not ship. `pnpm test:production-api` builds without the E2E
 flag and fails if any test-API marker is present in emitted HTML, JavaScript,
 or CSS.
+
+`parser-diagnostics.spec.ts` additionally injects reproducible missing/invalid
+`UNITS` streams. It asserts that the provisional scale is visible to the user
+and that BOX geometry and TEXT origin-marker semantics survive partial parsing.
