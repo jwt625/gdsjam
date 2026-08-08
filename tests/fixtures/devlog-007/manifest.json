@@ -1,0 +1,63 @@
+{
+  "fixtures": [
+    {
+      "description": "two independent top cells sharing one referenced child",
+      "gds": {
+        "bytes": 494,
+        "file": "multiple_top_cells.gds",
+        "sha256": "10f33291ee9fde4c93f182804f61f10a5876c455cf2a4acb1925f84dd46d5aa7"
+      },
+      "name": "multiple_top_cells",
+      "oracle": {
+        "bytes": 6762,
+        "file": "multiple_top_cells.semantic.json",
+        "sha256": "22bd1d4b32961e166728a1a05c2939e383b0a833927c7310c35177e6e409a196"
+      }
+    },
+    {
+      "description": "5 nm database unit with geometry on two layer/datatype pairs",
+      "gds": {
+        "bytes": 254,
+        "file": "non_default_dbu.gds",
+        "sha256": "70a1b26019a337a504c1c097f92ad6095f86632aeeb22cd673c953a5caf759a3"
+      },
+      "name": "non_default_dbu",
+      "oracle": {
+        "bytes": 3396,
+        "file": "non_default_dbu.semantic.json",
+        "sha256": "93213a1b54479d2bd6c7deb181e84592801dc97617c408b50b78d251553c6ed2"
+      }
+    },
+    {
+      "description": "3 by 2 rotated AREF with lattice vectors (7, 3) and (-3, 7) um",
+      "gds": {
+        "bytes": 312,
+        "file": "skewed_aref.gds",
+        "sha256": "1e2fde7c6e26daf3da44e73e6f21fc22fb38b841487738bb9cf0c4b7f017b426"
+      },
+      "name": "skewed_aref",
+      "oracle": {
+        "bytes": 7940,
+        "file": "skewed_aref.semantic.json",
+        "sha256": "f40e14af277d279f1eebdffa93f053c91dbb075fcb1ddc224bc475acf1145757"
+      }
+    },
+    {
+      "description": "asymmetric leaf under rotated, reflected, and magnified SREF transforms",
+      "gds": {
+        "bytes": 406,
+        "file": "transformed_sref.gds",
+        "sha256": "188866e074520171e7df667b19bb75f9be380b78e806901ba8fded76f3a1e424"
+      },
+      "name": "transformed_sref",
+      "oracle": {
+        "bytes": 4521,
+        "file": "transformed_sref.semantic.json",
+        "sha256": "68ada0f2ef05920e9877f389b98be04ff59ee422fff64adfcb506afc772f2613"
+      }
+    }
+  ],
+  "gdstkVersion": "1.0.1",
+  "generator": "scripts/devlog-007/generate_fixtures.py",
+  "schemaVersion": 1
+}

@@ -1,0 +1,256 @@
+{
+  "cells": [
+    {
+      "localPolygons": [
+        {
+          "datatype": 0,
+          "layer": 10,
+          "pointsDbu": [
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              3000
+            ],
+            [
+              1000,
+              3000
+            ],
+            [
+              1000,
+              1000
+            ],
+            [
+              4000,
+              1000
+            ],
+            [
+              4000,
+              0
+            ]
+          ],
+          "pointsUm": [
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              3
+            ],
+            [
+              1,
+              3
+            ],
+            [
+              1,
+              1
+            ],
+            [
+              4,
+              1
+            ],
+            [
+              4,
+              0
+            ]
+          ]
+        }
+      ],
+      "name": "ASYMMETRIC_LEAF",
+      "references": []
+    },
+    {
+      "localPolygons": [],
+      "name": "TOP_TRANSFORMED_SREF",
+      "references": [
+        {
+          "cell": "ASYMMETRIC_LEAF",
+          "magnification": 0.5,
+          "originDbu": [
+            -8000,
+            4000
+          ],
+          "originUm": [
+            -8,
+            4
+          ],
+          "rotationDegrees": 180,
+          "xReflection": false
+        },
+        {
+          "cell": "ASYMMETRIC_LEAF",
+          "magnification": 2,
+          "originDbu": [
+            20000,
+            10000
+          ],
+          "originUm": [
+            20,
+            10
+          ],
+          "rotationDegrees": 90,
+          "xReflection": true
+        }
+      ]
+    }
+  ],
+  "description": "asymmetric leaf under rotated, reflected, and magnified SREF transforms",
+  "documentBoundsDbu": {
+    "maxX": 26000,
+    "maxY": 18000,
+    "minX": -10000,
+    "minY": 2500
+  },
+  "documentBoundsUm": {
+    "maxX": 26,
+    "maxY": 18,
+    "minX": -10,
+    "minY": 2.5
+  },
+  "fixture": "transformed_sref",
+  "flattenedTopCells": [
+    {
+      "boundsDbu": {
+        "maxX": 26000,
+        "maxY": 18000,
+        "minX": -10000,
+        "minY": 2500
+      },
+      "boundsUm": {
+        "maxX": 26,
+        "maxY": 18,
+        "minX": -10,
+        "minY": 2.5
+      },
+      "name": "TOP_TRANSFORMED_SREF",
+      "polygonCount": 2,
+      "polygons": [
+        {
+          "datatype": 0,
+          "layer": 10,
+          "pointsDbu": [
+            [
+              -10000,
+              3500
+            ],
+            [
+              -10000,
+              4000
+            ],
+            [
+              -8000,
+              4000
+            ],
+            [
+              -8000,
+              2500
+            ],
+            [
+              -8500,
+              2500
+            ],
+            [
+              -8500,
+              3500
+            ]
+          ],
+          "pointsUm": [
+            [
+              -10,
+              3.5
+            ],
+            [
+              -10,
+              4
+            ],
+            [
+              -8,
+              4
+            ],
+            [
+              -8,
+              2.5
+            ],
+            [
+              -8.5,
+              2.5
+            ],
+            [
+              -8.5,
+              3.5
+            ]
+          ]
+        },
+        {
+          "datatype": 0,
+          "layer": 10,
+          "pointsDbu": [
+            [
+              20000,
+              10000
+            ],
+            [
+              20000,
+              18000
+            ],
+            [
+              22000,
+              18000
+            ],
+            [
+              22000,
+              12000
+            ],
+            [
+              26000,
+              12000
+            ],
+            [
+              26000,
+              10000
+            ]
+          ],
+          "pointsUm": [
+            [
+              20,
+              10
+            ],
+            [
+              20,
+              18
+            ],
+            [
+              22,
+              18
+            ],
+            [
+              22,
+              12
+            ],
+            [
+              26,
+              12
+            ],
+            [
+              26,
+              10
+            ]
+          ]
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 1,
+  "topCells": [
+    "TOP_TRANSFORMED_SREF"
+  ],
+  "units": {
+    "databaseUnitMeters": 1e-09,
+    "databaseUnitsPerUserUnit": 1000,
+    "displayUnit": "um",
+    "userUnitMeters": 1e-06
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "fixture": "tests/fixtures/devlog-007/non_default_dbu.gds",
+  "configuration": {
+    "maxPolygonsPerRender": 1,
+    "viewport": [
+      1440,
+      900
+    ],
+    "deviceScaleFactor": 1
+  },
+  "warning": "Layout is partially rendered Some geometry may be missing from this view. Polygon budget reached after 1 polygon",
+  "elapsedMilliseconds": 1496.4,
+  "consoleErrors": [],
+  "screenshot": "artifacts/devlog-007/2026-08-08-correctness-foundation/partial-render-warning.png"
+}

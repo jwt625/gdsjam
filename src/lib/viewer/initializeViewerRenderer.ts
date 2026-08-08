@@ -1,9 +1,11 @@
 import type { GDSDocument } from "../../types/gds";
+import type { RenderDiagnostics } from "../diagnostics/renderDiagnostics";
 import { PixiRenderer, type ViewportState } from "../renderer/PixiRenderer";
 
 export interface InitialRenderProgress {
 	progress: number;
 	message: string;
+	diagnostics?: RenderDiagnostics;
 }
 
 export interface ViewerRendererBootstrapOptions {
@@ -30,8 +32,8 @@ export async function initializeViewerRenderer(
 
 	let initialDocumentRendered = false;
 	if (options.initialDocument) {
-		await renderer.renderGDSDocument(options.initialDocument, (progress, message) => {
-			options.onInitialRenderProgress({ progress, message });
+		await renderer.renderGDSDocument(options.initialDocument, (progress, message, diagnostics) => {
+			options.onInitialRenderProgress({ progress, message, diagnostics });
 		});
 		initialDocumentRendered = true;
 	}

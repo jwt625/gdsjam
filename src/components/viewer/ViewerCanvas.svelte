@@ -493,8 +493,9 @@ onMount(() => {
 						sessionManager.broadcastViewport(viewportState.x, viewportState.y, viewportState.scale);
 					}
 				},
-				onInitialRenderProgress: ({ progress, message }) => {
+				onInitialRenderProgress: ({ progress, message, diagnostics }) => {
 					gdsStore.setRendering(true, message, progress);
+					if (diagnostics) gdsStore.setRenderDiagnostics(diagnostics);
 					if (progress >= 100) {
 						setTimeout(() => gdsStore.setRendering(false), 500);
 					}
@@ -711,8 +712,9 @@ $effect(() => {
 		gdsStore.setRendering(true, "Rendering...", 0);
 		(async () => {
 			try {
-				await renderer.renderGDSDocument(gdsDocument, (progress, message) => {
+				await renderer.renderGDSDocument(gdsDocument, (progress, message, diagnostics) => {
 					gdsStore.setRendering(true, message, progress);
+					if (diagnostics) gdsStore.setRenderDiagnostics(diagnostics);
 					if (progress >= 100) {
 						setTimeout(() => gdsStore.setRendering(false), 500);
 					}

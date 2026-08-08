@@ -1,22 +1,9 @@
 name: Release Desktop App
 
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to release (e.g., 0.1.0)'
-        required: true
-        type: string
-      draft:
-        description: 'Create as draft release'
-        required: true
-        type: boolean
-        default: true
-      prerelease:
-        description: 'Mark as pre-release'
-        required: true
-        type: boolean
-        default: false
+  push:
+    tags:
+      - 'desktop-v*'
 
 permissions:
   contents: write
@@ -40,6 +27,18 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Verify release commit is on main
+        shell: bash
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$(git rev-parse HEAD)" origin/main; then
+            echo "Desktop release tags must point to a commit reachable from main" >&2
+            exit 1
+          fi
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -49,8 +48,28 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'pnpm'
+
+      - name: Validate immutable release tag
+        id: release
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^desktop-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Desktop releases require a desktop-vMAJOR.MINOR.PATCH tag; got: $RELEASE_TAG" >&2
+            exit 1
+          fi
+
+          RELEASE_VERSION="${RELEASE_TAG#desktop-v}"
+          CONFIG_VERSION="$(node -e "const fs = require('fs'); const config = JSON.parse(fs.readFileSync('src-tauri/tauri.conf.json', 'utf8')); process.stdout.write(config.version)")"
+          if [[ "$RELEASE_VERSION" != "$CONFIG_VERSION" ]]; then
+            echo "Tag version $RELEASE_VERSION does not match src-tauri/tauri.conf.json version $CONFIG_VERSION" >&2
+            exit 1
+          fi
+
+          echo "version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -71,15 +90,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: v${{ inputs.version }}
-          releaseName: 'gdsjam Desktop v${{ inputs.version }}'
+          tagName: ${{ github.ref_name }}
+          releaseName: 'gdsjam Desktop v${{ steps.release.outputs.version }}'
           releaseBody: |
-            ## gdsjam Desktop App v${{ inputs.version }}
+            ## gdsjam Desktop App v${{ steps.release.outputs.version }}
             
             Download the appropriate installer for your platform:
-            - **macOS (Apple Silicon)**: `gdsjam_${{ inputs.version }}_aarch64.dmg`
-            - **macOS (Intel)**: `gdsjam_${{ inputs.version }}_x64.dmg`
-            - **Windows**: `gdsjam_${{ inputs.version }}_x64-setup.exe` or `.msi`
+            - **macOS (Apple Silicon)**: `gdsjam_${{ steps.release.outputs.version }}_aarch64.dmg`
+            - **macOS (Intel)**: `gdsjam_${{ steps.release.outputs.version }}_x64.dmg`
+            - **Windows**: `gdsjam_${{ steps.release.outputs.version }}_x64-setup.exe` or `.msi`
             - **Linux**: `.deb`, `.rpm`, or `.AppImage`
             
             ### Features
@@ -88,7 +107,6 @@ jobs:
             - All web features (GDS/DXF viewing, collaboration, etc.)
             
             See the [README](https://github.com/jwt625/gdsjam#desktop-app) for more details.
-          releaseDraft: ${{ inputs.draft }}
-          prerelease: ${{ inputs.prerelease }}
+          releaseDraft: true
+          prerelease: false
           args: ${{ matrix.args }}
-

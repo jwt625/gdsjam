@@ -7,8 +7,10 @@ import HeaderBar from "./components/ui/HeaderBar.svelte";
 import HelpModal from "./components/ui/HelpModal.svelte";
 import LoadingOverlay from "./components/ui/LoadingOverlay.svelte";
 import ParticipantList from "./components/ui/ParticipantList.svelte";
+import RenderDiagnosticsBanner from "./components/ui/RenderDiagnosticsBanner.svelte";
 import ViewerCanvas from "./components/viewer/ViewerCanvas.svelte";
 import { type ExecutionResult, pythonExecutor } from "./lib/api/pythonExecutor";
+import { BUILD_INFO } from "./lib/buildInfo";
 import { getDefaultCode } from "./lib/code/defaultExample";
 import { EmbedAPI } from "./lib/embed/EmbedAPI";
 import { KeyboardShortcutManager } from "./lib/keyboard/KeyboardShortcutManager";
@@ -539,6 +541,7 @@ onDestroy(() => {
 	{/if}
 
 	<div class="viewer-wrapper">
+		<RenderDiagnosticsBanner diagnostics={$gdsStore.renderDiagnostics} />
 		{#if !$gdsStore.document && !$gdsStore.isLoading}
 			{#if embedMode}
 				<div class="upload-overlay">
@@ -596,7 +599,12 @@ onDestroy(() => {
 					Controls: Ctrl/Cmd+O to open file | Mouse wheel to zoom | Middle mouse or Space+Drag to pan | Arrow keys to move | Enter to zoom in | Shift+Enter to zoom out | F to fit view (hold for fullscreen) | Esc to exit fullscreen | G to toggle grid | O to toggle fill/outline | P to toggle info panel | L to toggle layer panel | M to toggle minimap | C to add comment (double-tap for comment panel, hold to toggle visibility) | H for help | Touch: One finger to pan, two fingers to zoom
 				</p>
 				<p class="text-sm text-gray-400 footer-note">
-					When not using sessions, this webapp is client-side only - your GDS file is not uploaded anywhere. Created by <a href="https://outside5sigma.com/" target="_blank" rel="noopener noreferrer" class="creator-link">Wentao</a>. Read or Contribute to source code on <a href="https://github.com/jwt625/gdsjam" target="_blank" rel="noopener noreferrer" class="creator-link">GitHub</a>.
+					When not using sessions, this webapp is client-side only - your GDS file is not uploaded anywhere. Created by <a href="https://outside5sigma.com/" target="_blank" rel="noopener noreferrer" class="creator-link">Wentao Jiang</a>. Read or Contribute to source code on <a href="https://github.com/jwt625/gdsjam" target="_blank" rel="noopener noreferrer" class="creator-link">GitHub</a>.
+					{#if BUILD_INFO.releaseUrl}
+						<a href={BUILD_INFO.releaseUrl} target="_blank" rel="noopener noreferrer" class="creator-link">GDSJam {BUILD_INFO.version}</a>
+					{:else}
+						<span>GDSJam {BUILD_INFO.version}</span>
+					{/if}{#if BUILD_INFO.shortCommit} · {BUILD_INFO.shortCommit}{/if}
 				</p>
 			</div>
 		{/if}

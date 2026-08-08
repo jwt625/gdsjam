@@ -1,9 +1,9 @@
 name: Deploy to GitHub Pages
 
 on:
-  push:
-    branches:
-      - main
+  release:
+    types:
+      - published
   workflow_dispatch:
 
 permissions:
@@ -17,10 +17,34 @@ concurrency:
 
 jobs:
   build:
+    if: ${{ (github.event_name == 'release' && !github.event.release.prerelease && startsWith(github.event.release.tag_name, 'web-v')) || (github.event_name == 'workflow_dispatch' && github.ref_type == 'tag' && startsWith(github.ref_name, 'web-v')) }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref_name }}
+          fetch-depth: 0
+
+      - name: Verify release commit is on main
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$(git rev-parse HEAD)" origin/main; then
+            echo "Web production tags must point to a commit reachable from main" >&2
+            exit 1
+          fi
+
+      - name: Validate release tag
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref_name }}
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^web-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Web production releases require a web-vMAJOR.MINOR.PATCH tag; got: $RELEASE_TAG" >&2
+            exit 1
+          fi
+          echo "VITE_APP_VERSION=${RELEASE_TAG#web-}" >> "$GITHUB_ENV"
+          echo "VITE_BUILD_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "VITE_RELEASE_URL=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${RELEASE_TAG}" >> "$GITHUB_ENV"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -30,11 +54,17 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Test
+        run: pnpm test -- --run
+
+      - name: Check
+        run: pnpm check
 
       - name: Build
         run: pnpm build

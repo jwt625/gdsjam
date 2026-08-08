@@ -1,0 +1,198 @@
+{
+  "cells": [
+    {
+      "localPolygons": [
+        {
+          "datatype": 7,
+          "layer": 1,
+          "pointsDbu": [
+            [
+              250,
+              -100
+            ],
+            [
+              250,
+              400
+            ],
+            [
+              750,
+              400
+            ],
+            [
+              750,
+              -100
+            ]
+          ],
+          "pointsUm": [
+            [
+              1.25,
+              -0.5
+            ],
+            [
+              1.25,
+              2
+            ],
+            [
+              3.75,
+              2
+            ],
+            [
+              3.75,
+              -0.5
+            ]
+          ]
+        },
+        {
+          "datatype": 0,
+          "layer": 2,
+          "pointsDbu": [
+            [
+              1000,
+              0
+            ],
+            [
+              1100,
+              300
+            ],
+            [
+              1200,
+              0
+            ]
+          ],
+          "pointsUm": [
+            [
+              5,
+              0
+            ],
+            [
+              5.5,
+              1.5
+            ],
+            [
+              6,
+              0
+            ]
+          ]
+        }
+      ],
+      "name": "TOP_NON_DEFAULT_DBU",
+      "references": []
+    }
+  ],
+  "description": "5 nm database unit with geometry on two layer/datatype pairs",
+  "documentBoundsDbu": {
+    "maxX": 1200,
+    "maxY": 400,
+    "minX": 250,
+    "minY": -100
+  },
+  "documentBoundsUm": {
+    "maxX": 6,
+    "maxY": 2,
+    "minX": 1.25,
+    "minY": -0.5
+  },
+  "fixture": "non_default_dbu",
+  "flattenedTopCells": [
+    {
+      "boundsDbu": {
+        "maxX": 1200,
+        "maxY": 400,
+        "minX": 250,
+        "minY": -100
+      },
+      "boundsUm": {
+        "maxX": 6,
+        "maxY": 2,
+        "minX": 1.25,
+        "minY": -0.5
+      },
+      "name": "TOP_NON_DEFAULT_DBU",
+      "polygonCount": 2,
+      "polygons": [
+        {
+          "datatype": 7,
+          "layer": 1,
+          "pointsDbu": [
+            [
+              250,
+              -100
+            ],
+            [
+              250,
+              400
+            ],
+            [
+              750,
+              400
+            ],
+            [
+              750,
+              -100
+            ]
+          ],
+          "pointsUm": [
+            [
+              1.25,
+              -0.5
+            ],
+            [
+              1.25,
+              2
+            ],
+            [
+              3.75,
+              2
+            ],
+            [
+              3.75,
+              -0.5
+            ]
+          ]
+        },
+        {
+          "datatype": 0,
+          "layer": 2,
+          "pointsDbu": [
+            [
+              1000,
+              0
+            ],
+            [
+              1100,
+              300
+            ],
+            [
+              1200,
+              0
+            ]
+          ],
+          "pointsUm": [
+            [
+              5,
+              0
+            ],
+            [
+              5.5,
+              1.5
+            ],
+            [
+              6,
+              0
+            ]
+          ]
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 1,
+  "topCells": [
+    "TOP_NON_DEFAULT_DBU"
+  ],
+  "units": {
+    "databaseUnitMeters": 5e-09,
+    "databaseUnitsPerUserUnit": 200,
+    "displayUnit": "um",
+    "userUnitMeters": 1e-06
+  }
+}

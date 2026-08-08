@@ -1,0 +1,395 @@
+{
+  "cells": [
+    {
+      "localPolygons": [
+        {
+          "datatype": 0,
+          "layer": 30,
+          "pointsDbu": [
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              2000
+            ],
+            [
+              2000,
+              2000
+            ],
+            [
+              2000,
+              0
+            ]
+          ],
+          "pointsUm": [
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              0
+            ]
+          ]
+        }
+      ],
+      "name": "SHARED_CHILD",
+      "references": []
+    },
+    {
+      "localPolygons": [
+        {
+          "datatype": 0,
+          "layer": 31,
+          "pointsDbu": [
+            [
+              -12000,
+              -2000
+            ],
+            [
+              -12000,
+              -1000
+            ],
+            [
+              -8000,
+              -1000
+            ],
+            [
+              -8000,
+              -2000
+            ]
+          ],
+          "pointsUm": [
+            [
+              -12,
+              -2
+            ],
+            [
+              -12,
+              -1
+            ],
+            [
+              -8,
+              -1
+            ],
+            [
+              -8,
+              -2
+            ]
+          ]
+        }
+      ],
+      "name": "TOP_A",
+      "references": [
+        {
+          "cell": "SHARED_CHILD",
+          "magnification": 1,
+          "originDbu": [
+            -10000,
+            0
+          ],
+          "originUm": [
+            -10,
+            0
+          ],
+          "rotationDegrees": 0,
+          "xReflection": false
+        }
+      ]
+    },
+    {
+      "localPolygons": [
+        {
+          "datatype": 0,
+          "layer": 32,
+          "pointsDbu": [
+            [
+              24000,
+              5000
+            ],
+            [
+              24000,
+              6000
+            ],
+            [
+              28000,
+              6000
+            ],
+            [
+              28000,
+              5000
+            ]
+          ],
+          "pointsUm": [
+            [
+              24,
+              5
+            ],
+            [
+              24,
+              6
+            ],
+            [
+              28,
+              6
+            ],
+            [
+              28,
+              5
+            ]
+          ]
+        }
+      ],
+      "name": "TOP_B",
+      "references": [
+        {
+          "cell": "SHARED_CHILD",
+          "magnification": 1,
+          "originDbu": [
+            25000,
+            8000
+          ],
+          "originUm": [
+            25,
+            8
+          ],
+          "rotationDegrees": 90,
+          "xReflection": false
+        }
+      ]
+    }
+  ],
+  "description": "two independent top cells sharing one referenced child",
+  "documentBoundsDbu": {
+    "maxX": 28000,
+    "maxY": 10000,
+    "minX": -12000,
+    "minY": -2000
+  },
+  "documentBoundsUm": {
+    "maxX": 28,
+    "maxY": 10,
+    "minX": -12,
+    "minY": -2
+  },
+  "fixture": "multiple_top_cells",
+  "flattenedTopCells": [
+    {
+      "boundsDbu": {
+        "maxX": -8000,
+        "maxY": 2000,
+        "minX": -12000,
+        "minY": -2000
+      },
+      "boundsUm": {
+        "maxX": -8,
+        "maxY": 2,
+        "minX": -12,
+        "minY": -2
+      },
+      "name": "TOP_A",
+      "polygonCount": 2,
+      "polygons": [
+        {
+          "datatype": 0,
+          "layer": 30,
+          "pointsDbu": [
+            [
+              -10000,
+              0
+            ],
+            [
+              -10000,
+              2000
+            ],
+            [
+              -8000,
+              2000
+            ],
+            [
+              -8000,
+              0
+            ]
+          ],
+          "pointsUm": [
+            [
+              -10,
+              0
+            ],
+            [
+              -10,
+              2
+            ],
+            [
+              -8,
+              2
+            ],
+            [
+              -8,
+              0
+            ]
+          ]
+        },
+        {
+          "datatype": 0,
+          "layer": 31,
+          "pointsDbu": [
+            [
+              -12000,
+              -2000
+            ],
+            [
+              -12000,
+              -1000
+            ],
+            [
+              -8000,
+              -1000
+            ],
+            [
+              -8000,
+              -2000
+            ]
+          ],
+          "pointsUm": [
+            [
+              -12,
+              -2
+            ],
+            [
+              -12,
+              -1
+            ],
+            [
+              -8,
+              -1
+            ],
+            [
+              -8,
+              -2
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "boundsDbu": {
+        "maxX": 28000,
+        "maxY": 10000,
+        "minX": 23000,
+        "minY": 5000
+      },
+      "boundsUm": {
+        "maxX": 28,
+        "maxY": 10,
+        "minX": 23,
+        "minY": 5
+      },
+      "name": "TOP_B",
+      "polygonCount": 2,
+      "polygons": [
+        {
+          "datatype": 0,
+          "layer": 30,
+          "pointsDbu": [
+            [
+              23000,
+              8000
+            ],
+            [
+              23000,
+              10000
+            ],
+            [
+              25000,
+              10000
+            ],
+            [
+              25000,
+              8000
+            ]
+          ],
+          "pointsUm": [
+            [
+              23,
+              8
+            ],
+            [
+              23,
+              10
+            ],
+            [
+              25,
+              10
+            ],
+            [
+              25,
+              8
+            ]
+          ]
+        },
+        {
+          "datatype": 0,
+          "layer": 32,
+          "pointsDbu": [
+            [
+              24000,
+              5000
+            ],
+            [
+              24000,
+              6000
+            ],
+            [
+              28000,
+              6000
+            ],
+            [
+              28000,
+              5000
+            ]
+          ],
+          "pointsUm": [
+            [
+              24,
+              5
+            ],
+            [
+              24,
+              6
+            ],
+            [
+              28,
+              6
+            ],
+            [
+              28,
+              5
+            ]
+          ]
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 1,
+  "topCells": [
+    "TOP_A",
+    "TOP_B"
+  ],
+  "units": {
+    "databaseUnitMeters": 1e-09,
+    "databaseUnitsPerUserUnit": 1000,
+    "displayUnit": "um",
+    "userUnitMeters": 1e-06
+  }
+}

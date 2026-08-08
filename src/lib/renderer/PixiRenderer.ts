@@ -28,6 +28,11 @@ import {
 	POLYGON_FILL_MODE,
 } from "../config";
 import { DEBUG_MEASUREMENT } from "../debug";
+import {
+	buildRenderDiagnostics,
+	failedRenderDiagnostics,
+	renderStatusMessage,
+} from "../diagnostics/renderDiagnostics";
 import { type RTreeItem, SpatialIndex } from "../spatial/RTree";
 import { InputController } from "./controls/InputController";
 import { LODManager } from "./lod/LODManager";
@@ -66,6 +71,7 @@ export class PixiRenderer {
 	private gridUpdateTimeout: number | null = null;
 	private scaleBarUpdateTimeout: number | null = null;
 	private currentDocument: GDSDocument | null = null;
+	private renderProgressCallback: RenderProgressCallback | null = null;
 
 	// LOD metrics tracking
 	private visiblePolygonCount = 0;
@@ -631,11 +637,14 @@ export class PixiRenderer {
 		skipFitToView = false,
 		overrideScale?: number,
 	): Promise<void> {
+		if (onProgress) this.renderProgressCallback = onProgress;
+		const progressCallback = onProgress ?? this.renderProgressCallback ?? undefined;
+
 		// Store document for incremental re-rendering
 		this.currentDocument = document;
 		this.documentUnits = document.units;
 
-		onProgress?.(0, "Preparing to render...");
+		progressCallback?.(0, "Preparing to render...");
 		await new Promise((resolve) => setTimeout(resolve, 0));
 		this.clear();
 
@@ -677,7 +686,7 @@ export class PixiRenderer {
 					overrideScale,
 					layerVisibility: this.layerVisibility,
 				},
-				onProgress,
+				progressCallback,
 			);
 
 			// Store results
@@ -685,7 +694,7 @@ export class PixiRenderer {
 			this.totalRenderedPolygons = result.totalPolygons;
 
 			if (!skipFitToView) {
-				onProgress?.(90, "Fitting to view...");
+				progressCallback?.(90, "Fitting to view...");
 				await new Promise((resolve) => setTimeout(resolve, 0));
 				this.fitToView();
 				// Initialize zoom thresholds after fitToView
@@ -693,7 +702,13 @@ export class PixiRenderer {
 			}
 			this.updateViewport();
 
-			onProgress?.(100, "Render complete!");
+			const diagnostics = buildRenderDiagnostics(document, {
+				budgetExhausted: result.budgetExhausted,
+				depthLimited: result.depthLimited,
+				renderedPolygons: result.renderedPolygons,
+				polygonBudget: scaledBudget,
+			});
+			progressCallback?.(100, renderStatusMessage(diagnostics), diagnostics);
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			const isLikelyOOM =
@@ -704,13 +719,17 @@ export class PixiRenderer {
 			this.updateViewport();
 
 			if (isLikelyOOM) {
-				onProgress?.(100, "Rendering paused (memory limit reached)");
+				progressCallback?.(
+					100,
+					"Rendering paused (memory limit reached)",
+					failedRenderDiagnostics(error),
+				);
 				throw new Error(
 					"Rendering paused to prevent browser crash (memory limit reached). Try hiding layers, zooming in, or using a smaller file.",
 				);
 			}
 
-			onProgress?.(100, "Rendering failed");
+			progressCallback?.(100, "Rendering failed", failedRenderDiagnostics(error));
 			throw error;
 		}
 	}
