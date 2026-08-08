@@ -10,6 +10,7 @@ const box = { minX: 0, minY: 0, maxX: 1, maxY: 1 };
 const cell = (name: string, refs: string[] = []): Cell => ({
 	name,
 	polygons: [],
+	texts: [],
 	instances: refs.map((cellRef, index) => ({
 		id: String(index),
 		cellRef,
@@ -31,6 +32,13 @@ const documentWith = (cells: Cell[]): GDSDocument => ({
 	topCells: [cells[0]?.name ?? ""],
 	boundingBox: box,
 	units: { database: 1e-9, user: 1e-6 },
+	diagnostics: {
+		unsupportedElements: {},
+		unsupported: { count: 0, details: [] },
+		malformed: { count: 0, details: [] },
+		unresolvedReferences: { count: 0, details: [] },
+		referenceCycles: { count: 0, details: [] },
+	},
 });
 
 describe("render diagnostics", () => {
@@ -94,5 +102,29 @@ describe("render diagnostics", () => {
 		const result = failedRenderDiagnostics(new Error("GPU allocation failed"));
 		expect(result.status).toBe("failed");
 		expect(result.issues[0]?.message).toBe("GPU allocation failed");
+	});
+
+	it("uses typed parser diagnostics and exposes malformed state", () => {
+		const document = documentWith([cell("TOP")]);
+		document.diagnostics.malformed = {
+			count: 1,
+			details: [
+				{
+					code: "malformed-element",
+					cellName: "TOP",
+					elementType: "BOX",
+					recordIndex: 42,
+					message: "BOX has fewer than three unique points",
+				},
+			],
+		};
+		const result = buildRenderDiagnostics(document, {
+			budgetExhausted: false,
+			depthLimited: false,
+			renderedPolygons: 0,
+			polygonBudget: 100,
+		});
+		expect(result.status).toBe("partial-malformed");
+		expect(result.issues[0]).toMatchObject({ code: "malformed" });
 	});
 });

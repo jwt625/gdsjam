@@ -26,6 +26,7 @@ const document: GDSDocument = {
 			{
 				name: "TOP",
 				polygons: [polygon("one"), polygon("two")],
+				texts: [],
 				instances: [],
 				boundingBox,
 				skipInMinimap: false,
@@ -36,6 +37,13 @@ const document: GDSDocument = {
 	topCells: ["TOP"],
 	boundingBox,
 	units: { database: 1e-9, user: 1e-6 },
+	diagnostics: {
+		unsupportedElements: {},
+		unsupported: { count: 0, details: [] },
+		malformed: { count: 0, details: [] },
+		unresolvedReferences: { count: 0, details: [] },
+		referenceCycles: { count: 0, details: [] },
+	},
 };
 
 describe("GDSRenderer completeness", () => {
@@ -84,6 +92,7 @@ describe("GDSRenderer completeness", () => {
 								boundingBox: { minX: 0, minY: 0, maxX: 2, maxY: 1 },
 							},
 						],
+						texts: [],
 						instances: [],
 						boundingBox: { minX: 0, minY: 0, maxX: 2, maxY: 1 },
 						skipInMinimap: false,
@@ -94,6 +103,7 @@ describe("GDSRenderer completeness", () => {
 					{
 						name: "CHILD",
 						polygons: [],
+						texts: [],
 						instances: [
 							{
 								id: "child-leaf",
@@ -115,6 +125,7 @@ describe("GDSRenderer completeness", () => {
 					{
 						name: "TOP",
 						polygons: [],
+						texts: [],
 						instances: [
 							{
 								id: "top-child",

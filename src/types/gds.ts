@@ -22,6 +22,25 @@ export interface Polygon {
 	datatype: number;
 	points: Point[];
 	boundingBox: BoundingBox;
+	sourceType?: "boundary" | "path" | "box";
+	boxType?: number;
+}
+
+export interface TextLabel {
+	id: string;
+	content: string;
+	layer: number;
+	textType: number;
+	origin: Point;
+	rotation: number;
+	mirror: boolean;
+	magnification: number;
+	absoluteRotation?: boolean;
+	absoluteMagnification?: boolean;
+	presentation?: number;
+	/** A semantic point marker until font-independent glyph bounds are available. */
+	boundingBox: BoundingBox;
+	boundsKind: "origin-marker";
 }
 
 export interface CellInstance {
@@ -44,9 +63,38 @@ export interface CellInstance {
 export interface Cell {
 	name: string;
 	polygons: Polygon[];
+	texts: TextLabel[];
 	instances: CellInstance[];
 	boundingBox: BoundingBox;
 	skipInMinimap: boolean; // True if cell is < 1% of layout extent (for LOD culling)
+}
+
+export interface ParserDiagnosticDetail {
+	code:
+		| "unsupported-element"
+		| "malformed-element"
+		| "missing-units"
+		| "invalid-units"
+		| "unresolved-reference"
+		| "reference-cycle";
+	cellName?: string;
+	elementType?: string;
+	recordIndex?: number;
+	path?: string[];
+	message: string;
+}
+
+export interface ParserDiagnosticGroup {
+	count: number;
+	details: ParserDiagnosticDetail[];
+}
+
+export interface GDSParserDiagnostics {
+	unsupportedElements: Record<string, number>;
+	unsupported: ParserDiagnosticGroup;
+	malformed: ParserDiagnosticGroup;
+	unresolvedReferences: ParserDiagnosticGroup;
+	referenceCycles: ParserDiagnosticGroup;
 }
 
 export interface Layer {
@@ -67,6 +115,7 @@ export interface GDSDocument {
 		database: number; // Physical size of one database unit, in meters
 		user: number; // Physical size of one user unit, in meters
 	};
+	diagnostics: GDSParserDiagnostics;
 }
 
 export interface FileStatistics {
