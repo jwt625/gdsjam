@@ -1,0 +1,833 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-08T19:01:56.562Z",
+  "environment": {
+    "platform": "darwin",
+    "architecture": "arm64",
+    "node": "v23.7.0"
+  },
+  "workload": {
+    "kind": "synthetic-rectangular-aref",
+    "columns": 1000,
+    "rows": 100,
+    "logicalPlacements": 100000,
+    "leafPolygons": 1,
+    "repeats": 7
+  },
+  "methodology": {
+    "processIsolation": "fresh Node/Vite process per scenario repeat",
+    "garbageCollection": "three forced full-GC requests before each retained-heap sample",
+    "timing": "performance.now wall clock; median/min/max",
+    "memory": "V8 heapUsed deltas after forced GC plus deterministic UTF-8 JSON byte proxy; excludes native/runtime overhead and is not a browser peak-memory measurement",
+    "memoryNoise": "negative or very small retained-heap deltas mean the allocation is below this process-level measurement's noise floor",
+    "parserScope": "programmatic documents only; current-compatibility intentionally retains eager legacy expansion, so results do not claim parser-memory improvement"
+  },
+  "scenarios": {
+    "legacy-expanded": {
+      "counts": {
+        "logicalPlacements": 100000,
+        "legacyInstances": 100000,
+        "compactSourceReferences": 0,
+        "sceneIndexReferences": 100000,
+        "canonicalPolygons": 1
+      },
+      "bounds": {
+        "minX": 0,
+        "minY": 0,
+        "maxX": 19990,
+        "maxY": 2980
+      },
+      "buildStatistics": {
+        "boundsComputations": 2,
+        "boundsCacheHits": 100000
+      },
+      "timingMs": {
+        "documentConstruction": {
+          "median": 10.590958999999998,
+          "min": 9.995375000000024,
+          "max": 13.124375000000043
+        },
+        "sceneIndexConstruction": {
+          "median": 164.47720900000002,
+          "min": 161.05929199999997,
+          "max": 192.54149999999998
+        }
+      },
+      "memoryBytes": {
+        "documentRetainedHeapDelta": {
+          "median": 18412104,
+          "min": 18384800,
+          "max": 18423344
+        },
+        "indexIncrementalRetainedHeapDelta": {
+          "median": 39345912,
+          "min": 39345544,
+          "max": 39346600
+        },
+        "totalRetainedHeapDelta": {
+          "median": 57758704,
+          "min": 57730512,
+          "max": 57769256
+        },
+        "sourceRepresentationJson": 16708205
+      }
+    },
+    "current-compatibility": {
+      "counts": {
+        "logicalPlacements": 100000,
+        "legacyInstances": 100000,
+        "compactSourceReferences": 1,
+        "sceneIndexReferences": 1,
+        "canonicalPolygons": 1
+      },
+      "bounds": {
+        "minX": 0,
+        "minY": 0,
+        "maxX": 19990,
+        "maxY": 2980
+      },
+      "buildStatistics": {
+        "boundsComputations": 2,
+        "boundsCacheHits": 1
+      },
+      "timingMs": {
+        "documentConstruction": {
+          "median": 9.671374999999955,
+          "min": 9.490334000000018,
+          "max": 10.499124999999992
+        },
+        "sceneIndexConstruction": {
+          "median": 6.82691699999998,
+          "min": 6.434415999999999,
+          "max": 7.112459000000001
+        }
+      },
+      "memoryBytes": {
+        "documentRetainedHeapDelta": {
+          "median": 18413736,
+          "min": 18403088,
+          "max": 18424976
+        },
+        "indexIncrementalRetainedHeapDelta": {
+          "median": 35224,
+          "min": 35224,
+          "max": 36456
+        },
+        "totalRetainedHeapDelta": {
+          "median": 18448960,
+          "min": 18438312,
+          "max": 18461432
+        },
+        "sourceRepresentationJson": 16708482
+      }
+    },
+    "compact-canonical": {
+      "counts": {
+        "logicalPlacements": 100000,
+        "legacyInstances": 0,
+        "compactSourceReferences": 1,
+        "sceneIndexReferences": 1,
+        "canonicalPolygons": 1
+      },
+      "bounds": {
+        "minX": 0,
+        "minY": 0,
+        "maxX": 19990,
+        "maxY": 2980
+      },
+      "buildStatistics": {
+        "boundsComputations": 2,
+        "boundsCacheHits": 1
+      },
+      "timingMs": {
+        "documentConstruction": {
+          "median": 0.1224170000000413,
+          "min": 0.11283299999996643,
+          "max": 0.25183400000003076
+        },
+        "sceneIndexConstruction": {
+          "median": 6.517084000000011,
+          "min": 6.141917000000035,
+          "max": 6.793375000000026
+        }
+      },
+      "memoryBytes": {
+        "documentRetainedHeapDelta": {
+          "median": -8048,
+          "min": -14352,
+          "max": 4448
+        },
+        "indexIncrementalRetainedHeapDelta": {
+          "median": 35224,
+          "min": 35224,
+          "max": 35224
+        },
+        "totalRetainedHeapDelta": {
+          "median": 27176,
+          "min": 20872,
+          "max": 39672
+        },
+        "sourceRepresentationJson": 293
+      }
+    }
+  },
+  "rawRuns": {
+    "legacy-expanded": [
+      {
+        "scenario": "legacy-expanded",
+        "counts": {
+          "logicalPlacements": 100000,
+          "legacyInstances": 100000,
+          "compactSourceReferences": 0,
+          "sceneIndexReferences": 100000,
+          "canonicalPolygons": 1
+        },
+        "timingMs": {
+          "documentConstruction": 9.995375000000024,
+          "sceneIndexConstruction": 192.54149999999998
+        },
+        "memoryBytes": {
+          "baselineHeap": 27262480,
+          "documentRetainedHeapDelta": 18401504,
+          "indexIncrementalRetainedHeapDelta": 39345544,
+          "totalRetainedHeapDelta": 57747048,
+          "sourceRepresentationJson": 16708205
+        },
+        "bounds": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 19990,
+          "maxY": 2980
+        },
+        "buildStatistics": {
+          "boundsComputations": 2,
+          "boundsCacheHits": 100000
+        }
+      },
+      {
+        "scenario": "legacy-expanded",
+        "counts": {
+          "logicalPlacements": 100000,
+          "legacyInstances": 100000,
+          "compactSourceReferences": 0,
+          "sceneIndexReferences": 100000,
+          "canonicalPolygons": 1
+        },
+        "timingMs": {
+          "documentConstruction": 11.897833999999989,
+          "sceneIndexConstruction": 170.207334
+        },
+        "memoryBytes": {
+          "baselineHeap": 27184792,
+          "documentRetainedHeapDelta": 18421328,
+          "indexIncrementalRetainedHeapDelta": 39345912,
+          "totalRetainedHeapDelta": 57767240,
+          "sourceRepresentationJson": 16708205
+        },
+        "bounds": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 19990,
+          "maxY": 2980
+        },
+        "buildStatistics": {
+          "boundsComputations": 2,
+          "boundsCacheHits": 100000
+        }
+      },
+      {
+        "scenario": "legacy-expanded",
+        "counts": {
+          "logicalPlacements": 100000,
+          "legacyInstances": 100000,
+          "compactSourceReferences": 0,
+          "sceneIndexReferences": 100000,
+          "canonicalPolygons": 1
+        },
+        "timingMs": {
+          "documentConstruction": 13.124375000000043,
+          "sceneIndexConstruction": 161.37812499999995
+        },
+        "memoryBytes": {
+          "baselineHeap": 27190632,
+          "documentRetainedHeapDelta": 18384800,
+          "indexIncrementalRetainedHeapDelta": 39345712,
+          "totalRetainedHeapDelta": 57730512,
+          "sourceRepresentationJson": 16708205
+        },
+        "bounds": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 19990,
+          "maxY": 2980
+        },
+        "buildStatistics": {
+          "boundsComputations": 2,
+          "boundsCacheHits": 100000
+        }
+      },
+      {
+        "scenario": "legacy-expanded",
+        "counts": {
+          "logicalPlacements": 100000,
+          "legacyInstances": 100000,
+          "compactSourceReferences": 0,
+          "sceneIndexReferences": 100000,
+          "canonicalPolygons": 1
+        },
+        "timingMs": {
+          "documentConstruction": 10.590958999999998,
+          "sceneIndexConstruction": 164.47720900000002
+        },
+        "memoryBytes": {
+          "baselineHeap": 27169720,
+          "documentRetainedHeapDelta": 18395200,
+          "indexIncrementalRetainedHeapDelta": 39346600,
+          "totalRetainedHeapDelta": 57741800,
+          "sourceRepresentationJson": 16708205
+        },
+        "bounds": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 19990,
+          "maxY": 2980
+        },
+        "buildStatistics": {
+          "boundsComputations": 2,
+          "boundsCacheHits": 100000
+        }
+      },
+      {
+        "scenario": "legacy-expanded",
+        "counts": {
+          "logicalPlacements": 100000,
+          "legacyInstances": 100000,
+          "compactSourceReferences": 0,
+          "sceneIndexReferences": 100000,
+          "canonicalPolygons": 1
+        },
+        "timingMs": {
+          "documentConstruction": 10.564999999999998,
+          "sceneIndexConstruction": 165.88179199999996
+        },
+        "memoryBytes": {
+          "baselineHeap": 27190624,
+          "documentRetainedHeapDelta": 18423344,
+          "indexIncrementalRetainedHeapDelta": 39345912,
+          "totalRetainedHeapDelta": 57769256,
+          "sourceRepresentationJson": 16708205
+        },
+        "bounds": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 19990,
+          "maxY": 2980
+        },
+        "buildStatistics": {
+          "boundsComputations": 2,
+          "boundsCacheHits": 100000
+        }
+      },
+      {
+        "scenario": "legacy-expanded",
+        "counts": {
+          "logicalPlacements": 100000,
+          "legacyInstances": 100000,
+          "compactSourceReferences": 0,
+          "sceneIndexReferences": 100000,
+          "canonicalPolygons": 1
+        },
+        "timingMs": {
+          "documentConstruction": 11.605542000000014,
+          "sceneIndexConstruction": 161.05929199999997
+        },
+        "memoryBytes": {
+          "baselineHeap": 27179904,
+          "documentRetainedHeapDelta": 18423344,
+          "indexIncrementalRetainedHeapDelta": 39345912,
+          "totalRetainedHeapDelta": 57769256,
+          "sourceRepresentationJson": 16708205
+        },
+        "bounds": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 19990,
+          "maxY": 2980
+        },
+        "buildStatistics": {
+          "boundsComputations": 2,
+          "boundsCacheHits": 100000
+        }
+      },
+      {
+        "scenario": "legacy-expanded",
+        "counts": {
+          "logicalPlacements": 100000,
+          "legacyInstances": 100000,
+          "compactSourceReferences": 0,
+          "sceneIndexReferences": 100000,
+          "canonicalPolygons": 1
+        },
+        "timingMs": {
+          "documentConstruction": 10.169582999999989,
+          "sceneIndexConstruction": 161.111667
+        },
+        "memoryBytes": {
+          "baselineHeap": 27166944,
+          "documentRetainedHeapDelta": 18412104,
+          "indexIncrementalRetainedHeapDelta": 39346600,
+          "totalRetainedHeapDelta": 57758704,
+          "sourceRepresentationJson": 16708205
+        },
+        "bounds": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 19990,
+          "maxY": 2980
+        },
+        "buildStatistics": {
+          "boundsComputations": 2,
+          "boundsCacheHits": 100000
+        }
+      }
+    ],
+    "current-compatibility": [
+      {
+        "scenario": "current-compatibility",
+        "counts": {
+          "logicalPlacements": 100000,
+          "legacyInstances": 100000,
+          "compactSourceReferences": 1,
+          "sceneIndexReferences": 1,
+          "canonicalPolygons": 1
+        },
+        "timingMs": {
+          "documentConstruction": 9.490334000000018,
+          "sceneIndexConstruction": 6.82691699999998
+        },
+        "memoryBytes": {
+          "baselineHeap": 27178728,
+          "documentRetainedHeapDelta": 18413736,
+          "indexIncrementalRetainedHeapDelta": 35224,
+          "totalRetainedHeapDelta": 18448960,
+          "sourceRepresentationJson": 16708482
+        },
+        "bounds": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 19990,
+          "maxY": 2980
+        },
+        "buildStatistics": {
+          "boundsComputations": 2,
+          "boundsCacheHits": 1
+        }
+      },
+      {
+        "scenario": "current-compatibility",
+        "counts": {
+          "logicalPlacements": 100000,
+          "legacyInstances": 100000,
+          "compactSourceReferences": 1,
+          "sceneIndexReferences": 1,
+          "canonicalPolygons": 1
+        },
+        "timingMs": {
+          "documentConstruction": 10.104917,
+          "sceneIndexConstruction": 6.434415999999999
+        },
+        "memoryBytes": {
+          "baselineHeap": 27212992,
+          "documentRetainedHeapDelta": 18403136,
+          "indexIncrementalRetainedHeapDelta": 35224,
+          "totalRetainedHeapDelta": 18438360,
+          "sourceRepresentationJson": 16708482
+        },
+        "bounds": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 19990,
+          "maxY": 2980
+        },
+        "buildStatistics": {
+          "boundsComputations": 2,
+          "boundsCacheHits": 1
+        }
+      },
+      {
+        "scenario": "current-compatibility",
+        "counts": {
+          "logicalPlacements": 100000,
+          "legacyInstances": 100000,
+          "compactSourceReferences": 1,
+          "sceneIndexReferences": 1,
+          "canonicalPolygons": 1
+        },
+        "timingMs": {
+          "documentConstruction": 10.499124999999992,
+          "sceneIndexConstruction": 7.112459000000001
+        },
+        "memoryBytes": {
+          "baselineHeap": 27173000,
+          "documentRetainedHeapDelta": 18424976,
+          "indexIncrementalRetainedHeapDelta": 36456,
+          "totalRetainedHeapDelta": 18461432,
+          "sourceRepresentationJson": 16708482
+        },
+        "bounds": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 19990,
+          "maxY": 2980
+        },
+        "buildStatistics": {
+          "boundsComputations": 2,
+          "boundsCacheHits": 1
+        }
+      },
+      {
+        "scenario": "current-compatibility",
+        "counts": {
+          "logicalPlacements": 100000,
+          "legacyInstances": 100000,
+          "compactSourceReferences": 1,
+          "sceneIndexReferences": 1,
+          "canonicalPolygons": 1
+        },
+        "timingMs": {
+          "documentConstruction": 9.648750000000007,
+          "sceneIndexConstruction": 7.054624999999987
+        },
+        "memoryBytes": {
+          "baselineHeap": 27253632,
+          "documentRetainedHeapDelta": 18424976,
+          "indexIncrementalRetainedHeapDelta": 36456,
+          "totalRetainedHeapDelta": 18461432,
+          "sourceRepresentationJson": 16708482
+        },
+        "bounds": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 19990,
+          "maxY": 2980
+        },
+        "buildStatistics": {
+          "boundsComputations": 2,
+          "boundsCacheHits": 1
+        }
+      },
+      {
+        "scenario": "current-compatibility",
+        "counts": {
+          "logicalPlacements": 100000,
+          "legacyInstances": 100000,
+          "compactSourceReferences": 1,
+          "sceneIndexReferences": 1,
+          "canonicalPolygons": 1
+        },
+        "timingMs": {
+          "documentConstruction": 9.671374999999955,
+          "sceneIndexConstruction": 6.5247079999999755
+        },
+        "memoryBytes": {
+          "baselineHeap": 27147864,
+          "documentRetainedHeapDelta": 18424976,
+          "indexIncrementalRetainedHeapDelta": 36456,
+          "totalRetainedHeapDelta": 18461432,
+          "sourceRepresentationJson": 16708482
+        },
+        "bounds": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 19990,
+          "maxY": 2980
+        },
+        "buildStatistics": {
+          "boundsComputations": 2,
+          "boundsCacheHits": 1
+        }
+      },
+      {
+        "scenario": "current-compatibility",
+        "counts": {
+          "logicalPlacements": 100000,
+          "legacyInstances": 100000,
+          "compactSourceReferences": 1,
+          "sceneIndexReferences": 1,
+          "canonicalPolygons": 1
+        },
+        "timingMs": {
+          "documentConstruction": 10.102332999999987,
+          "sceneIndexConstruction": 7.106832999999995
+        },
+        "memoryBytes": {
+          "baselineHeap": 27287872,
+          "documentRetainedHeapDelta": 18407912,
+          "indexIncrementalRetainedHeapDelta": 35224,
+          "totalRetainedHeapDelta": 18443136,
+          "sourceRepresentationJson": 16708482
+        },
+        "bounds": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 19990,
+          "maxY": 2980
+        },
+        "buildStatistics": {
+          "boundsComputations": 2,
+          "boundsCacheHits": 1
+        }
+      },
+      {
+        "scenario": "current-compatibility",
+        "counts": {
+          "logicalPlacements": 100000,
+          "legacyInstances": 100000,
+          "compactSourceReferences": 1,
+          "sceneIndexReferences": 1,
+          "canonicalPolygons": 1
+        },
+        "timingMs": {
+          "documentConstruction": 9.616040999999996,
+          "sceneIndexConstruction": 6.584625000000017
+        },
+        "memoryBytes": {
+          "baselineHeap": 27192808,
+          "documentRetainedHeapDelta": 18403088,
+          "indexIncrementalRetainedHeapDelta": 35224,
+          "totalRetainedHeapDelta": 18438312,
+          "sourceRepresentationJson": 16708482
+        },
+        "bounds": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 19990,
+          "maxY": 2980
+        },
+        "buildStatistics": {
+          "boundsComputations": 2,
+          "boundsCacheHits": 1
+        }
+      }
+    ],
+    "compact-canonical": [
+      {
+        "scenario": "compact-canonical",
+        "counts": {
+          "logicalPlacements": 100000,
+          "legacyInstances": 0,
+          "compactSourceReferences": 1,
+          "sceneIndexReferences": 1,
+          "canonicalPolygons": 1
+        },
+        "timingMs": {
+          "documentConstruction": 0.25099999999997635,
+          "sceneIndexConstruction": 6.550334000000021
+        },
+        "memoryBytes": {
+          "baselineHeap": 27188160,
+          "documentRetainedHeapDelta": 4448,
+          "indexIncrementalRetainedHeapDelta": 35224,
+          "totalRetainedHeapDelta": 39672,
+          "sourceRepresentationJson": 293
+        },
+        "bounds": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 19990,
+          "maxY": 2980
+        },
+        "buildStatistics": {
+          "boundsComputations": 2,
+          "boundsCacheHits": 1
+        }
+      },
+      {
+        "scenario": "compact-canonical",
+        "counts": {
+          "logicalPlacements": 100000,
+          "legacyInstances": 0,
+          "compactSourceReferences": 1,
+          "sceneIndexReferences": 1,
+          "canonicalPolygons": 1
+        },
+        "timingMs": {
+          "documentConstruction": 0.11283299999996643,
+          "sceneIndexConstruction": 6.47037499999999
+        },
+        "memoryBytes": {
+          "baselineHeap": 27188208,
+          "documentRetainedHeapDelta": -8096,
+          "indexIncrementalRetainedHeapDelta": 35224,
+          "totalRetainedHeapDelta": 27128,
+          "sourceRepresentationJson": 293
+        },
+        "bounds": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 19990,
+          "maxY": 2980
+        },
+        "buildStatistics": {
+          "boundsComputations": 2,
+          "boundsCacheHits": 1
+        }
+      },
+      {
+        "scenario": "compact-canonical",
+        "counts": {
+          "logicalPlacements": 100000,
+          "legacyInstances": 0,
+          "compactSourceReferences": 1,
+          "sceneIndexReferences": 1,
+          "canonicalPolygons": 1
+        },
+        "timingMs": {
+          "documentConstruction": 0.11504200000001674,
+          "sceneIndexConstruction": 6.141917000000035
+        },
+        "memoryBytes": {
+          "baselineHeap": 27151064,
+          "documentRetainedHeapDelta": -7848,
+          "indexIncrementalRetainedHeapDelta": 35224,
+          "totalRetainedHeapDelta": 27376,
+          "sourceRepresentationJson": 293
+        },
+        "bounds": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 19990,
+          "maxY": 2980
+        },
+        "buildStatistics": {
+          "boundsComputations": 2,
+          "boundsCacheHits": 1
+        }
+      },
+      {
+        "scenario": "compact-canonical",
+        "counts": {
+          "logicalPlacements": 100000,
+          "legacyInstances": 0,
+          "compactSourceReferences": 1,
+          "sceneIndexReferences": 1,
+          "canonicalPolygons": 1
+        },
+        "timingMs": {
+          "documentConstruction": 0.14020900000002712,
+          "sceneIndexConstruction": 6.547208000000012
+        },
+        "memoryBytes": {
+          "baselineHeap": 27184792,
+          "documentRetainedHeapDelta": -9776,
+          "indexIncrementalRetainedHeapDelta": 35224,
+          "totalRetainedHeapDelta": 25448,
+          "sourceRepresentationJson": 293
+        },
+        "bounds": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 19990,
+          "maxY": 2980
+        },
+        "buildStatistics": {
+          "boundsComputations": 2,
+          "boundsCacheHits": 1
+        }
+      },
+      {
+        "scenario": "compact-canonical",
+        "counts": {
+          "logicalPlacements": 100000,
+          "legacyInstances": 0,
+          "compactSourceReferences": 1,
+          "sceneIndexReferences": 1,
+          "canonicalPolygons": 1
+        },
+        "timingMs": {
+          "documentConstruction": 0.25183400000003076,
+          "sceneIndexConstruction": 6.793375000000026
+        },
+        "memoryBytes": {
+          "baselineHeap": 27203424,
+          "documentRetainedHeapDelta": -14352,
+          "indexIncrementalRetainedHeapDelta": 35224,
+          "totalRetainedHeapDelta": 20872,
+          "sourceRepresentationJson": 293
+        },
+        "bounds": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 19990,
+          "maxY": 2980
+        },
+        "buildStatistics": {
+          "boundsComputations": 2,
+          "boundsCacheHits": 1
+        }
+      },
+      {
+        "scenario": "compact-canonical",
+        "counts": {
+          "logicalPlacements": 100000,
+          "legacyInstances": 0,
+          "compactSourceReferences": 1,
+          "sceneIndexReferences": 1,
+          "canonicalPolygons": 1
+        },
+        "timingMs": {
+          "documentConstruction": 0.1224170000000413,
+          "sceneIndexConstruction": 6.335500000000025
+        },
+        "memoryBytes": {
+          "baselineHeap": 27207360,
+          "documentRetainedHeapDelta": -8048,
+          "indexIncrementalRetainedHeapDelta": 35224,
+          "totalRetainedHeapDelta": 27176,
+          "sourceRepresentationJson": 293
+        },
+        "bounds": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 19990,
+          "maxY": 2980
+        },
+        "buildStatistics": {
+          "boundsComputations": 2,
+          "boundsCacheHits": 1
+        }
+      },
+      {
+        "scenario": "compact-canonical",
+        "counts": {
+          "logicalPlacements": 100000,
+          "legacyInstances": 0,
+          "compactSourceReferences": 1,
+          "sceneIndexReferences": 1,
+          "canonicalPolygons": 1
+        },
+        "timingMs": {
+          "documentConstruction": 0.1199579999999969,
+          "sceneIndexConstruction": 6.517084000000011
+        },
+        "memoryBytes": {
+          "baselineHeap": 27187840,
+          "documentRetainedHeapDelta": -8048,
+          "indexIncrementalRetainedHeapDelta": 35224,
+          "totalRetainedHeapDelta": 27176,
+          "sourceRepresentationJson": 293
+        },
+        "bounds": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 19990,
+          "maxY": 2980
+        },
+        "buildStatistics": {
+          "boundsComputations": 2,
+          "boundsCacheHits": 1
+        }
+      }
+    ]
+  }
+}
