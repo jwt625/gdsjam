@@ -1,6 +1,10 @@
 import type { GDSDocument } from "../../types/gds";
 import type { RenderDiagnostics } from "../diagnostics/renderDiagnostics";
-import { PixiRenderer, type ViewportState } from "../renderer/PixiRenderer";
+import {
+	type DocumentRenderScope,
+	PixiRenderer,
+	type ViewportState,
+} from "../renderer/PixiRenderer";
 
 export interface InitialRenderProgress {
 	progress: number;
@@ -11,6 +15,7 @@ export interface InitialRenderProgress {
 export interface ViewerRendererBootstrapOptions {
 	canvas: HTMLCanvasElement;
 	initialDocument: GDSDocument | null;
+	initialRenderScope?: DocumentRenderScope;
 	onViewportChanged: (viewportState: ViewportState) => void;
 	onInitialRenderProgress: (update: InitialRenderProgress) => void;
 }
@@ -32,9 +37,15 @@ export async function initializeViewerRenderer(
 
 	let initialDocumentRendered = false;
 	if (options.initialDocument) {
-		await renderer.renderGDSDocument(options.initialDocument, (progress, message, diagnostics) => {
-			options.onInitialRenderProgress({ progress, message, diagnostics });
-		});
+		await renderer.renderGDSDocument(
+			options.initialDocument,
+			(progress, message, diagnostics) => {
+				options.onInitialRenderProgress({ progress, message, diagnostics });
+			},
+			false,
+			undefined,
+			options.initialRenderScope,
+		);
 		initialDocumentRendered = true;
 	}
 

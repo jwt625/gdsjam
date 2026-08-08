@@ -8,6 +8,7 @@ import HelpModal from "./components/ui/HelpModal.svelte";
 import LoadingOverlay from "./components/ui/LoadingOverlay.svelte";
 import ParticipantList from "./components/ui/ParticipantList.svelte";
 import RenderDiagnosticsBanner from "./components/ui/RenderDiagnosticsBanner.svelte";
+import TopCellSelector from "./components/ui/TopCellSelector.svelte";
 import ViewerCanvas from "./components/viewer/ViewerCanvas.svelte";
 import { type ExecutionResult, pythonExecutor } from "./lib/api/pythonExecutor";
 import { getDefaultCode } from "./lib/code/defaultExample";
@@ -556,6 +557,14 @@ onDestroy(() => {
 
 	<div class="viewer-wrapper">
 		<RenderDiagnosticsBanner diagnostics={$gdsStore.renderDiagnostics} />
+		{#if $gdsStore.sceneIndex}
+			<TopCellSelector
+				index={$gdsStore.sceneIndex}
+				selection={$gdsStore.topCellSelection}
+				onSelect={(cellName) => gdsStore.selectTopCell(cellName)}
+				onShowAll={() => gdsStore.showAllTopCells()}
+			/>
+		{/if}
 		{#if !$gdsStore.document && !$gdsStore.isLoading}
 			{#if embedMode}
 				<div class="upload-overlay">

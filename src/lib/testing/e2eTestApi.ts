@@ -2,6 +2,7 @@ import { get } from "svelte/store";
 import { type GDSState, gdsStore } from "../../stores/gdsStore";
 import type { BoundingBox } from "../../types/gds";
 import type { RenderDiagnostics } from "../diagnostics/renderDiagnostics";
+import type { TopCellSelection } from "../layout/LayoutSceneIndex";
 import type { PixiRenderer } from "../renderer/PixiRenderer";
 import { loadGDSIIFromBuffer } from "../utils/gdsLoader";
 
@@ -41,6 +42,11 @@ export interface GDSJamTestApi {
 	waitForRenderIdle(options?: { timeoutMs?: number }): Promise<RenderDiagnostics>;
 	getCompleteness(): RenderDiagnostics["status"];
 	getDiagnostics(): RenderDiagnostics;
+	getRenderScope(): {
+		selection: TopCellSelection;
+		aggregateBounds: BoundingBox | null;
+		selectedBounds: BoundingBox | null;
+	};
 	getWorldViewport(): BoundingBox;
 	setWorldViewport(bounds: BoundingBox): Promise<BoundingBox>;
 	getSemanticDigest(): Promise<SemanticDigest>;
@@ -153,6 +159,14 @@ export function installE2ETestApi(getRenderer: () => PixiRenderer | null): () =>
 		},
 		getDiagnostics() {
 			return cloneDiagnostics(get(gdsStore).renderDiagnostics);
+		},
+		getRenderScope() {
+			const state = get(gdsStore);
+			return {
+				selection: { ...state.topCellSelection },
+				aggregateBounds: state.aggregateBounds ? { ...state.aggregateBounds } : null,
+				selectedBounds: state.selectedBounds ? { ...state.selectedBounds } : null,
+			};
 		},
 		getWorldViewport() {
 			const renderer = getRenderer();

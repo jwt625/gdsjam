@@ -51,6 +51,11 @@ export interface ViewportState {
 	scale: number;
 }
 
+export interface DocumentRenderScope {
+	topCellNames: readonly string[];
+	bounds: BoundingBox;
+}
+
 export class PixiRenderer {
 	private app: Application;
 	private mainContainer: Container;
@@ -71,6 +76,7 @@ export class PixiRenderer {
 	private gridUpdateTimeout: number | null = null;
 	private scaleBarUpdateTimeout: number | null = null;
 	private currentDocument: GDSDocument | null = null;
+	private currentRenderScope: DocumentRenderScope | null = null;
 
 	// LOD metrics tracking
 	private visiblePolygonCount = 0;
@@ -504,7 +510,13 @@ export class PixiRenderer {
 
 		// Re-render with new depth (skip fitToView to preserve zoom)
 		// Pass the saved scale so stroke widths are calculated correctly
-		await this.renderGDSDocument(this.currentDocument, undefined, true, savedScale);
+		await this.renderGDSDocument(
+			this.currentDocument,
+			undefined,
+			true,
+			savedScale,
+			this.currentRenderScope ?? undefined,
+		);
 
 		// Restore viewport state to new container
 		this.setViewportState(viewportState);
@@ -635,9 +647,13 @@ export class PixiRenderer {
 		onProgress?: RenderProgressCallback,
 		skipFitToView = false,
 		overrideScale?: number,
+		renderScope?: DocumentRenderScope,
 	): Promise<void> {
 		// Store document for incremental re-rendering
 		this.currentDocument = document;
+		this.currentRenderScope = renderScope
+			? { topCellNames: [...renderScope.topCellNames], bounds: { ...renderScope.bounds } }
+			: { topCellNames: [...document.topCells], bounds: { ...document.boundingBox } };
 		this.documentUnits = document.units;
 
 		onProgress?.(0, "Preparing to render...");
@@ -652,7 +668,7 @@ export class PixiRenderer {
 			let totalTopCellPolygons = 0;
 			let totalTopCellInstances = 0;
 
-			for (const topCellName of document.topCells) {
+			for (const topCellName of this.currentRenderScope.topCellNames) {
 				const cell = document.cells.get(topCellName);
 				if (cell) {
 					totalTopCellPolygons += cell.polygons.length;
@@ -681,6 +697,7 @@ export class PixiRenderer {
 					fillMode: this.fillPolygons,
 					overrideScale,
 					layerVisibility: this.layerVisibility,
+					rootCellNames: this.currentRenderScope.topCellNames,
 				},
 				onProgress,
 			);
@@ -859,7 +876,7 @@ export class PixiRenderer {
 	 * Get document bounding box (for minimap)
 	 */
 	getDocumentBoundingBox(): BoundingBox | null {
-		return this.currentDocument?.boundingBox ?? null;
+		return this.currentRenderScope ? { ...this.currentRenderScope.bounds } : null;
 	}
 
 	/**

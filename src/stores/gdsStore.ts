@@ -7,10 +7,23 @@ import {
 	pendingRenderDiagnostics,
 	type RenderDiagnostics,
 } from "../lib/diagnostics/renderDiagnostics";
-import type { FileStatistics, GDSDocument } from "../types/gds";
+import {
+	createLayoutSceneIndex,
+	type LayoutSceneIndex,
+	type TopCellSelection,
+} from "../lib/layout/LayoutSceneIndex";
+import type { BoundingBox, FileStatistics, GDSDocument } from "../types/gds";
 
 export interface GDSState {
 	document: GDSDocument | null;
+	/** Hierarchy-preserving index for the original, aggregate document. */
+	sceneIndex: LayoutSceneIndex | null;
+	/** Explicit render scope. Multiple-top documents start in `required`. */
+	topCellSelection: TopCellSelection;
+	/** Shallow document view consumed by renderers; null until a required choice is made. */
+	renderDocument: GDSDocument | null;
+	aggregateBounds: BoundingBox | null;
+	selectedBounds: BoundingBox | null;
 	statistics: FileStatistics | null;
 	isLoading: boolean;
 	isRendering: boolean;
@@ -23,6 +36,11 @@ export interface GDSState {
 
 const initialState: GDSState = {
 	document: null,
+	sceneIndex: null,
+	topCellSelection: { mode: "required" },
+	renderDocument: null,
+	aggregateBounds: null,
+	selectedBounds: null,
 	statistics: null,
 	isLoading: false,
 	isRendering: false,
@@ -47,9 +65,18 @@ function createGDSStore() {
 			fileName: string,
 			statistics: FileStatistics | null = null,
 		) => {
+			const sceneIndex = createLayoutSceneIndex(document);
+			const topCellSelection = sceneIndex.initialSelection;
+			const selectedBounds = sceneIndex.getSelectedBounds(topCellSelection);
+			const renderDocument = createRenderDocument(document, topCellSelection, selectedBounds);
 			update((state) => ({
 				...state,
 				document,
+				sceneIndex,
+				topCellSelection,
+				renderDocument,
+				aggregateBounds: { ...sceneIndex.aggregateBounds },
+				selectedBounds,
 				statistics,
 				fileName,
 				isLoading: false,
@@ -59,6 +86,36 @@ function createGDSStore() {
 				error: null,
 				renderDiagnostics: pendingRenderDiagnostics(),
 			}));
+		},
+
+		selectTopCell: (cellName: string) => {
+			update((state) => {
+				if (!state.document || !state.sceneIndex) return state;
+				const topCellSelection = state.sceneIndex.selectTopCell(cellName);
+				const selectedBounds = state.sceneIndex.getSelectedBounds(topCellSelection);
+				return {
+					...state,
+					topCellSelection,
+					selectedBounds,
+					renderDocument: createRenderDocument(state.document, topCellSelection, selectedBounds),
+					renderDiagnostics: pendingRenderDiagnostics(),
+				};
+			});
+		},
+
+		showAllTopCells: () => {
+			update((state) => {
+				if (!state.document || !state.sceneIndex) return state;
+				const topCellSelection = state.sceneIndex.showAllTopCells();
+				const selectedBounds = state.sceneIndex.getSelectedBounds(topCellSelection);
+				return {
+					...state,
+					topCellSelection,
+					selectedBounds,
+					renderDocument: createRenderDocument(state.document, topCellSelection, selectedBounds),
+					renderDiagnostics: pendingRenderDiagnostics(),
+				};
+			});
 		},
 
 		/**
@@ -168,3 +225,16 @@ function createGDSStore() {
 }
 
 export const gdsStore = createGDSStore();
+
+function createRenderDocument(
+	document: GDSDocument,
+	selection: TopCellSelection,
+	bounds: BoundingBox | null,
+): GDSDocument | null {
+	if (selection.mode === "required" || !bounds) return null;
+	return {
+		...document,
+		topCells: selection.mode === "all" ? [...document.topCells] : [selection.cellName],
+		boundingBox: { ...bounds },
+	};
+}
