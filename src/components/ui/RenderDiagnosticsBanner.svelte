@@ -9,7 +9,7 @@ const { diagnostics }: Props = $props();
 </script>
 
 {#if diagnostics.status !== "pending" && diagnostics.status !== "complete" && diagnostics.status !== "failed"}
-	<details class="render-warning" open>
+	<details class="render-warning" open data-testid="render-diagnostics-warning">
 		<summary>Layout is partially rendered</summary>
 		<p>Some geometry may be missing from this view.</p>
 		<ul>

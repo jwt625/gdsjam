@@ -1,0 +1,234 @@
+{
+  "cells": [
+    {
+      "localPolygons": [],
+      "name": "LEVEL_0",
+      "references": [
+        {
+          "cell": "LEVEL_1",
+          "magnification": 1,
+          "originDbu": [
+            1000,
+            1000
+          ],
+          "originUm": [
+            1,
+            1
+          ],
+          "rotationDegrees": 0,
+          "xReflection": false
+        }
+      ]
+    },
+    {
+      "localPolygons": [],
+      "name": "LEVEL_1",
+      "references": [
+        {
+          "cell": "LEVEL_2",
+          "magnification": 1,
+          "originDbu": [
+            2000,
+            2000
+          ],
+          "originUm": [
+            2,
+            2
+          ],
+          "rotationDegrees": 0,
+          "xReflection": false
+        }
+      ]
+    },
+    {
+      "localPolygons": [],
+      "name": "LEVEL_2",
+      "references": [
+        {
+          "cell": "LEVEL_3",
+          "magnification": 1,
+          "originDbu": [
+            3000,
+            3000
+          ],
+          "originUm": [
+            3,
+            3
+          ],
+          "rotationDegrees": 0,
+          "xReflection": false
+        }
+      ]
+    },
+    {
+      "localPolygons": [],
+      "name": "LEVEL_3",
+      "references": [
+        {
+          "cell": "LEVEL_4",
+          "magnification": 1,
+          "originDbu": [
+            4000,
+            4000
+          ],
+          "originUm": [
+            4,
+            4
+          ],
+          "rotationDegrees": 0,
+          "xReflection": false
+        }
+      ]
+    },
+    {
+      "localPolygons": [],
+      "name": "LEVEL_4",
+      "references": [
+        {
+          "cell": "LEVEL_5",
+          "magnification": 1,
+          "originDbu": [
+            5000,
+            5000
+          ],
+          "originUm": [
+            5,
+            5
+          ],
+          "rotationDegrees": 0,
+          "xReflection": false
+        }
+      ]
+    },
+    {
+      "localPolygons": [
+        {
+          "datatype": 0,
+          "layer": 40,
+          "pointsDbu": [
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              1000
+            ],
+            [
+              2000,
+              1000
+            ],
+            [
+              2000,
+              0
+            ]
+          ],
+          "pointsUm": [
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              1
+            ],
+            [
+              2,
+              1
+            ],
+            [
+              2,
+              0
+            ]
+          ]
+        }
+      ],
+      "name": "LEVEL_5",
+      "references": []
+    }
+  ],
+  "description": "six-level reference chain for bounded hierarchy diagnostics",
+  "documentBoundsDbu": {
+    "maxX": 17000,
+    "maxY": 16000,
+    "minX": 15000,
+    "minY": 15000
+  },
+  "documentBoundsUm": {
+    "maxX": 17,
+    "maxY": 16,
+    "minX": 15,
+    "minY": 15
+  },
+  "fixture": "deep_hierarchy",
+  "flattenedTopCells": [
+    {
+      "boundsDbu": {
+        "maxX": 17000,
+        "maxY": 16000,
+        "minX": 15000,
+        "minY": 15000
+      },
+      "boundsUm": {
+        "maxX": 17,
+        "maxY": 16,
+        "minX": 15,
+        "minY": 15
+      },
+      "name": "LEVEL_0",
+      "polygonCount": 1,
+      "polygons": [
+        {
+          "datatype": 0,
+          "layer": 40,
+          "pointsDbu": [
+            [
+              15000,
+              15000
+            ],
+            [
+              15000,
+              16000
+            ],
+            [
+              17000,
+              16000
+            ],
+            [
+              17000,
+              15000
+            ]
+          ],
+          "pointsUm": [
+            [
+              15,
+              15
+            ],
+            [
+              15,
+              16
+            ],
+            [
+              17,
+              16
+            ],
+            [
+              17,
+              15
+            ]
+          ]
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 1,
+  "topCells": [
+    "LEVEL_0"
+  ],
+  "units": {
+    "databaseUnitMeters": 1e-09,
+    "databaseUnitsPerUserUnit": 1000,
+    "displayUnit": "um",
+    "userUnitMeters": 1e-06
+  }
+}

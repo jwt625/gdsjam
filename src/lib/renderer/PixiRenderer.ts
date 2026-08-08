@@ -883,6 +883,31 @@ export class PixiRenderer {
 		return this.getViewportBounds();
 	}
 
+	/** Fit world-space bounds into the viewport while preserving canvas aspect ratio. */
+	setPublicViewportBounds(bounds: BoundingBox): void {
+		if (this.isViewportLocked) {
+			this.onViewportBlockedCallback?.();
+			return;
+		}
+
+		const width = bounds.maxX - bounds.minX;
+		const height = bounds.maxY - bounds.minY;
+		if (
+			![bounds.minX, bounds.minY, bounds.maxX, bounds.maxY].every(Number.isFinite) ||
+			width <= 0 ||
+			height <= 0
+		) {
+			throw new Error("Viewport bounds must be finite and have positive width and height");
+		}
+
+		const scale = Math.min(this.app.screen.width / width, this.app.screen.height / height);
+		this.setViewportCenterAndScale(
+			(bounds.minX + bounds.maxX) / 2,
+			(bounds.minY + bounds.maxY) / 2,
+			scale,
+		);
+	}
+
 	/**
 	 * Set viewport center (for minimap click-to-navigate)
 	 * Instantly centers the viewport on the given world coordinates

@@ -91,7 +91,19 @@ def multiple_top_cells() -> tuple[gdstk.Library, str]:
     return library, "two independent top cells sharing one referenced child"
 
 
+def deep_hierarchy() -> tuple[gdstk.Library, str]:
+    library = _new_library("DEEP_HIERARCHY")
+    child = library.new_cell("LEVEL_5")
+    child.add(gdstk.rectangle((0, 0), (2, 1), layer=40))
+    for level in reversed(range(5)):
+        parent = library.new_cell(f"LEVEL_{level}")
+        parent.add(gdstk.Reference(child, origin=(level + 1, level + 1)))
+        child = parent
+    return library, "six-level reference chain for bounded hierarchy diagnostics"
+
+
 FIXTURES: dict[str, Callable[[], tuple[gdstk.Library, str]]] = {
+    "deep_hierarchy": deep_hierarchy,
     "multiple_top_cells": multiple_top_cells,
     "non_default_dbu": non_default_dbu,
     "skewed_aref": skewed_aref,
