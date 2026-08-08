@@ -803,6 +803,21 @@ export class PixiRenderer {
 	}
 
 	/**
+	 * Remove the active document as well as its rendered geometry.
+	 * Use this when the viewer intentionally has no render scope (for example,
+	 * while a multiple-top document awaits an explicit selection).
+	 */
+	unloadDocument(): void {
+		this.clear();
+		this.currentDocument = null;
+		this.currentRenderScope = null;
+		this.currentRenderDepth = 0;
+		this.visiblePolygonCount = 0;
+		this.totalRenderedPolygons = 0;
+		this.isRerendering = false;
+	}
+
+	/**
 	 * Check if renderer is initialized and ready to render
 	 */
 	isReady(): boolean {
