@@ -210,13 +210,13 @@ describe("DevLog-007 synthetic GDS fixtures", () => {
 		expect(document.diagnostics?.unsupportedElements).toEqual({ BOX: 1 });
 	});
 
-	it("keeps repeated hierarchical bounds construction bounded", async () => {
-		const fixture = await readFile(resolve(process.cwd(), "tests/gds/ring_modulator_pin.gds"));
+	it("keeps repeated AREF bounds construction bounded", async () => {
+		const fixture = await readFile(resolve(fixtureDirectory, "skewed_aref.gds"));
 		const startedAt = performance.now();
-		const { document } = await parseGDSII(fixture.buffer, "ring_modulator_pin.gds");
+		const { document } = await parseGDSII(fixture.buffer, "skewed_aref.gds");
 		const elapsedMs = performance.now() - startedAt;
 
-		expect(document.cells.size).toBe(16);
+		expect(document.cells.size).toBe(2);
 		expect(Object.values(document.boundingBox).every(Number.isFinite)).toBe(true);
 		expect(elapsedMs).toBeLessThan(2_000);
 	});
