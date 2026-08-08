@@ -1,7 +1,7 @@
 # DevLog-007-02: Execution Decisions and Multi-PR Plan
 
 **Date**: 2026-08-08  
-**Status**: In progress; correctness foundation and parallel PR foundations implemented, pushed, and integration-validated
+**Status**: Initial autonomous execution wave complete; milestones pushed and integration-validated through the gated overview prototype
 **Base revision**: `b3bc996` on `main`  
 **Related roadmaps**:
 
@@ -293,7 +293,7 @@ This is intentionally ambitious. If integration pressure arises, mathematical co
 - [x] Parser diagnostics with BOX/TEXT semantics implemented and pushed.
 - [x] Parallel branches composed on an integration branch and validated together.
 - [x] High-repetition scene-index compactness and browser-visible parser diagnostics measured.
-- [ ] Complete-overview and slow reference-raster prototypes in progress on isolated branches.
+- [x] Complete-overview and slow reference-raster prototypes implemented, pushed, and integration-validated.
 
 ### Active branches and milestone commits
 
@@ -303,22 +303,22 @@ This is intentionally ambitious. If integration pressure arises, mathematical co
 | `feature/devlog-007-parser-diagnostics` | `0452f45` | Pushed; typed parser diagnostics, BOX polygons, TEXT origin markers |
 | `feature/devlog-007-scene-index` | `473da91`, `98ad6c6` | Pushed; compact hierarchy index and memoized construction |
 | `feature/devlog-007-playwright` | `23bff59`, `c7b8b1b` | Pushed; gated browser API and deterministic desktop/iPad tests |
-| `feature/devlog-007-integration` | `0e0663c` through `c5e0f88` | Pushed; all completed slices composed and validated together |
+| `feature/devlog-007-integration` | `0e0663c` through `84f14b5` | Pushed; all completed slices composed and validated together |
 | `feature/devlog-007-top-cell-ui` | `3de89ac`, `da966d6` | Pushed; explicit multi-top selection and stale-document protection |
 | `feature/devlog-007-scene-benchmarks` | `c1930b0` | Pushed; 100,000-placement compactness benchmark and evidence |
 | `feature/devlog-007-parser-e2e` | `1ceec99` | Pushed; browser-visible unit diagnostics and semantic BOX/TEXT digest |
-| `feature/devlog-007-overview-prototype` | Pending | Active stacked branch for a gated complete-overview prototype |
-| `feature/devlog-007-reference-raster` | Pending | Active stacked branch for an exact slow raster oracle |
+| `feature/devlog-007-overview-prototype` | `111f218` | Pushed; gated conservative complete-overview prototype and benchmark |
+| `feature/devlog-007-reference-raster` | `126c976` | Pushed; exact discrete slow raster oracle and evidence |
 
 No pull requests have been opened. The stacked integration branch is validation evidence, not a replacement for the small review branches.
 
-### Combined validation at `c5e0f88`
+### Combined validation at `84f14b5`
 
 | Check | Result |
 |---|---|
-| Vitest | 23 files, 156 tests passed |
+| Vitest | 25 files, 171 tests passed |
 | Type/Svelte check | 0 errors, 0 warnings |
-| Production build | Passed; 2,217 modules transformed in approximately 10.6 seconds |
+| Production build | Passed; 2,219 modules transformed in approximately 10.8 seconds |
 | Playwright | 12/12 passed across desktop Chromium and emulated iPad |
 | Production test-API audit | 103 emitted HTML/JS/CSS assets checked; zero gated E2E markers |
 
@@ -337,6 +337,41 @@ The committed benchmark uses 21 isolated Node processes across three scenarios f
 | Compact canonical document | 6.52 ms | 35,224 B | 1 |
 
 The deterministic source-representation JSON proxy is 16,708,205 B expanded versus 293 B compact, a 57,025× ratio. This is evidence for the compact scene-index boundary, **not** a parser-memory win: the current compatibility document still retains 100,000 legacy instances and measured 18,413,736 B of retained heap. Removing that adapter requires renderer migration.
+
+### Complete-overview prototype evidence
+
+The feature-gated prototype (`VITE_ENABLE_COMPLETE_OVERVIEW=true`) produces conservative binary coverage masks per layer from the compact scene hierarchy. It visits every selected, resolvable polygon occurrence without a polygon budget and commits a Pixi representation only after a complete artifact is ready. Failed or incomplete output cannot replace a valid same-scope artifact, and stale artifacts from another document/scope are discarded. The vector renderer remains the production default.
+
+The benchmark workload is an 8 × 8 compact AREF with four canonical polygons/layers per placement: 256 logical polygon occurrences over a 1,024 × 1,024 DBU scope.
+
+| Physical raster | DPR | Median generation | Coverage bytes |
+|---:|---:|---:|---:|
+| 128 × 128 | 1 / 2 | 1.02 / 0.83 ms | 65,536 B |
+| 256 × 256 | 1 / 2 | 2.51 / 2.63 ms | 262,144 B |
+| 512 × 512 | 1 / 2 | 9.68 / 9.66 ms | 1,048,576 B |
+
+These numbers include scene-index construction, hierarchy traversal, conservative rasterization, ordering, and telemetry, but exclude Pixi conversion/render cost, GPU memory, and large-layout scaling. Conservative means any pixel touched by polygon area or boundary remains occupied; this is spatial-completeness evidence, not area-exact equivalence.
+
+### Reference-raster evidence
+
+The slow TypeScript oracle uses exact BigInt rational pixel-center tests, even-odd fill, boundary inclusion, integer DBU crops, Y-up world coordinates, and deterministic raw masks. Its 32 × 16 synthetic evidence fixture contains five polygons on three layer/datatype masks:
+
+- Combined union: 252 covered pixels.
+- Conserved polygon coverage: 297 samples, including overlap.
+- Runtime: approximately 0.147–0.155 ms per raster across 250 repeats.
+- Committed raw-mask JSON SHA-256: `d04c2f72fe911fc21f9cb5318fbebbf0fac275d6a7ce7d2f1ca3d801f69bdd8f`.
+
+This oracle is deliberately separate from browser/GPU antialiasing. It supports exact discrete-mask comparisons for small filled-polygon crops; hierarchy flattening, PATH conversion, TEXT, fractional-area coverage, and screenshot tolerance remain outside its current contract.
+
+## Next execution priorities
+
+1. Move overview generation off the main thread and add document/viewport generation IDs plus cancellation before considering default enablement.
+2. Replace run-length Pixi `Graphics` conversion with a measured texture path and benchmark upload/render cost, blank-frame count, and 128/256/512 candidates on representative layouts.
+3. Add world-anchored dynamic tile keys, parent fallback, padded borders, and atomic child swaps.
+4. Migrate exact rendering onto compact scene references so the parser can stop retaining eagerly expanded AREF compatibility instances.
+5. Implement or formally resolve absolute-angle/absolute-magnification STRANS composition; the overview currently marks those scopes incomplete.
+6. Define browser antialiasing/golden-image tolerance against the exact reference raster, then add fixed-viewport goldens.
+7. Decide whether top-cell render scope should be collaboration-synchronized; it is intentionally local viewer state today.
 
 ## Resolved Execution Gates
 
@@ -395,3 +430,8 @@ All 15 final gates were resolved on 2026-08-08. Defaults were accepted except wh
 - Fixed stale renderer state discovered during top-cell review so an unloaded render scope cannot resurrect the prior document.
 - Composed the full second wave at `c5e0f88`; 156 unit tests and 12 desktop/tablet browser tests passed together.
 - Started isolated complete-overview and slow reference-raster prototype tracks for the next renderer phase.
+- Added an exact discrete reference raster for small integer-DBU crops with per-layer masks and overlap conservation.
+- Added a default-off complete-overview prototype that builds conservative per-layer coverage before atomic Pixi replacement and rejects incomplete, unsupported, or stale-scope artifacts.
+- Benchmarked physical overview resolutions at DPR 1 and 2; selected 256 physical pixels as the current prototype starting point, subject to Pixi/GPU and large-layout measurements.
+- Composed the third wave at `84f14b5`; 171 unit tests, 12 browser tests, checks, build, and production test-API audit passed together.
+- Closed the initial autonomous execution wave with all milestone and integration branches pushed and no pull requests opened.
