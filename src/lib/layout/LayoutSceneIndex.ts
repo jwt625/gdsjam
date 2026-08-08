@@ -90,6 +90,8 @@ export interface LayoutSceneIndex {
 
 type OptionalBounds = BoundingBox | null;
 
+const SCENE_INDEX_ID_SCHEMA_VERSION = 1;
+
 function unionBounds(left: OptionalBounds, right: OptionalBounds): OptionalBounds {
 	if (!left) return right ? { ...right } : null;
 	if (!right) return { ...left };
@@ -224,6 +226,8 @@ function selectionRoots(index: LayoutSceneIndex, selection: TopCellSelection): r
 /** Build a compact, hierarchy-preserving index without flattening cell polygons. */
 export function createLayoutSceneIndex(document: GDSDocument): LayoutSceneIndex {
 	const hasher = new StableHasher();
+	hasher.update("layout-scene-index");
+	hasher.update(SCENE_INDEX_ID_SCHEMA_VERSION);
 	hasher.update(document.name);
 	hasher.update(document.units.database);
 	hasher.update(document.units.user);
@@ -242,6 +246,21 @@ export function createLayoutSceneIndex(document: GDSDocument): LayoutSceneIndex 
 				hasher.update(point.x);
 				hasher.update(point.y);
 			}
+		}
+		hasher.update(cell.texts.length);
+		for (const text of cell.texts) {
+			hasher.update(text.content);
+			hasher.update(text.layer);
+			hasher.update(text.textType);
+			hasher.update(text.origin.x);
+			hasher.update(text.origin.y);
+			hasher.update(text.rotation);
+			hasher.update(text.mirror);
+			hasher.update(text.magnification);
+			hasher.update(text.absoluteRotation);
+			hasher.update(text.absoluteMagnification);
+			hasher.update(text.presentation);
+			hasher.update(text.boundsKind);
 		}
 		const references = sourceReferences(document, cell.name);
 		hasher.update(references.length);

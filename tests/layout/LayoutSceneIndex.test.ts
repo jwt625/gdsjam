@@ -3,7 +3,13 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseGDSII } from "../../src/lib/gds/GDSParser";
 import { createLayoutSceneIndex } from "../../src/lib/layout/LayoutSceneIndex";
-import type { Cell, CellInstance, GDSDocument, Polygon } from "../../src/types/gds";
+import type {
+	Cell,
+	CellInstance,
+	GDSDocument,
+	GDSParserDiagnostics,
+	Polygon,
+} from "../../src/types/gds";
 
 const fixtureDirectory = resolve(process.cwd(), "tests/fixtures/devlog-007");
 
@@ -44,6 +50,7 @@ function cell(name: string, instances: CellInstance[] = []): Cell {
 	return {
 		name,
 		polygons: [polygon(`${name}-random-source-id`)],
+		texts: [],
 		instances,
 		boundingBox: { minX: 0, minY: 0, maxX: 10, maxY: 10 },
 		skipInMinimap: false,
@@ -51,6 +58,13 @@ function cell(name: string, instances: CellInstance[] = []): Cell {
 }
 
 function document(cells: Cell[], topCells: string[]): GDSDocument {
+	const emptyDiagnostics = (): GDSParserDiagnostics => ({
+		unsupportedElements: {},
+		unsupported: { count: 0, details: [] },
+		malformed: { count: 0, details: [] },
+		unresolvedReferences: { count: 0, details: [] },
+		referenceCycles: { count: 0, details: [] },
+	});
 	return {
 		name: "TEST",
 		cells: new Map(cells.map((item) => [item.name, item])),
@@ -58,6 +72,7 @@ function document(cells: Cell[], topCells: string[]): GDSDocument {
 		topCells,
 		boundingBox: { minX: 0, minY: 0, maxX: 10, maxY: 10 },
 		units: { database: 1e-9, user: 1e-6 },
+		diagnostics: emptyDiagnostics(),
 	};
 }
 
@@ -201,6 +216,25 @@ describe("LayoutSceneIndex", () => {
 		expect(createLayoutSceneIndex(document([beta, alpha], ["ALPHA", "BETA"])).id).not.toBe(
 			first.id,
 		);
+	});
+
+	it("includes semantic text markers in the versioned document identity", () => {
+		const top = cell("TOP");
+		const withoutText = createLayoutSceneIndex(document([top], ["TOP"]));
+		top.texts.push({
+			id: "source-id-does-not-define-identity",
+			content: "device-A",
+			layer: 12,
+			textType: 4,
+			origin: { x: 5, y: 6 },
+			rotation: 0,
+			mirror: false,
+			magnification: 1,
+			boundingBox: { minX: 5, minY: 6, maxX: 5, maxY: 6 },
+			boundsKind: "origin-marker",
+		});
+
+		expect(createLayoutSceneIndex(document([top], ["TOP"])).id).not.toBe(withoutText.id);
 	});
 
 	it("uses legacy instances only when compact source references are absent", () => {
