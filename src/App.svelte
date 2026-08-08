@@ -13,6 +13,7 @@ import { type ExecutionResult, pythonExecutor } from "./lib/api/pythonExecutor";
 import { getDefaultCode } from "./lib/code/defaultExample";
 import { EmbedAPI } from "./lib/embed/EmbedAPI";
 import { KeyboardShortcutManager } from "./lib/keyboard/KeyboardShortcutManager";
+import type { PixiRenderer } from "./lib/renderer/PixiRenderer";
 import { loadGDSIIFromBuffer } from "./lib/utils/gdsLoader";
 import { fetchGDSIIFromURL } from "./lib/utils/urlLoader";
 import { collaborationStore } from "./stores/collaborationStore";
@@ -38,6 +39,12 @@ const editorModeActive = $derived($editorStore.editorModeActive);
 // Embed mode state (iframe-friendly, viewer-only)
 let embedMode = $state(false);
 let embedApi: EmbedAPI | null = null;
+let activeRenderer: PixiRenderer | null = null;
+let removeE2ETestApi: (() => void) | null = null;
+
+function handleRendererReady(renderer: PixiRenderer | null): void {
+	activeRenderer = renderer;
+}
 
 // Rate limit countdown interval (needs cleanup on unmount)
 let rateLimitCountdownInterval: NodeJS.Timeout | null = null;
@@ -329,6 +336,12 @@ onMount(async () => {
 	// Register keyboard shortcuts
 	registerKeyboardShortcuts();
 
+	// Vite/Rollup eliminates this import from ordinary production builds.
+	if (import.meta.env.VITE_E2E === "true") {
+		const { installE2ETestApi } = await import("./lib/testing/e2eTestApi");
+		removeE2ETestApi = installE2ETestApi(() => activeRenderer);
+	}
+
 	// Check if this is the first time user visits (show help modal)
 	const hasSeenHelpModal = localStorage.getItem(HELP_MODAL_SEEN_KEY);
 
@@ -516,6 +529,8 @@ onDestroy(() => {
 	KeyboardShortcutManager.unregisterByOwner(KEYBOARD_OWNER);
 	embedApi?.destroy();
 	embedApi = null;
+	removeE2ETestApi?.();
+	removeE2ETestApi = null;
 
 	// Clean up rate limit countdown interval (prevent memory leak)
 	if (rateLimitCountdownInterval) {
@@ -575,6 +590,7 @@ onDestroy(() => {
 				{fullscreenMode}
 				onToggleFullscreen={handleToggleFullscreen}
 				onToggleEditorMode={handleToggleEditorMode}
+				onRendererReady={handleRendererReady}
 			/>
 		{/if}
 

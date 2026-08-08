@@ -201,6 +201,7 @@ function triggerFileInput() {
 	<div class="file-upload-container">
 		<div
 			class="file-upload"
+			data-testid="file-upload"
 			class:dragging={isDragging}
 			ondragover={handleDragOver}
 			ondragleave={handleDragLeave}

@@ -70,6 +70,7 @@ describe("DevLog-007 synthetic GDS fixtures", () => {
 		expect(manifest.schemaVersion).toBe(1);
 		expect(manifest.gdstkVersion).toBe("1.0.1");
 		expect(manifest.fixtures.map((fixture) => fixture.name)).toEqual([
+			"deep_hierarchy",
 			"multiple_top_cells",
 			"non_default_dbu",
 			"skewed_aref",
@@ -134,6 +135,7 @@ describe("DevLog-007 synthetic GDS fixtures", () => {
 	});
 
 	it.each([
+		"deep_hierarchy",
 		"multiple_top_cells",
 		"non_default_dbu",
 		"skewed_aref",

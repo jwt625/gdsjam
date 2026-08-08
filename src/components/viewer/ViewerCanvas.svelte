@@ -41,9 +41,15 @@ interface Props {
 	fullscreenMode?: boolean;
 	onToggleFullscreen?: (enabled: boolean) => void;
 	onToggleEditorMode?: () => void;
+	onRendererReady?: (renderer: PixiRenderer | null) => void;
 }
 
-const { fullscreenMode = false, onToggleFullscreen, onToggleEditorMode }: Props = $props();
+const {
+	fullscreenMode = false,
+	onToggleFullscreen,
+	onToggleEditorMode,
+	onRendererReady,
+}: Props = $props();
 
 // Mobile breakpoint (matches CSS media query)
 const MOBILE_BREAKPOINT = 1024; // pixels
@@ -502,6 +508,7 @@ onMount(() => {
 				},
 			});
 			renderer = result.renderer;
+			onRendererReady?.(renderer);
 
 			// Set up viewport sync callbacks
 			setupViewportSync();
@@ -698,6 +705,7 @@ function setupViewportSync() {
 }
 
 onDestroy(() => {
+	onRendererReady?.(null);
 	renderer?.destroy();
 });
 
@@ -777,8 +785,8 @@ function toggleMinimap() {
 }
 </script>
 
-<div class="viewer-container" class:comment-mode={commentModeActive}>
-	<canvas bind:this={canvas} class="viewer-canvas"></canvas>
+<div class="viewer-container" class:comment-mode={commentModeActive} data-testid="viewer">
+	<canvas bind:this={canvas} class="viewer-canvas" data-testid="viewer-canvas"></canvas>
 	<PerformancePanel {renderer} statistics={$gdsStore.statistics} visible={panelsVisible} />
 	<LayerPanel statistics={$gdsStore.statistics} visible={layerPanelVisible} />
 	<Minimap

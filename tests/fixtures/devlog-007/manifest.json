@@ -1,6 +1,20 @@
 {
   "fixtures": [
     {
+      "description": "six-level reference chain for bounded hierarchy diagnostics",
+      "gds": {
+        "bytes": 564,
+        "file": "deep_hierarchy.gds",
+        "sha256": "0ecfe6e563c85bfcb90004c362665b1167bfe04b14572d15cb34c0174aef171e"
+      },
+      "name": "deep_hierarchy",
+      "oracle": {
+        "bytes": 4175,
+        "file": "deep_hierarchy.semantic.json",
+        "sha256": "bce6ebdef3ee474949dc777ef947404b6578b163f71d6dd9b623fb0a5feeeb49"
+      }
+    },
+    {
       "description": "two independent top cells sharing one referenced child",
       "gds": {
         "bytes": 494,
