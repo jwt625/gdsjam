@@ -9,6 +9,9 @@ const fixturePath = fileURLToPath(
 const partialFixturePath = fileURLToPath(
 	new URL("../tests/fixtures/devlog-007/deep_hierarchy.gds", import.meta.url),
 );
+const multipleTopFixturePath = fileURLToPath(
+	new URL("../tests/fixtures/devlog-007/multiple_top_cells.gds", import.meta.url),
+);
 
 test.beforeEach(async ({ page }) => {
 	await page.addInitScript(() => {
@@ -51,9 +54,7 @@ test("loads a deterministic ArrayBuffer fixture and exposes render state", async
 	expect(result.viewport.maxX).toBeGreaterThan(result.viewport.minX);
 	await expect(page.getByTestId("viewer-canvas")).toBeVisible();
 	const lifecycle = await page.evaluate(
-		() =>
-			(window as unknown as { __GDSJAM_E2E_LIFECYCLE__: string[] })
-				.__GDSJAM_E2E_LIFECYCLE__,
+		() => (window as unknown as { __GDSJAM_E2E_LIFECYCLE__: string[] }).__GDSJAM_E2E_LIFECYCLE__,
 	);
 	expect(lifecycle).toEqual(
 		expect.arrayContaining([
@@ -100,11 +101,48 @@ test("shows a warning when bounded hierarchy rendering omits geometry", async ({
 	}, fixture);
 
 	expect(diagnostics.status).toBe("partial-depth");
-	expect(diagnostics.issues).toContainEqual(
-		expect.objectContaining({ code: "hierarchy-depth" }),
-	);
+	expect(diagnostics.issues).toContainEqual(expect.objectContaining({ code: "hierarchy-depth" }));
 	await expect(page.getByTestId("render-diagnostics-warning")).toContainText(
 		"Layout is partially rendered",
 	);
+	expect(consoleMessages.filter((line) => line.startsWith("[error]"))).toEqual([]);
+});
+
+test("requires a top-cell choice and can explicitly render the aggregate layout", async ({
+	page,
+	consoleMessages,
+}) => {
+	const fixture = Array.from(await readFile(multipleTopFixturePath));
+	await page.evaluate(async (bytes) => {
+		const api = window.__GDSJAM_TEST__ as GDSJamTestApi;
+		await api.loadFixture(Uint8Array.from(bytes).buffer, "multiple_top_cells.gds");
+	}, fixture);
+
+	const selector = page.getByTestId("top-cell-selector");
+	await expect(selector).toBeVisible();
+	await expect(selector).toContainText("Select one top-level cell to render");
+	const scopeSelect = page.getByLabel("Top cell render scope");
+	await expect(scopeSelect).toHaveValue("");
+
+	await scopeSelect.selectOption("TOP_A");
+	const selected = await page.evaluate(async () => {
+		const api = window.__GDSJAM_TEST__ as GDSJamTestApi;
+		await api.waitForRenderIdle();
+		return api.getRenderScope();
+	});
+	expect(selected).toEqual({
+		selection: { mode: "single", cellName: "TOP_A" },
+		aggregateBounds: { minX: -12000, minY: -2000, maxX: 28000, maxY: 10000 },
+		selectedBounds: { minX: -12000, minY: -2000, maxX: -8000, maxY: 2000 },
+	});
+
+	await scopeSelect.selectOption("__all__");
+	const all = await page.evaluate(async () => {
+		const api = window.__GDSJAM_TEST__ as GDSJamTestApi;
+		await api.waitForRenderIdle();
+		return api.getRenderScope();
+	});
+	expect(all.selection).toEqual({ mode: "all" });
+	expect(all.selectedBounds).toEqual(all.aggregateBounds);
 	expect(consoleMessages.filter((line) => line.startsWith("[error]"))).toEqual([]);
 });

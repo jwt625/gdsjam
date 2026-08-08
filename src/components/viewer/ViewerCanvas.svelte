@@ -462,15 +462,22 @@ onMount(() => {
 	// Initialize renderer asynchronously
 	if (canvas) {
 		(async () => {
-			const initialDocument = $gdsStore.document;
-			if (initialDocument) {
-				lastRenderedDocument = initialDocument;
+			const initialRenderDocument = $gdsStore.renderDocument;
+			const initialDocument = initialRenderDocument ? $gdsStore.document : null;
+			if (initialDocument && initialRenderDocument) {
+				lastRenderedDocument = initialRenderDocument;
 				gdsStore.setRendering(true, "Rendering...", 0);
 			}
 
 			const result = await initializeViewerRenderer({
 				canvas,
 				initialDocument,
+				initialRenderScope: initialRenderDocument
+					? {
+							topCellNames: initialRenderDocument.topCells,
+							bounds: initialRenderDocument.boundingBox,
+						}
+					: undefined,
 				onViewportChanged: (viewportState) => {
 					// Update minimap viewport bounds
 					viewportBounds = renderer?.getPublicViewportBounds() ?? null;
@@ -713,20 +720,40 @@ onDestroy(() => {
 // Only react to document changes, not other store properties
 $effect(() => {
 	const gdsDocument = $gdsStore.document;
-	if (renderer?.isReady() && gdsDocument && gdsDocument !== lastRenderedDocument) {
-		lastRenderedDocument = gdsDocument;
+	const renderDocument = $gdsStore.renderDocument;
+	if (renderer?.isReady() && !renderDocument) {
+		if (lastRenderedDocument) renderer.clear();
+		lastRenderedDocument = null;
+		return;
+	}
+	if (
+		renderer?.isReady() &&
+		gdsDocument &&
+		renderDocument &&
+		renderDocument !== lastRenderedDocument
+	) {
+		lastRenderedDocument = renderDocument;
 		// Reset layer store initialization flag when new document is loaded
 		layerStoreInitialized = false;
 		gdsStore.setRendering(true, "Rendering...", 0);
 		(async () => {
 			try {
-				await renderer.renderGDSDocument(gdsDocument, (progress, message, diagnostics) => {
-					gdsStore.setRendering(true, message, progress);
-					if (diagnostics) gdsStore.setRenderDiagnostics(diagnostics);
-					if (progress >= 100) {
-						setTimeout(() => gdsStore.setRendering(false), 500);
-					}
-				});
+				await renderer.renderGDSDocument(
+					gdsDocument,
+					(progress, message, diagnostics) => {
+						gdsStore.setRendering(true, message, progress);
+						if (diagnostics) gdsStore.setRenderDiagnostics(diagnostics);
+						if (progress >= 100) {
+							setTimeout(() => gdsStore.setRendering(false), 500);
+						}
+					},
+					false,
+					undefined,
+					{
+						topCellNames: renderDocument.topCells,
+						bounds: renderDocument.boundingBox,
+					},
+				);
 				// Update viewport bounds after render completes (for minimap)
 				viewportBounds = renderer?.getPublicViewportBounds() ?? null;
 			} catch (error) {
@@ -791,7 +818,7 @@ function toggleMinimap() {
 	<LayerPanel statistics={$gdsStore.statistics} visible={layerPanelVisible} />
 	<Minimap
 		visible={minimapVisible}
-		document={$gdsStore.document}
+		document={$gdsStore.renderDocument}
 		{viewportBounds}
 		{participantViewports}
 		onNavigate={handleMinimapNavigate}

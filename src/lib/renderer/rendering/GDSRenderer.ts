@@ -42,6 +42,8 @@ export interface RenderOptions {
 	fillMode: boolean;
 	overrideScale?: number;
 	layerVisibility: Map<string, boolean>;
+	/** Explicit roots to render. Descendants are still resolved from the full document. */
+	rootCellNames?: readonly string[];
 }
 
 export interface RenderResult {
@@ -78,24 +80,12 @@ export class GDSRenderer {
 		this.cellRenderCounts.clear();
 		const allGraphicsItems: RTreeItem[] = [];
 
-		// Find top-level cells (cells that are not referenced by any other cell)
-		// Exclude references from context cells (e.g., $$$CONTEXT_INFO$$$) as they're just library metadata
-		const referencedCells = new Set<string>();
-		for (const cell of document.cells.values()) {
-			// Skip context cells when building referenced cells set
-			const isContextCell = cell.name.includes("CONTEXT_INFO") || cell.name.startsWith("$$$");
-			if (!isContextCell) {
-				for (const instance of cell.instances) {
-					referencedCells.add(instance.cellRef);
-				}
-			}
-		}
-
-		// Filter out context cells from top cells list - we don't want to render them
-		const topCells = Array.from(document.cells.values()).filter((cell) => {
-			const isContextCell = cell.name.includes("CONTEXT_INFO") || cell.name.startsWith("$$$");
-			return !referencedCells.has(cell.name) && !isContextCell;
-		});
+		const topCells = (options.rootCellNames ?? document.topCells)
+			.map((cellName) => document.cells.get(cellName))
+			.filter((cell): cell is Cell => {
+				if (!cell) return false;
+				return !cell.name.includes("CONTEXT_INFO") && !cell.name.startsWith("$$$");
+			});
 
 		if (DEBUG_RENDERER) {
 			console.log(
