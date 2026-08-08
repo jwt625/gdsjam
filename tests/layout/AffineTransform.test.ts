@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
 	composeAffine,
+	composeGDSHierarchyTransform,
 	fromGDSReferenceTransform,
+	IDENTITY_GDS_HIERARCHY_TRANSFORM,
 	rotationAffine,
 	transformBoundingBox,
 	transformPoint,
@@ -40,5 +42,25 @@ describe("AffineTransform", () => {
 		expect(bounds.minY).toBeCloseTo(0);
 		expect(bounds.maxX).toBeCloseTo(0);
 		expect(bounds.maxY).toBeCloseTo(10);
+	});
+
+	it("keeps absolute child angle and magnification independent of its parent", () => {
+		const parent = composeGDSHierarchyTransform(IDENTITY_GDS_HIERARCHY_TRANSFORM, {
+			x: 100,
+			y: 50,
+			rotationDegrees: 90,
+			magnification: 2,
+		});
+		const child = composeGDSHierarchyTransform(parent, {
+			x: 10,
+			y: 0,
+			rotationDegrees: 0,
+			magnification: 1,
+			absoluteRotation: true,
+			absoluteMagnification: true,
+		});
+
+		expect(transformPoint(child.affine, { x: 0, y: 0 })).toEqual({ x: 100, y: 70 });
+		expect(transformPoint(child.affine, { x: 2, y: 1 })).toEqual({ x: 102, y: 71 });
 	});
 });

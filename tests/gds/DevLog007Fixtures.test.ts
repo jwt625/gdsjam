@@ -64,6 +64,55 @@ function expectBoundsClose(actual: Bounds, expected: Bounds): void {
 	}
 }
 
+function unsupportedBoxElement(): Uint8Array {
+	const bytes = new Uint8Array(4 + 6 + 6 + 44 + 4);
+	const view = new DataView(bytes.buffer);
+	let offset = 0;
+	const header = (length: number, tag: number, dataType: number): void => {
+		view.setUint16(offset, length, false);
+		view.setUint8(offset + 2, tag);
+		view.setUint8(offset + 3, dataType);
+		offset += 4;
+	};
+	header(4, 0x2d, 0); // BOX
+	header(6, 0x0d, 2); // LAYER
+	view.setInt16(offset, 7, false);
+	offset += 2;
+	header(6, 0x2e, 2); // BOXTYPE
+	view.setInt16(offset, 0, false);
+	offset += 2;
+	header(44, 0x10, 3); // XY: closed rectangle
+	for (const [x, y] of [
+		[0, 0],
+		[10, 0],
+		[10, 10],
+		[0, 10],
+		[0, 0],
+	]) {
+		view.setInt32(offset, x, false);
+		view.setInt32(offset + 4, y, false);
+		offset += 8;
+	}
+	header(4, 0x11, 0); // ENDEL
+	return bytes;
+}
+
+function insertBeforeFirstEndStructure(gds: Uint8Array, element: Uint8Array): Uint8Array {
+	let endStructureOffset = -1;
+	for (let offset = 0; offset <= gds.length - 4; offset++) {
+		if (gds[offset] === 0 && gds[offset + 1] === 4 && gds[offset + 2] === 7) {
+			endStructureOffset = offset;
+			break;
+		}
+	}
+	if (endStructureOffset < 0) throw new Error("Fixture has no ENDSTR record");
+	const result = new Uint8Array(gds.length + element.length);
+	result.set(gds.subarray(0, endStructureOffset));
+	result.set(element, endStructureOffset);
+	result.set(gds.subarray(endStructureOffset), endStructureOffset + element.length);
+	return result;
+}
+
 describe("DevLog-007 synthetic GDS fixtures", () => {
 	it("tracks deterministic fixture and oracle bytes", async () => {
 		const manifest = await readJson<Manifest>("manifest.json");
@@ -151,5 +200,24 @@ describe("DevLog-007 synthetic GDS fixtures", () => {
 		expect(document.units.database).toBeCloseTo(oracle.units.databaseUnitMeters, 15);
 		expect(document.units.user).toBeCloseTo(oracle.units.userUnitMeters, 15);
 		expectBoundsClose(document.boundingBox, oracle.documentBoundsDbu);
+	});
+
+	it("attaches diagnostics for unsupported element records", async () => {
+		const fixture = await readFile(resolve(fixtureDirectory, "non_default_dbu.gds"));
+		const withBox = insertBeforeFirstEndStructure(fixture, unsupportedBoxElement());
+		const { document } = await parseGDSII(withBox.buffer, "unsupported-box.gds");
+
+		expect(document.diagnostics?.unsupportedElements).toEqual({ BOX: 1 });
+	});
+
+	it("keeps repeated hierarchical bounds construction bounded", async () => {
+		const fixture = await readFile(resolve(process.cwd(), "tests/gds/ring_modulator_pin.gds"));
+		const startedAt = performance.now();
+		const { document } = await parseGDSII(fixture.buffer, "ring_modulator_pin.gds");
+		const elapsedMs = performance.now() - startedAt;
+
+		expect(document.cells.size).toBe(16);
+		expect(Object.values(document.boundingBox).every(Number.isFinite)).toBe(true);
+		expect(elapsedMs).toBeLessThan(2_000);
 	});
 });

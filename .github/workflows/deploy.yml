@@ -24,6 +24,15 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref_name }}
+          fetch-depth: 0
+
+      - name: Verify release commit is on main
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$(git rev-parse HEAD)" origin/main; then
+            echo "Web production tags must point to a commit reachable from main" >&2
+            exit 1
+          fi
 
       - name: Validate release tag
         env:

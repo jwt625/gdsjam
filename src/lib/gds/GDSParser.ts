@@ -15,7 +15,12 @@ import type {
 	Polygon,
 } from "../../types/gds";
 import { DEBUG_PARSER } from "../debug";
-import { fromGDSReferenceTransform, transformBoundingBox } from "../layout/AffineTransform";
+import {
+	composeGDSHierarchyTransform,
+	type GDSHierarchyTransform,
+	IDENTITY_GDS_HIERARCHY_TRANSFORM,
+	transformBoundingBox,
+} from "../layout/AffineTransform";
 import { decodeGDSUnits, toLegacyDocumentUnits } from "../layout/coordinates";
 import { generateUUID } from "../utils/uuid";
 import { pathToPolygon } from "./pathToPolygon";
@@ -747,11 +752,12 @@ async function buildGDSDocument(
 		width: number;
 		pathtype: number;
 	}> | null = null;
-	let currentPathWidth = 0;
-	let currentPathType = 0;
-
 	let polygonCount = 0;
 	let instanceCount = 0;
+	const unsupportedElements: Record<string, number> = {};
+	const recordUnsupportedElement = (element: string): void => {
+		unsupportedElements[element] = (unsupportedElements[element] ?? 0) + 1;
+	};
 
 	// Process records sequentially with progress updates
 	const totalRecords = records.length;
@@ -825,7 +831,25 @@ async function buildGDSDocument(
 				currentPath = {
 					id: generateUUID(),
 					points: [],
+					width: 0,
+					pathtype: 0,
 				};
+				break;
+
+			case RecordType.TEXT:
+				recordUnsupportedElement("TEXT");
+				break;
+
+			case RecordType.TEXTNODE:
+				recordUnsupportedElement("TEXTNODE");
+				break;
+
+			case RecordType.NODE:
+				recordUnsupportedElement("NODE");
+				break;
+
+			case RecordType.BOX:
+				recordUnsupportedElement("BOX");
 				break;
 
 			case RecordType.LAYER:
@@ -849,16 +873,14 @@ async function buildGDSDocument(
 				break;
 
 			case RecordType.WIDTH:
-				currentPathWidth = data as number;
 				if (currentPath) {
-					currentPath.width = currentPathWidth;
+					currentPath.width = data as number;
 				}
 				break;
 
 			case RecordType.PATHTYPE:
-				currentPathType = data as number;
 				if (currentPath) {
-					currentPath.pathtype = currentPathType;
+					currentPath.pathtype = data as number;
 				}
 				break;
 
@@ -962,10 +984,14 @@ async function buildGDSDocument(
 						currentPath.datatype = currentDatatype || 0;
 					}
 					if (currentPath.width === undefined) {
-						currentPath.width = currentPathWidth || 0;
+						currentPath.width = 0;
 					}
 					if (currentPath.pathtype === undefined) {
-						currentPath.pathtype = currentPathType || 0;
+						currentPath.pathtype = 0;
+					}
+					if (currentPath.width < 0) recordUnsupportedElement("absolute-width PATH");
+					if (![0, 1, 2].includes(currentPath.pathtype)) {
+						recordUnsupportedElement(`PATH type ${currentPath.pathtype}`);
 					}
 
 					// Convert path to polygon (or polyline for zero-width paths)
@@ -1125,29 +1151,59 @@ async function buildGDSDocument(
 		}
 	}
 
-	// Calculate bounding boxes for cells recursively (bottom-up)
-	// We need to process cells in dependency order: leaf cells first, then parents
-	const cellBBoxCalculated = new Set<string>();
-	const cellBBoxInProgress = new Set<string>(); // Guard against circular references
+	function hasReferenceCycle(): boolean {
+		const visited = new Set<string>();
+		const active = new Set<string>();
+		const visit = (cellName: string): boolean => {
+			if (active.has(cellName)) return true;
+			if (visited.has(cellName)) return false;
+			visited.add(cellName);
+			active.add(cellName);
+			const cell = cells.get(cellName);
+			if (cell?.instances.some((instance) => visit(instance.cellRef))) return true;
+			active.delete(cellName);
+			return false;
+		};
+		return Array.from(cells.keys()).some(visit);
+	}
 
-	function calculateCellBoundingBox(cellName: string): BoundingBox {
-		// Return cached result if already calculated
+	const boundsCache = new Map<string, BoundingBox | null>();
+	const canCacheBounds = !hasReferenceCycle();
+	const translateBounds = (bounds: BoundingBox, x: number, y: number): BoundingBox => ({
+		minX: bounds.minX + x,
+		minY: bounds.minY + y,
+		maxX: bounds.maxX + x,
+		maxY: bounds.maxY + y,
+	});
+
+	// Traverse hierarchy for bounds so absolute STRANS angle/magnification semantics are preserved.
+	// Cache translation-normalized results: repeated placements share the same inherited linear state.
+	function calculateHierarchyBounds(
+		cellName: string,
+		worldTransform: GDSHierarchyTransform = IDENTITY_GDS_HIERARCHY_TRANSFORM,
+		activePath: Set<string> = new Set(),
+	): BoundingBox | null {
 		const cell = cells.get(cellName);
-		if (!cell) {
-			return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
-		}
-
-		if (cellBBoxCalculated.has(cellName)) {
-			return cell.boundingBox;
-		}
+		if (!cell) return null;
 
 		// Detect circular references
-		if (cellBBoxInProgress.has(cellName)) {
+		if (activePath.has(cellName)) {
 			console.warn(`[GDSParser] Circular cell reference detected: ${cellName}`);
-			return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+			return null;
 		}
+		const nextPath = new Set(activePath);
+		nextPath.add(cellName);
 
-		cellBBoxInProgress.add(cellName);
+		const { e: originX, f: originY } = worldTransform.affine;
+		const normalizedTransform: GDSHierarchyTransform = {
+			...worldTransform,
+			affine: { ...worldTransform.affine, e: 0, f: 0 },
+		};
+		const cacheKey = `${cellName}|${normalizedTransform.rotationDegrees},${normalizedTransform.reflectAcrossX},${normalizedTransform.magnification}|${normalizedTransform.affine.a},${normalizedTransform.affine.b},${normalizedTransform.affine.c},${normalizedTransform.affine.d}`;
+		if (canCacheBounds && boundsCache.has(cacheKey)) {
+			const cached = boundsCache.get(cacheKey);
+			return cached ? translateBounds(cached, originX, originY) : null;
+		}
 
 		let minX = Number.POSITIVE_INFINITY;
 		let minY = Number.POSITIVE_INFINITY;
@@ -1156,27 +1212,27 @@ async function buildGDSDocument(
 
 		// Include polygons in this cell
 		for (const polygon of cell.polygons) {
-			minX = Math.min(minX, polygon.boundingBox.minX);
-			minY = Math.min(minY, polygon.boundingBox.minY);
-			maxX = Math.max(maxX, polygon.boundingBox.maxX);
-			maxY = Math.max(maxY, polygon.boundingBox.maxY);
+			const transformed = transformBoundingBox(normalizedTransform.affine, polygon.boundingBox);
+			minX = Math.min(minX, transformed.minX);
+			minY = Math.min(minY, transformed.minY);
+			maxX = Math.max(maxX, transformed.maxX);
+			maxY = Math.max(maxY, transformed.maxY);
 		}
 
-		// Include transformed bounding boxes of referenced cells
+		// Reference origins inherit the parent transform; absolute STRANS flags selectively reset
+		// accumulated angle and magnification for referenced geometry.
 		for (const instance of cell.instances) {
-			// Recursively calculate referenced cell's bbox first
-			const refBBox = calculateCellBoundingBox(instance.cellRef);
-
-			const transformed = transformBoundingBox(
-				fromGDSReferenceTransform({
-					x: instance.x,
-					y: instance.y,
-					rotationDegrees: instance.rotation,
-					reflectAcrossX: instance.mirror,
-					magnification: instance.magnification,
-				}),
-				refBBox,
-			);
+			const childTransform = composeGDSHierarchyTransform(normalizedTransform, {
+				x: instance.x,
+				y: instance.y,
+				rotationDegrees: instance.rotation,
+				reflectAcrossX: instance.mirror,
+				magnification: instance.magnification,
+				absoluteRotation: instance.absoluteRotation,
+				absoluteMagnification: instance.absoluteMagnification,
+			});
+			const transformed = calculateHierarchyBounds(instance.cellRef, childTransform, nextPath);
+			if (!transformed) continue;
 
 			minX = Math.min(minX, transformed.minX);
 			minY = Math.min(minY, transformed.minY);
@@ -1184,21 +1240,16 @@ async function buildGDSDocument(
 			maxY = Math.max(maxY, transformed.maxY);
 		}
 
-		cell.boundingBox = {
-			minX: minX === Number.POSITIVE_INFINITY ? 0 : minX,
-			minY: minY === Number.POSITIVE_INFINITY ? 0 : minY,
-			maxX: maxX === Number.NEGATIVE_INFINITY ? 0 : maxX,
-			maxY: maxY === Number.NEGATIVE_INFINITY ? 0 : maxY,
-		};
-
-		cellBBoxInProgress.delete(cellName);
-		cellBBoxCalculated.add(cellName);
-		return cell.boundingBox;
+		const localBounds = minX === Number.POSITIVE_INFINITY ? null : { minX, minY, maxX, maxY };
+		if (canCacheBounds) boundsCache.set(cacheKey, localBounds);
+		return localBounds ? translateBounds(localBounds, originX, originY) : null;
 	}
 
-	// Calculate bounding boxes for all cells
+	// Calculate each cell's bounds in its own identity coordinate system.
 	for (const cellName of cells.keys()) {
-		calculateCellBoundingBox(cellName);
+		const cell = cells.get(cellName);
+		const bounds = calculateHierarchyBounds(cellName);
+		if (cell) cell.boundingBox = bounds ?? { minX: 0, minY: 0, maxX: 0, maxY: 0 };
 	}
 
 	// Find top cells (cells not referenced by others)
@@ -1273,5 +1324,6 @@ async function buildGDSDocument(
 			maxY: globalMaxY === Number.NEGATIVE_INFINITY ? 0 : globalMaxY,
 		},
 		units,
+		diagnostics: { unsupportedElements },
 	};
 }

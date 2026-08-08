@@ -198,4 +198,90 @@ describe("GDSRenderer completeness", () => {
 		expect(progressValues.length).toBeGreaterThan(0);
 		expect(progressValues.every(Number.isFinite)).toBe(true);
 	});
+
+	it("honors absolute STRANS angle and magnification in nested references", async () => {
+		const top = document.cells.get("TOP");
+		if (!top) throw new Error("Missing test top cell");
+		const absoluteDocument: GDSDocument = {
+			...document,
+			cells: new Map([
+				[
+					"LEAF",
+					{
+						...top,
+						name: "LEAF",
+						polygons: [
+							{
+								...polygon("absolute-leaf"),
+								points: [
+									{ x: 0, y: 0 },
+									{ x: 2, y: 0 },
+									{ x: 2, y: 1 },
+									{ x: 0, y: 1 },
+								],
+								boundingBox: { minX: 0, minY: 0, maxX: 2, maxY: 1 },
+							},
+						],
+						instances: [],
+					},
+				],
+				[
+					"CHILD",
+					{
+						...top,
+						name: "CHILD",
+						polygons: [],
+						instances: [
+							{
+								id: "absolute-child",
+								cellRef: "LEAF",
+								x: 10,
+								y: 0,
+								rotation: 0,
+								mirror: false,
+								magnification: 1,
+								absoluteRotation: true,
+								absoluteMagnification: true,
+								boundingBox,
+							},
+						],
+					},
+				],
+				[
+					"TOP",
+					{
+						...top,
+						polygons: [],
+						instances: [
+							{
+								id: "absolute-parent",
+								cellRef: "CHILD",
+								x: 100,
+								y: 50,
+								rotation: 90,
+								mirror: false,
+								magnification: 2,
+								boundingBox,
+							},
+						],
+					},
+				],
+			]),
+		};
+
+		const renderer = new GDSRenderer(new SpatialIndex(), new Container());
+		const result = await renderer.render(absoluteDocument, {
+			maxDepth: 2,
+			maxPolygonsPerRender: 10,
+			fillMode: true,
+			layerVisibility: new Map([["1:0", true]]),
+		});
+
+		expect(result.graphicsItems[0]).toMatchObject({
+			minX: 100,
+			minY: 70,
+			maxX: 102,
+			maxY: 71,
+		});
+	});
 });

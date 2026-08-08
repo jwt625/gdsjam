@@ -57,6 +57,11 @@ export interface Layer {
 	visible: boolean;
 }
 
+export interface GDSDocumentDiagnostics {
+	/** Element kinds that were omitted or represented approximately by the parser. */
+	unsupportedElements: Record<string, number>;
+}
+
 export interface GDSDocument {
 	name: string;
 	cells: Map<string, Cell>;
@@ -67,6 +72,7 @@ export interface GDSDocument {
 		database: number; // Physical size of one database unit, in meters
 		user: number; // Physical size of one user unit, in meters
 	};
+	diagnostics?: GDSDocumentDiagnostics;
 }
 
 export interface FileStatistics {

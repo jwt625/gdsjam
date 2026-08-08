@@ -29,13 +29,6 @@ export interface RenderDiagnostics {
 	polygonBudget?: number;
 }
 
-/** Optional parser-owned diagnostics supported without coupling the renderer to parser internals. */
-interface DocumentWithDiagnostics extends GDSDocument {
-	diagnostics?: {
-		unsupportedElements?: Record<string, number>;
-	};
-}
-
 export const pendingRenderDiagnostics = (): RenderDiagnostics => ({
 	status: "pending",
 	issues: [],
@@ -97,13 +90,13 @@ export function buildRenderDiagnostics(
 	},
 ): RenderDiagnostics {
 	const issues = findReferenceProblems(document);
-	const unsupported = (document as DocumentWithDiagnostics).diagnostics?.unsupportedElements;
+	const unsupported = document.diagnostics?.unsupportedElements;
 	if (unsupported) {
 		for (const [element, count] of Object.entries(unsupported)) {
 			if (count > 0) {
 				issues.push({
 					code: "unsupported",
-					message: `Unsupported ${element} element${count === 1 ? "" : "s"} were not rendered`,
+					message: `Unsupported ${element} element${count === 1 ? " was" : "s were"} not rendered`,
 					count,
 				});
 			}

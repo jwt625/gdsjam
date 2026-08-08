@@ -95,4 +95,29 @@ describe("render diagnostics", () => {
 		expect(result.status).toBe("failed");
 		expect(result.issues[0]?.message).toBe("GPU allocation failed");
 	});
+
+	it("reports parser-owned unsupported elements", () => {
+		const document = documentWith([cell("TOP")]);
+		document.diagnostics = { unsupportedElements: { TEXT: 2, BOX: 1 } };
+		const result = buildRenderDiagnostics(document, {
+			budgetExhausted: false,
+			depthLimited: false,
+			renderedPolygons: 0,
+			polygonBudget: 100,
+		});
+
+		expect(result.status).toBe("partial-unsupported");
+		expect(result.issues).toEqual([
+			{
+				code: "unsupported",
+				message: "Unsupported TEXT elements were not rendered",
+				count: 2,
+			},
+			{
+				code: "unsupported",
+				message: "Unsupported BOX element was not rendered",
+				count: 1,
+			},
+		]);
+	});
 });

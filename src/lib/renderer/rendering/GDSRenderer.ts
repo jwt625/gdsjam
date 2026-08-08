@@ -21,12 +21,11 @@ import { SPATIAL_TILE_SIZE } from "../../config";
 import { DEBUG_RENDERER } from "../../debug";
 import type { RenderDiagnostics } from "../../diagnostics/renderDiagnostics";
 import {
-	type AffineTransform,
 	transformBoundingBox as applyTransformToBoundingBox,
 	transformPoint as applyTransformToPoint,
-	composeAffine,
-	fromGDSReferenceTransform,
-	IDENTITY_TRANSFORM,
+	composeGDSHierarchyTransform,
+	type GDSHierarchyTransform,
+	IDENTITY_GDS_HIERARCHY_TRANSFORM,
 } from "../../layout/AffineTransform";
 import type { RTreeItem, SpatialIndex } from "../../spatial/RTree";
 
@@ -141,7 +140,7 @@ export class GDSRenderer {
 			const result = await this.renderCell(
 				cell,
 				document,
-				{ ...IDENTITY_TRANSFORM },
+				{ ...IDENTITY_GDS_HIERARCHY_TRANSFORM },
 				options.maxDepth,
 				polygonBudget,
 				options.fillMode,
@@ -199,7 +198,7 @@ export class GDSRenderer {
 	private async renderCell(
 		cell: Cell,
 		document: GDSDocument,
-		worldTransform: AffineTransform,
+		worldTransform: GDSHierarchyTransform,
 		maxDepth: number,
 		polygonBudget: number,
 		fillMode: boolean,
@@ -266,7 +265,10 @@ export class GDSRenderer {
 			if (!isVisible) continue;
 
 			// Transform the polygon's bounding box to get the actual position
-			const transformedBBox = applyTransformToBoundingBox(worldTransform, polygon.boundingBox);
+			const transformedBBox = applyTransformToBoundingBox(
+				worldTransform.affine,
+				polygon.boundingBox,
+			);
 
 			// Debug: Show transformed bbox for via layers
 			if (
@@ -345,7 +347,7 @@ export class GDSRenderer {
 				minY: bounds.minY,
 				maxX: bounds.maxX,
 				maxY: bounds.maxY,
-				id: `${cell.name}_${tileKey}_${worldTransform.a}_${worldTransform.b}_${worldTransform.c}_${worldTransform.d}_${worldTransform.e}_${worldTransform.f}`,
+				id: `${cell.name}_${tileKey}_${worldTransform.affine.a}_${worldTransform.affine.b}_${worldTransform.affine.c}_${worldTransform.affine.d}_${worldTransform.affine.e}_${worldTransform.affine.f}`,
 				type: "tile",
 				data: graphics,
 				layer,
@@ -377,22 +379,23 @@ export class GDSRenderer {
 
 				const refCell = document.cells.get(instance.cellRef);
 				if (refCell) {
-					const instanceTransform = fromGDSReferenceTransform({
+					const childWorldTransform = composeGDSHierarchyTransform(worldTransform, {
 						x: instance.x,
 						y: instance.y,
 						rotationDegrees: instance.rotation,
 						reflectAcrossX: instance.mirror,
 						magnification: instance.magnification,
+						absoluteRotation: instance.absoluteRotation,
+						absoluteMagnification: instance.absoluteMagnification,
 					});
-					const childWorldTransform = composeAffine(worldTransform, instanceTransform);
 
 					// Debug: Log instance transformation (first 3 instances per cell)
 					if (DEBUG_RENDERER && cell.instances.indexOf(instance) < 3) {
 						console.log(
 							`[GDSRenderer] Instance: "${cell.name}" → "${refCell.name}" | ` +
 								`inst_pos=(${instance.x.toFixed(2)}, ${instance.y.toFixed(2)}) | ` +
-								`parent_origin=(${worldTransform.e.toFixed(2)}, ${worldTransform.f.toFixed(2)}) | ` +
-								`→ final_origin=(${childWorldTransform.e.toFixed(2)}, ${childWorldTransform.f.toFixed(2)})`,
+								`parent_origin=(${worldTransform.affine.e.toFixed(2)}, ${worldTransform.affine.f.toFixed(2)}) | ` +
+								`→ final_origin=(${childWorldTransform.affine.e.toFixed(2)}, ${childWorldTransform.affine.f.toFixed(2)})`,
 						);
 					}
 
@@ -437,7 +440,7 @@ export class GDSRenderer {
 		colorHex: string,
 		strokeWidthDB: number,
 		fillMode: boolean,
-		worldTransform: AffineTransform,
+		worldTransform: GDSHierarchyTransform,
 	): void {
 		let color = Number.parseInt(colorHex.replace("#", ""), 16);
 
@@ -448,14 +451,14 @@ export class GDSRenderer {
 
 		if (polygon.points.length > 0 && polygon.points[0]) {
 			// Transform first point
-			const firstPt = applyTransformToPoint(worldTransform, polygon.points[0]);
+			const firstPt = applyTransformToPoint(worldTransform.affine, polygon.points[0]);
 			graphics.moveTo(firstPt.x, firstPt.y);
 
 			// Transform and draw remaining points
 			for (let i = 1; i < polygon.points.length; i++) {
 				const point = polygon.points[i];
 				if (point) {
-					const pt = applyTransformToPoint(worldTransform, point);
+					const pt = applyTransformToPoint(worldTransform.affine, point);
 					graphics.lineTo(pt.x, pt.y);
 				}
 			}

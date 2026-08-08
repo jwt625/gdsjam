@@ -16,6 +16,16 @@ export interface GDSReferenceTransform {
 	rotationDegrees?: number;
 	reflectAcrossX?: boolean;
 	magnification?: number;
+	absoluteRotation?: boolean;
+	absoluteMagnification?: boolean;
+}
+
+/** Decomposed hierarchy state needed to implement GDS absolute STRANS flags. */
+export interface GDSHierarchyTransform {
+	affine: AffineTransform;
+	rotationDegrees: number;
+	reflectAcrossX: boolean;
+	magnification: number;
 }
 
 export const IDENTITY_TRANSFORM: Readonly<AffineTransform> = Object.freeze({
@@ -25,6 +35,13 @@ export const IDENTITY_TRANSFORM: Readonly<AffineTransform> = Object.freeze({
 	d: 1,
 	e: 0,
 	f: 0,
+});
+
+export const IDENTITY_GDS_HIERARCHY_TRANSFORM: Readonly<GDSHierarchyTransform> = Object.freeze({
+	affine: IDENTITY_TRANSFORM,
+	rotationDegrees: 0,
+	reflectAcrossX: false,
+	magnification: 1,
 });
 
 /** Compose transforms so the returned matrix applies `inner` and then `outer`. */
@@ -71,6 +88,41 @@ export function fromGDSReferenceTransform(reference: GDSReferenceTransform): Aff
 		translation,
 		composeAffine(magnification, composeAffine(rotation, reflection)),
 	);
+}
+
+/**
+ * Compose a GDS reference into an accumulated hierarchy transform.
+ *
+ * Reference origins always inherit the complete parent transform. Absolute ANGLE and MAG only
+ * suppress inheritance for the referenced geometry's linear transform. A reflected parent also
+ * reverses the sign of a relative child angle.
+ */
+export function composeGDSHierarchyTransform(
+	parent: GDSHierarchyTransform,
+	reference: GDSReferenceTransform,
+): GDSHierarchyTransform {
+	const origin = transformPoint(parent.affine, { x: reference.x, y: reference.y });
+	const referenceRotation = reference.rotationDegrees ?? 0;
+	const rotationDegrees = reference.absoluteRotation
+		? referenceRotation
+		: parent.rotationDegrees + (parent.reflectAcrossX ? -referenceRotation : referenceRotation);
+	const magnification = reference.absoluteMagnification
+		? (reference.magnification ?? 1)
+		: parent.magnification * (reference.magnification ?? 1);
+	const reflectAcrossX = parent.reflectAcrossX !== (reference.reflectAcrossX ?? false);
+
+	return {
+		affine: fromGDSReferenceTransform({
+			x: origin.x,
+			y: origin.y,
+			rotationDegrees,
+			reflectAcrossX,
+			magnification,
+		}),
+		rotationDegrees,
+		reflectAcrossX,
+		magnification,
+	};
 }
 
 export function transformPoint(transform: AffineTransform, point: Point): Point {
