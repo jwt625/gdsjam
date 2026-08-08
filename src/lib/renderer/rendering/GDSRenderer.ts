@@ -109,15 +109,15 @@ export class GDSRenderer {
 			}
 		}
 
-		// Calculate total polygon count for progress tracking
-		let totalPolygonCount = 0;
-		for (const cell of topCells) {
-			totalPolygonCount += cell.polygons.length;
-		}
+		// Give hierarchy-only top cells a non-zero progress weight.
+		const totalProgressWeight = Math.max(
+			1,
+			topCells.reduce((sum, cell) => sum + Math.max(cell.polygons.length, 1), 0),
+		);
 
 		let totalPolygons = 0;
 		let polygonBudget = options.maxPolygonsPerRender;
-		let processedPolygons = 0;
+		let processedProgressWeight = 0;
 		let budgetExhausted = false;
 		let depthLimited = false;
 
@@ -132,7 +132,8 @@ export class GDSRenderer {
 
 			const topCellName = cell.name;
 
-			const baseProgress = Math.floor((processedPolygons / totalPolygonCount) * 80);
+			const cellProgressWeight = Math.max(cell.polygons.length, 1);
+			const baseProgress = Math.floor((processedProgressWeight / totalProgressWeight) * 80);
 			const message = `Rendering ${topCellName} (${cell.polygons.length} polygons)...`;
 			onProgress?.(baseProgress, message);
 			await new Promise((resolve) => setTimeout(resolve, 0));
@@ -147,7 +148,7 @@ export class GDSRenderer {
 				options.overrideScale,
 				options.layerVisibility,
 				(cellProgress, cellMessage) => {
-					const cellContribution = (cell.polygons.length / totalPolygonCount) * 80;
+					const cellContribution = (cellProgressWeight / totalProgressWeight) * 80;
 					const overallProgress =
 						baseProgress + Math.floor((cellProgress / 100) * cellContribution);
 					onProgress?.(overallProgress, cellMessage);
@@ -159,9 +160,9 @@ export class GDSRenderer {
 			budgetExhausted ||= result.budgetExhausted;
 			depthLimited ||= result.depthLimited;
 			polygonBudget -= result.renderedPolygons;
-			processedPolygons += cell.polygons.length;
+			processedProgressWeight += cellProgressWeight;
 
-			const afterProgress = Math.floor((processedPolygons / totalPolygonCount) * 80);
+			const afterProgress = Math.floor((processedProgressWeight / totalProgressWeight) * 80);
 			const afterMessage = `Rendered ${topCellName}`;
 			onProgress?.(afterProgress, afterMessage);
 			await new Promise((resolve) => setTimeout(resolve, 0));

@@ -182,13 +182,20 @@ describe("GDSRenderer completeness", () => {
 			]),
 		};
 		const renderer = new GDSRenderer(new SpatialIndex(), new Container());
-		const result = await renderer.render(hierarchicalDocument, {
-			maxDepth: 0,
-			maxPolygonsPerRender: 10,
-			fillMode: true,
-			layerVisibility: new Map([["1:0", true]]),
-		});
+		const progressValues: number[] = [];
+		const result = await renderer.render(
+			hierarchicalDocument,
+			{
+				maxDepth: 0,
+				maxPolygonsPerRender: 10,
+				fillMode: true,
+				layerVisibility: new Map([["1:0", true]]),
+			},
+			(progress) => progressValues.push(progress),
+		);
 		expect(result.renderedPolygons).toBe(0);
 		expect(result.depthLimited).toBe(true);
+		expect(progressValues.length).toBeGreaterThan(0);
+		expect(progressValues.every(Number.isFinite)).toBe(true);
 	});
 });
