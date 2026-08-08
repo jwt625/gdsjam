@@ -60,11 +60,19 @@ export interface CellInstance {
 	boundingBox: BoundingBox;
 }
 
+/**
+ * Source-level structure reference retained by the parser. Unlike `CellInstance`,
+ * an AREF remains one compact record instead of being eagerly expanded.
+ */
+export interface CellReference extends CellInstance {}
+
 export interface Cell {
 	name: string;
 	polygons: Polygon[];
 	texts: TextLabel[];
 	instances: CellInstance[];
+	/** Compact source references. `instances` remains the legacy rendering adapter. */
+	references?: CellReference[];
 	boundingBox: BoundingBox;
 	skipInMinimap: boolean; // True if cell is < 1% of layout extent (for LOD culling)
 }

@@ -8,6 +8,7 @@ import type {
 	BoundingBox,
 	Cell,
 	CellInstance,
+	CellReference,
 	FileStatistics,
 	GDSDocument,
 	GDSParserDiagnostics,
@@ -845,6 +846,7 @@ export async function buildGDSDocument(
 					polygons: [],
 					texts: [],
 					instances: [],
+					references: [],
 					boundingBox: { minX: 0, minY: 0, maxX: 0, maxY: 0 },
 					skipInMinimap: false, // Will be calculated after global bbox is known
 				};
@@ -1190,6 +1192,14 @@ export async function buildGDSDocument(
 						currentInstance = null;
 						break;
 					}
+
+					// Retain the source reference as one compact semantic record. The
+					// expanded instances below are a compatibility adapter for the
+					// current renderer and can be removed after scene-index adoption.
+					currentCell.references?.push({
+						...(currentInstance as CellReference),
+						boundingBox: { minX: 0, minY: 0, maxX: 0, maxY: 0 },
+					});
 
 					// Check if this is an AREF (array reference) that needs expansion
 					if (currentInstance.arrayCols && currentInstance.arrayRows) {
