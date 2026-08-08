@@ -1,0 +1,127 @@
+{
+  "collected_at": "2026-08-08T18:38:01.256267+00:00",
+  "commands": {
+    "build": {
+      "command": [
+        "pnpm",
+        "build"
+      ],
+      "exit_code": 0,
+      "log": "artifacts/devlog-007/2026-08-08-correctness-milestone-1/build.log",
+      "wall_seconds": 10.91
+    },
+    "check": {
+      "command": [
+        "pnpm",
+        "check"
+      ],
+      "exit_code": 0,
+      "log": "artifacts/devlog-007/2026-08-08-correctness-milestone-1/check.log",
+      "wall_seconds": 2.408
+    },
+    "test": {
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "--run"
+      ],
+      "exit_code": 0,
+      "log": "artifacts/devlog-007/2026-08-08-correctness-milestone-1/test.log",
+      "wall_seconds": 1.521
+    }
+  },
+  "environment": {
+    "machine": "arm64",
+    "node": "v23.7.0",
+    "platform": "macOS-15.5-arm64-arm-64bit-Mach-O",
+    "pnpm": "10.12.4",
+    "python": "3.14.6"
+  },
+  "fixtures": [
+    {
+      "bytes": 269056,
+      "fully_scanned": true,
+      "path": "tests/gds/PIC_example_20251213.gds",
+      "record_counts": {
+        "BGNSTR": 186,
+        "BOUNDARY": 416,
+        "SREF": 702,
+        "STRNAME": 186,
+        "UNITS": 1
+      },
+      "records": 8151,
+      "scan_errors": [],
+      "semantic_element_records": 1118,
+      "sha256": "942f6162b88e16c33933f7dceb1d0f673ab8ac833efe3ec70ebba5ef09e0c807",
+      "units": {
+        "dbu_in_user_units": 0.001,
+        "meters_per_dbu": 1e-09,
+        "meters_per_user_unit": 1e-06,
+        "micrometers_per_dbu": 0.001
+      }
+    },
+    {
+      "bytes": 10091426,
+      "fully_scanned": true,
+      "path": "tests/gds/TLS08C_20220725.gds",
+      "record_counts": {
+        "BGNSTR": 1,
+        "BOUNDARY": 61443,
+        "PATH": 80152,
+        "STRNAME": 1,
+        "UNITS": 1
+      },
+      "records": 868343,
+      "scan_errors": [],
+      "semantic_element_records": 141595,
+      "sha256": "ac34c6ee4fe7c8dca123646a49811de270bae146f385fbd4d457fba7ccf277a1",
+      "units": {
+        "dbu_in_user_units": 0.001,
+        "meters_per_dbu": 1e-09,
+        "meters_per_user_unit": 1e-06,
+        "micrometers_per_dbu": 0.001
+      }
+    },
+    {
+      "bytes": 24706,
+      "fully_scanned": true,
+      "path": "tests/gds/ring_modulator_pin.gds",
+      "record_counts": {
+        "AREF": 3,
+        "BGNSTR": 16,
+        "BOUNDARY": 18,
+        "SREF": 30,
+        "STRNAME": 16,
+        "UNITS": 1
+      },
+      "records": 496,
+      "scan_errors": [],
+      "semantic_element_records": 51,
+      "sha256": "383ab4082e249636ba9e0c0389f02f690f7c6f65e982227ea777490dd631a6fe",
+      "units": {
+        "dbu_in_user_units": 0.001,
+        "meters_per_dbu": 1e-09,
+        "meters_per_user_unit": 1e-06,
+        "micrometers_per_dbu": 0.001
+      }
+    }
+  ],
+  "git": {
+    "branch": "feature/devlog-007-correctness-foundation",
+    "revision": "b3bc9963d9baac95988b1f50c2bfa8e24bde7e93"
+  },
+  "renderer_contract": {
+    "budget_exhaustion_branch_present": true,
+    "default_polygon_budget": 100000,
+    "explicit_budget_signal_in_render_result": true,
+    "explicit_depth_signal_in_render_result": true,
+    "render_complete_log_present": true,
+    "render_result_fields": [
+      "totalPolygons",
+      "renderedPolygons",
+      "graphicsItems"
+    ]
+  },
+  "schema_version": 1
+}
