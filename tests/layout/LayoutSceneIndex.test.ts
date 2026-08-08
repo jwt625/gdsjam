@@ -154,6 +154,21 @@ describe("LayoutSceneIndex", () => {
 		});
 		expect(index.diagnostics.some((item) => item.kind === "cyclic-reference")).toBe(true);
 		expect(index.getHierarchyPaths()).toHaveLength(4);
+		expect(index.buildStatistics.boundsComputations).toBe(4);
+	});
+
+	it("memoizes hierarchical bounds for shared subtrees", () => {
+		const topA = cell("TOP_A", [reference("top-a", "SHARED")]);
+		const topB = cell("TOP_B", [reference("top-b", "SHARED")]);
+		const shared = cell("SHARED", [reference("shared", "LEAF")]);
+		const leaf = cell("LEAF");
+		const index = createLayoutSceneIndex(document([topA, topB, shared, leaf], ["TOP_A", "TOP_B"]));
+
+		// Each cell is evaluated once; subsequent shared/root lookups use cache.
+		expect(index.buildStatistics).toEqual({
+			boundsComputations: 4,
+			boundsCacheHits: 3,
+		});
 	});
 
 	it("does not use random legacy polygon and instance IDs for semantic identity", () => {
@@ -172,6 +187,19 @@ describe("LayoutSceneIndex", () => {
 
 		expect(first.cells.get("TOP")?.polygons[0]?.id).toBe(
 			changedSourceIds.cells.get("TOP")?.polygons[0]?.id,
+		);
+	});
+
+	it("streams deterministic identity independent of cell-map insertion order", () => {
+		const alpha = cell("ALPHA");
+		const beta = cell("BETA");
+		const first = createLayoutSceneIndex(document([alpha, beta], ["ALPHA", "BETA"]));
+		const reordered = createLayoutSceneIndex(document([beta, alpha], ["ALPHA", "BETA"]));
+
+		expect(first.id).toBe(reordered.id);
+		beta.polygons[0]?.points.push({ x: 5, y: 5 });
+		expect(createLayoutSceneIndex(document([beta, alpha], ["ALPHA", "BETA"])).id).not.toBe(
+			first.id,
 		);
 	});
 

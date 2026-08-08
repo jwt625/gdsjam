@@ -67,12 +67,20 @@ export interface HierarchyPath {
 	referenceId?: string;
 }
 
+export interface SceneIndexBuildStatistics {
+	/** Cells whose hierarchical bounds were actually evaluated (cache misses). */
+	boundsComputations: number;
+	/** Shared-subtree bounds lookups served from the memoized result. */
+	boundsCacheHits: number;
+}
+
 export interface LayoutSceneIndex {
 	id: string;
 	cells: ReadonlyMap<string, SceneCell>;
 	topCells: readonly string[];
 	aggregateBounds: BoundingBox;
 	diagnostics: readonly SceneIndexDiagnostic[];
+	buildStatistics: Readonly<SceneIndexBuildStatistics>;
 	initialSelection: TopCellSelection;
 	getSelectedBounds(selection: TopCellSelection): BoundingBox | null;
 	selectTopCell(cellName: string): TopCellSelection;
@@ -97,13 +105,24 @@ function zeroBounds(bounds: OptionalBounds): BoundingBox {
 	return bounds ?? { minX: 0, minY: 0, maxX: 0, maxY: 0 };
 }
 
-function stableHash(value: string): string {
-	let hash = 0x811c9dc5;
-	for (let index = 0; index < value.length; index++) {
-		hash ^= value.charCodeAt(index);
-		hash = Math.imul(hash, 0x01000193);
+class StableHasher {
+	private hash = 0x811c9dc5;
+
+	update(value: string | number | boolean | undefined): void {
+		const encoded = value === undefined ? "u" : `${typeof value}:${String(value)}`;
+		for (let index = 0; index < encoded.length; index++) {
+			this.hash ^= encoded.charCodeAt(index);
+			this.hash = Math.imul(this.hash, 0x01000193);
+		}
+		// Field separator prevents ambiguous concatenations without allocating a
+		// geometry-sized serialized document.
+		this.hash ^= 0xff;
+		this.hash = Math.imul(this.hash, 0x01000193);
 	}
-	return (hash >>> 0).toString(16).padStart(8, "0");
+
+	digest(): string {
+		return (this.hash >>> 0).toString(16).padStart(8, "0");
+	}
 }
 
 function sourceReferences(document: GDSDocument, cellName: string): readonly CellReference[] {
@@ -204,51 +223,46 @@ function selectionRoots(index: LayoutSceneIndex, selection: TopCellSelection): r
 
 /** Build a compact, hierarchy-preserving index without flattening cell polygons. */
 export function createLayoutSceneIndex(document: GDSDocument): LayoutSceneIndex {
-	const signature = [
-		document.name,
-		document.units.database,
-		document.units.user,
-		...Array.from(document.cells.values(), (cell) =>
-			JSON.stringify({
-				name: cell.name,
-				polygons: cell.polygons.map(({ layer, datatype, points }) => ({
-					layer,
-					datatype,
-					points,
-				})),
-				references: sourceReferences(document, cell.name).map(
-					({
-						cellRef,
-						x,
-						y,
-						rotation,
-						mirror,
-						magnification,
-						absoluteRotation,
-						absoluteMagnification,
-						arrayRows,
-						arrayCols,
-						arrayColumnVector,
-						arrayRowVector,
-					}) => ({
-						cellRef,
-						x,
-						y,
-						rotation,
-						mirror,
-						magnification,
-						absoluteRotation,
-						absoluteMagnification,
-						arrayRows,
-						arrayCols,
-						arrayColumnVector,
-						arrayRowVector,
-					}),
-				),
-			}),
-		).sort(),
-	].join("|");
-	const documentId = `gds:${stableHash(signature)}`;
+	const hasher = new StableHasher();
+	hasher.update(document.name);
+	hasher.update(document.units.database);
+	hasher.update(document.units.user);
+	for (const topCell of [...document.topCells].sort()) hasher.update(topCell);
+	const orderedCells = [...document.cells.values()].sort((left, right) =>
+		left.name.localeCompare(right.name),
+	);
+	for (const cell of orderedCells) {
+		hasher.update(cell.name);
+		hasher.update(cell.polygons.length);
+		for (const polygon of cell.polygons) {
+			hasher.update(polygon.layer);
+			hasher.update(polygon.datatype);
+			hasher.update(polygon.points.length);
+			for (const point of polygon.points) {
+				hasher.update(point.x);
+				hasher.update(point.y);
+			}
+		}
+		const references = sourceReferences(document, cell.name);
+		hasher.update(references.length);
+		for (const reference of references) {
+			hasher.update(reference.cellRef);
+			hasher.update(reference.x);
+			hasher.update(reference.y);
+			hasher.update(reference.rotation);
+			hasher.update(reference.mirror);
+			hasher.update(reference.magnification);
+			hasher.update(reference.absoluteRotation);
+			hasher.update(reference.absoluteMagnification);
+			hasher.update(reference.arrayRows);
+			hasher.update(reference.arrayCols);
+			hasher.update(reference.arrayColumnVector?.x);
+			hasher.update(reference.arrayColumnVector?.y);
+			hasher.update(reference.arrayRowVector?.x);
+			hasher.update(reference.arrayRowVector?.y);
+		}
+	}
+	const documentId = `gds:${hasher.digest()}`;
 	const normalized = new Map<string, Omit<SceneCell, "bounds"> & { bounds?: BoundingBox }>();
 
 	for (const cell of document.cells.values()) {
@@ -284,45 +298,90 @@ export function createLayoutSceneIndex(document: GDSDocument): LayoutSceneIndex 
 		}
 	};
 
-	const computeBounds = (cellName: string, path: readonly string[]): OptionalBounds => {
+	// Diagnostics are a topology pass rather than a side effect of bounds
+	// evaluation. This keeps diagnostic coverage deterministic when shared
+	// descendants are served from the bounds cache.
+	for (const cellName of [...normalized.keys()].sort()) {
 		const cell = normalized.get(cellName);
-		if (!cell) return null;
-		let bounds: OptionalBounds = cell.polygons.reduce<OptionalBounds>(
-			(current, polygon) => unionBounds(current, polygon.polygon.boundingBox),
-			null,
-		);
+		if (!cell) continue;
 		for (const reference of cell.references) {
-			const segment = `ref:${reference.sourceOrdinal}->${reference.cellRef}`;
-			const referencePath = [...path, segment];
 			if (!normalized.has(reference.cellRef)) {
 				addDiagnostic({
 					kind: "unresolved-reference",
 					cellName,
 					referencedCellName: reference.cellRef,
-					path: referencePath.join("/"),
+					path: `${cellName}/ref:${reference.sourceOrdinal}->${reference.cellRef}`,
 				});
-				continue;
 			}
-			if (path.includes(reference.cellRef)) {
-				addDiagnostic({
-					kind: "cyclic-reference",
-					cellName,
-					referencedCellName: reference.cellRef,
-					path: referencePath.join("/"),
-				});
-				continue;
-			}
-			const child = computeBounds(reference.cellRef, [...path, reference.cellRef]);
-			if (child) bounds = unionBounds(bounds, referenceBounds(reference, child));
 		}
-		return bounds;
+	}
+
+	const topologyState = new Map<string, "active" | "complete">();
+	const visitTopology = (cellName: string, activePath: readonly string[]): void => {
+		topologyState.set(cellName, "active");
+		const cell = normalized.get(cellName);
+		if (cell) {
+			for (const reference of cell.references) {
+				if (!normalized.has(reference.cellRef)) continue;
+				const segment = `ref:${reference.sourceOrdinal}->${reference.cellRef}`;
+				if (topologyState.get(reference.cellRef) === "active") {
+					addDiagnostic({
+						kind: "cyclic-reference",
+						cellName,
+						referencedCellName: reference.cellRef,
+						path: [...activePath, segment].join("/"),
+					});
+				} else if (!topologyState.has(reference.cellRef)) {
+					visitTopology(reference.cellRef, [...activePath, segment]);
+				}
+			}
+		}
+		topologyState.set(cellName, "complete");
+	};
+	for (const cellName of [...normalized.keys()].sort()) {
+		if (!topologyState.has(cellName)) visitTopology(cellName, [cellName]);
+	}
+
+	const boundsCache = new Map<string, OptionalBounds>();
+	const buildStatistics: SceneIndexBuildStatistics = {
+		boundsComputations: 0,
+		boundsCacheHits: 0,
+	};
+	type BoundsResult = { bounds: OptionalBounds; cacheable: boolean };
+	const computeBounds = (cellName: string, active: Set<string>): BoundsResult => {
+		if (boundsCache.has(cellName)) {
+			buildStatistics.boundsCacheHits++;
+			return { bounds: boundsCache.get(cellName) ?? null, cacheable: true };
+		}
+		const cell = normalized.get(cellName);
+		if (!cell) return { bounds: null, cacheable: true };
+		buildStatistics.boundsComputations++;
+		let bounds: OptionalBounds = cell.polygons.reduce<OptionalBounds>(
+			(current, polygon) => unionBounds(current, polygon.polygon.boundingBox),
+			null,
+		);
+		let cacheable = true;
+		for (const reference of cell.references) {
+			if (!normalized.has(reference.cellRef)) continue;
+			if (active.has(reference.cellRef)) {
+				cacheable = false;
+				continue;
+			}
+			active.add(reference.cellRef);
+			const child = computeBounds(reference.cellRef, active);
+			active.delete(reference.cellRef);
+			cacheable &&= child.cacheable;
+			if (child.bounds) bounds = unionBounds(bounds, referenceBounds(reference, child.bounds));
+		}
+		if (cacheable) boundsCache.set(cellName, bounds);
+		return { bounds, cacheable };
 	};
 
 	const cells = new Map<string, SceneCell>();
 	for (const [cellName, cell] of normalized) {
 		cells.set(cellName, {
 			...cell,
-			bounds: zeroBounds(computeBounds(cellName, [cellName])),
+			bounds: zeroBounds(computeBounds(cellName, new Set([cellName])).bounds),
 		});
 	}
 
@@ -344,6 +403,7 @@ export function createLayoutSceneIndex(document: GDSDocument): LayoutSceneIndex 
 		topCells,
 		aggregateBounds,
 		diagnostics,
+		buildStatistics,
 		initialSelection,
 		getSelectedBounds(selection) {
 			if (selection.mode === "required") return null;
