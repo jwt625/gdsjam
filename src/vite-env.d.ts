@@ -16,6 +16,8 @@ interface ImportMetaEnv {
 	readonly VITE_DEBUG_EDITOR_LAYOUT?: string;
 	readonly VITE_DEBUG_CODE_EDITOR?: string;
 	readonly VITE_DEBUG_MEASUREMENT?: string;
+	/** Experimental main-thread complete-overview prototype. Disabled unless exactly "true". */
+	readonly VITE_ENABLE_COMPLETE_OVERVIEW?: string;
 }
 
 interface ImportMeta {

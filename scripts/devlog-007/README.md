@@ -33,6 +33,18 @@ compatibility shape (expanded instances plus one compact source AREF), and a
 future compact-canonical document. Results are written to
 `artifacts/devlog-007/2026-08-08-scene-index/scene-index-benchmark.json`.
 
+Benchmark the feature-gated complete-overview prototype at 128, 256, and 512
+physical pixels for DPR 1 and 2:
+
+```sh
+node scripts/devlog-007/benchmark_complete_overview.mjs
+```
+
+Raw samples are written to
+`artifacts/devlog-007/2026-08-08-complete-overview/overview-benchmark.json`.
+The browser integration remains disabled unless the development server is
+started with `VITE_ENABLE_COMPLETE_OVERVIEW=true`.
+
 Capture the visible partial-render warning against the public synthetic fixture
 with a deliberately small polygon budget:
 

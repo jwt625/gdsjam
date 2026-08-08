@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-08T19:17:03.986Z",
+  "runtime": {
+    "node": "v23.7.0",
+    "platform": "darwin",
+    "architecture": "arm64"
+  },
+  "workload": {
+    "description": "8x8 compact AREF; four canonical rectangles/layers per placement",
+    "logicalPolygonOccurrences": 256,
+    "worldBoundsDBU": {
+      "minX": 0,
+      "minY": 0,
+      "maxX": 1024,
+      "maxY": 1024
+    },
+    "repeatsPerCase": 5
+  },
+  "cases": [
+    {
+      "physicalSizePx": 128,
+      "devicePixelRatio": 1,
+      "cssSizePx": 128,
+      "generationTimeMs": {
+        "median": 1.02475000000004,
+        "min": 0.7927920000000199,
+        "max": 2.1009169999999813
+      },
+      "byteLength": 65536,
+      "occupiedLayerPixels": 12544,
+      "polygonOccurrences": 256,
+      "rawSamplesMs": [
+        2.1009169999999813,
+        2.0620409999999936,
+        0.8933329999999842,
+        1.02475000000004,
+        0.7927920000000199
+      ]
+    },
+    {
+      "physicalSizePx": 128,
+      "devicePixelRatio": 2,
+      "cssSizePx": 64,
+      "generationTimeMs": {
+        "median": 0.8293329999999628,
+        "min": 0.7195830000000001,
+        "max": 1.010249999999985
+      },
+      "byteLength": 65536,
+      "occupiedLayerPixels": 12544,
+      "polygonOccurrences": 256,
+      "rawSamplesMs": [
+        1.010249999999985,
+        0.8293329999999628,
+        0.7311249999999632,
+        0.9166249999999536,
+        0.7195830000000001
+      ]
+    },
+    {
+      "physicalSizePx": 256,
+      "devicePixelRatio": 1,
+      "cssSizePx": 256,
+      "generationTimeMs": {
+        "median": 2.5070840000000203,
+        "min": 2.474999999999966,
+        "max": 2.568375000000003
+      },
+      "byteLength": 262144,
+      "occupiedLayerPixels": 43264,
+      "polygonOccurrences": 256,
+      "rawSamplesMs": [
+        2.5335830000000215,
+        2.5070840000000203,
+        2.568375000000003,
+        2.474999999999966,
+        2.4927920000000086
+      ]
+    },
+    {
+      "physicalSizePx": 256,
+      "devicePixelRatio": 2,
+      "cssSizePx": 128,
+      "generationTimeMs": {
+        "median": 2.626125000000002,
+        "min": 2.5022920000000113,
+        "max": 2.7697499999999877
+      },
+      "byteLength": 262144,
+      "occupiedLayerPixels": 43264,
+      "polygonOccurrences": 256,
+      "rawSamplesMs": [
+        2.5022920000000113,
+        2.626125000000002,
+        2.7697499999999877,
+        2.663250000000005,
+        2.5331669999999917
+      ]
+    },
+    {
+      "physicalSizePx": 512,
+      "devicePixelRatio": 1,
+      "cssSizePx": 512,
+      "generationTimeMs": {
+        "median": 9.680666999999971,
+        "min": 9.424040999999988,
+        "max": 9.747292000000016
+      },
+      "byteLength": 1048576,
+      "occupiedLayerPixels": 160000,
+      "polygonOccurrences": 256,
+      "rawSamplesMs": [
+        9.72304200000002,
+        9.680666999999971,
+        9.747292000000016,
+        9.424040999999988,
+        9.641541999999959
+      ]
+    },
+    {
+      "physicalSizePx": 512,
+      "devicePixelRatio": 2,
+      "cssSizePx": 256,
+      "generationTimeMs": {
+        "median": 9.658249999999953,
+        "min": 9.623708999999963,
+        "max": 9.934667000000047
+      },
+      "byteLength": 1048576,
+      "occupiedLayerPixels": 160000,
+      "polygonOccurrences": 256,
+      "rawSamplesMs": [
+        9.658249999999953,
+        9.694874999999968,
+        9.646541000000013,
+        9.934667000000047,
+        9.623708999999963
+      ]
+    }
+  ]
+}
