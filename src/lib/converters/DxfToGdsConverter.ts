@@ -368,6 +368,7 @@ export async function convertDxfToGds(
 	const topCell: Cell = {
 		name: fileName.replace(/\.(dxf|DXF)$/, ""),
 		polygons,
+		texts: [],
 		instances: [],
 		boundingBox: { minX, minY, maxX, maxY },
 		skipInMinimap: false, // DXF files typically have single top cell, don't skip
@@ -388,6 +389,13 @@ export async function convertDxfToGds(
 		layers: layerMap,
 		topCells: [topCell.name],
 		boundingBox: topCell.boundingBox,
+		diagnostics: {
+			unsupportedElements: {},
+			unsupported: { count: 0, details: [] },
+			malformed: { count: 0, details: [] },
+			unresolvedReferences: { count: 0, details: [] },
+			referenceCycles: { count: 0, details: [] },
+		},
 	};
 
 	onProgress?.(100, "Conversion complete!");

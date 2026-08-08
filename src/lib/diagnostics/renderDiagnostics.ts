@@ -6,6 +6,7 @@ export type RenderCompletenessStatus =
 	| "partial-unsupported"
 	| "partial-unresolved"
 	| "partial-cycle"
+	| "partial-malformed"
 	| "partial-budget"
 	| "partial-depth"
 	| "failed";
@@ -15,11 +16,13 @@ export interface RenderDiagnosticIssue {
 		| "unsupported"
 		| "unresolved-reference"
 		| "reference-cycle"
+		| "malformed"
 		| "polygon-budget"
 		| "hierarchy-depth"
 		| "render-failed";
 	message: string;
 	count?: number;
+	path?: string[];
 }
 
 export interface RenderDiagnostics {
@@ -27,13 +30,6 @@ export interface RenderDiagnostics {
 	issues: RenderDiagnosticIssue[];
 	renderedPolygons?: number;
 	polygonBudget?: number;
-}
-
-/** Optional parser-owned diagnostics supported without coupling the renderer to parser internals. */
-interface DocumentWithDiagnostics extends GDSDocument {
-	diagnostics?: {
-		unsupportedElements?: Record<string, number>;
-	};
 }
 
 export const pendingRenderDiagnostics = (): RenderDiagnostics => ({
@@ -96,8 +92,24 @@ export function buildRenderDiagnostics(
 		polygonBudget: number;
 	},
 ): RenderDiagnostics {
-	const issues = findReferenceProblems(document);
-	const unsupported = (document as DocumentWithDiagnostics).diagnostics?.unsupportedElements;
+	const parserDiagnostics = document.diagnostics;
+	const hasParserReferenceDiagnostics =
+		parserDiagnostics.unresolvedReferences.count > 0 || parserDiagnostics.referenceCycles.count > 0;
+	const issues = hasParserReferenceDiagnostics ? [] : findReferenceProblems(document);
+	for (const detail of parserDiagnostics.unresolvedReferences.details) {
+		issues.push({
+			code: "unresolved-reference",
+			message: detail.message,
+			path: detail.path,
+		});
+	}
+	for (const detail of parserDiagnostics.referenceCycles.details) {
+		issues.push({ code: "reference-cycle", message: detail.message, path: detail.path });
+	}
+	for (const detail of parserDiagnostics.malformed.details) {
+		issues.push({ code: "malformed", message: detail.message, path: detail.path });
+	}
+	const unsupported = parserDiagnostics.unsupportedElements;
 	if (unsupported) {
 		for (const [element, count] of Object.entries(unsupported)) {
 			if (count > 0) {
@@ -125,6 +137,7 @@ export function buildRenderDiagnostics(
 	let status: RenderCompletenessStatus = "complete";
 	if (issues.some((issue) => issue.code === "polygon-budget")) status = "partial-budget";
 	else if (issues.some((issue) => issue.code === "hierarchy-depth")) status = "partial-depth";
+	else if (issues.some((issue) => issue.code === "malformed")) status = "partial-malformed";
 	else if (issues.some((issue) => issue.code === "unsupported")) status = "partial-unsupported";
 	else if (issues.some((issue) => issue.code === "unresolved-reference"))
 		status = "partial-unresolved";

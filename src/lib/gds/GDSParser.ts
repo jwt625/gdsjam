@@ -10,9 +10,11 @@ import type {
 	CellInstance,
 	FileStatistics,
 	GDSDocument,
+	GDSParserDiagnostics,
 	Layer,
 	Point,
 	Polygon,
+	TextLabel,
 } from "../../types/gds";
 import { DEBUG_PARSER } from "../debug";
 import { fromGDSReferenceTransform, transformBoundingBox } from "../layout/AffineTransform";
@@ -722,7 +724,7 @@ export async function parseGDSII(
 /**
  * Build GDSDocument from parsed GDSII records
  */
-async function buildGDSDocument(
+export async function buildGDSDocument(
 	// biome-ignore lint/suspicious/noExplicitAny: GDSII records have dynamic data types
 	records: Array<{ tag: number; data: any }>,
 	onProgress?: ParseProgressCallback,
@@ -731,12 +733,51 @@ async function buildGDSDocument(
 	const layers = new Map<string, Layer>();
 	let libraryName = "Untitled";
 	let units = { database: 1e-9, user: 1e-6 };
+	let validUnitsSeen = false;
 
 	let currentCell: Cell | null = null;
 	let currentPolygon: Partial<Polygon> | null = null;
+	let currentBox: Partial<Polygon> | null = null;
+	let currentText: Partial<TextLabel> | null = null;
 	let currentInstance: Partial<CellInstance> | null = null;
 	let currentLayer = 0;
 	let currentDatatype = 0;
+	let currentElementStartIndex = 0;
+	let currentUnsupportedElement: string | null = null;
+	const diagnostics: GDSParserDiagnostics = {
+		unsupportedElements: {},
+		unsupported: { count: 0, details: [] },
+		malformed: { count: 0, details: [] },
+		unresolvedReferences: { count: 0, details: [] },
+		referenceCycles: { count: 0, details: [] },
+	};
+	const addMalformed = (
+		elementType: string,
+		recordIndex: number,
+		message: string,
+		code: "malformed-element" | "missing-units" | "invalid-units" = "malformed-element",
+	): void => {
+		diagnostics.malformed.count++;
+		diagnostics.malformed.details.push({
+			code,
+			cellName: currentCell?.name || undefined,
+			elementType,
+			recordIndex,
+			message,
+		});
+	};
+	const addUnsupported = (elementType: string, recordIndex: number): void => {
+		diagnostics.unsupportedElements[elementType] =
+			(diagnostics.unsupportedElements[elementType] ?? 0) + 1;
+		diagnostics.unsupported.count++;
+		diagnostics.unsupported.details.push({
+			code: "unsupported-element",
+			cellName: currentCell?.name || undefined,
+			elementType,
+			recordIndex,
+			message: `Unsupported ${elementType} element was not represented`,
+		});
+	};
 
 	// PATH support: track current path being parsed
 	let currentPath: Partial<{
@@ -749,9 +790,6 @@ async function buildGDSDocument(
 	}> | null = null;
 	let currentPathWidth = 0;
 	let currentPathType = 0;
-
-	let polygonCount = 0;
-	let instanceCount = 0;
 
 	// Process records sequentially with progress updates
 	const totalRecords = records.length;
@@ -782,12 +820,22 @@ async function buildGDSDocument(
 					"userUnit" in data &&
 					"metersPerUnit" in data
 				) {
-					units = toLegacyDocumentUnits(
-						decodeGDSUnits({
-							userUnit: Number(data.userUnit),
-							metersPerUnit: Number(data.metersPerUnit),
-						}),
-					);
+					try {
+						units = toLegacyDocumentUnits(
+							decodeGDSUnits({
+								userUnit: Number(data.userUnit),
+								metersPerUnit: Number(data.metersPerUnit),
+							}),
+						);
+						validUnitsSeen = true;
+					} catch (error) {
+						addMalformed(
+							"UNITS",
+							i,
+							`${error instanceof Error ? error.message : String(error)}; coordinates use the provisional 1 nm DBU until confirmed`,
+							"invalid-units",
+						);
+					}
 				}
 				break;
 
@@ -795,6 +843,7 @@ async function buildGDSDocument(
 				currentCell = {
 					name: "",
 					polygons: [],
+					texts: [],
 					instances: [],
 					boundingBox: { minX: 0, minY: 0, maxX: 0, maxY: 0 },
 					skipInMinimap: false, // Will be calculated after global bbox is known
@@ -815,17 +864,41 @@ async function buildGDSDocument(
 				break;
 
 			case RecordType.BOUNDARY: // Begin polygon
+				currentElementStartIndex = i;
 				currentPolygon = {
+					id: generateUUID(),
+					points: [],
+					sourceType: "boundary",
+				};
+				break;
+
+			case RecordType.PATH: // Begin path
+				currentElementStartIndex = i;
+				currentPath = {
 					id: generateUUID(),
 					points: [],
 				};
 				break;
 
-			case RecordType.PATH: // Begin path
-				currentPath = {
+			case RecordType.BOX:
+				currentElementStartIndex = i;
+				currentBox = { id: generateUUID(), points: [], sourceType: "box" };
+				break;
+
+			case RecordType.TEXT:
+				currentElementStartIndex = i;
+				currentText = {
 					id: generateUUID(),
-					points: [],
+					rotation: 0,
+					mirror: false,
+					magnification: 1,
 				};
+				break;
+
+			case RecordType.NODE:
+			case RecordType.TEXTNODE:
+				currentElementStartIndex = i;
+				currentUnsupportedElement = RecordType[tag] ?? `record-${tag}`;
 				break;
 
 			case RecordType.LAYER:
@@ -836,6 +909,8 @@ async function buildGDSDocument(
 				if (currentPath) {
 					currentPath.layer = currentLayer;
 				}
+				if (currentBox) currentBox.layer = currentLayer;
+				if (currentText) currentText.layer = currentLayer;
 				break;
 
 			case RecordType.DATATYPE:
@@ -846,6 +921,26 @@ async function buildGDSDocument(
 				if (currentPath) {
 					currentPath.datatype = currentDatatype;
 				}
+				if (currentBox) currentBox.datatype = currentDatatype;
+				break;
+
+			case RecordType.BOXTYPE:
+				if (currentBox) {
+					currentBox.boxType = data as number;
+					currentBox.datatype = data as number;
+				}
+				break;
+
+			case RecordType.TEXTTYPE:
+				if (currentText) currentText.textType = data as number;
+				break;
+
+			case RecordType.STRING:
+				if (currentText) currentText.content = data as string;
+				break;
+
+			case RecordType.PRESENTATION:
+				if (currentText) currentText.presentation = data as number;
 				break;
 
 			case RecordType.WIDTH:
@@ -874,6 +969,24 @@ async function buildGDSDocument(
 
 					currentPolygon.points = points;
 					currentPolygon.boundingBox = calculateBoundingBox(points);
+				} else if (currentBox && Array.isArray(data)) {
+					const points: Point[] = [];
+					for (const coord of data) {
+						if (Array.isArray(coord) && coord.length >= 2) {
+							points.push({ x: Number(coord[0]), y: Number(coord[1]) });
+						}
+					}
+					currentBox.points = points;
+					currentBox.boundingBox = calculateBoundingBox(points);
+				} else if (currentText && Array.isArray(data) && Array.isArray(data[0])) {
+					currentText.origin = { x: data[0][0], y: data[0][1] };
+					currentText.boundingBox = {
+						minX: data[0][0],
+						minY: data[0][1],
+						maxX: data[0][0],
+						maxY: data[0][1],
+					};
+					currentText.boundsKind = "origin-marker";
 				} else if (currentPath && Array.isArray(data)) {
 					// PATH XY data: centerline/spine points
 					const points: Point[] = [];
@@ -929,7 +1042,6 @@ async function buildGDSDocument(
 					if (uniquePoints.size >= 3) {
 						// Add polygon to current cell
 						currentCell.polygons.push(currentPolygon as Polygon);
-						polygonCount++;
 
 						// Track layer
 						const layerKey = `${currentPolygon.layer}:${currentPolygon.datatype}`;
@@ -945,13 +1057,65 @@ async function buildGDSDocument(
 								visible: true,
 							});
 						}
-					} else if (DEBUG_PARSER) {
-						console.log(
-							`[GDSParser] Skipping degenerate polygon with ${uniquePoints.size} unique points in cell ${currentCell.name}`,
+					} else {
+						addMalformed(
+							"BOUNDARY",
+							currentElementStartIndex,
+							"BOUNDARY has fewer than three unique points",
 						);
+						if (DEBUG_PARSER) {
+							console.log(
+								`[GDSParser] Skipping degenerate polygon with ${uniquePoints.size} unique points in cell ${currentCell.name}`,
+							);
+						}
 					}
 
 					currentPolygon = null;
+				} else if (currentBox && currentCell) {
+					const points = currentBox.points ?? [];
+					const uniquePoints = new Set(points.map((point) => `${point.x},${point.y}`));
+					if (uniquePoints.size >= 3) {
+						currentBox.layer ??= currentLayer;
+						currentBox.datatype ??= currentBox.boxType ?? 0;
+						currentBox.boundingBox ??= calculateBoundingBox(points);
+						currentCell.polygons.push(currentBox as Polygon);
+						const layerKey = `${currentBox.layer}:${currentBox.datatype}`;
+						if (!layers.has(layerKey)) {
+							layers.set(layerKey, {
+								layer: currentBox.layer,
+								datatype: currentBox.datatype,
+								name: `Layer ${currentBox.layer}/${currentBox.datatype}`,
+								color: generateLayerColor(currentBox.layer, currentBox.datatype),
+								visible: true,
+							});
+						}
+					} else {
+						addMalformed("BOX", currentElementStartIndex, "BOX has fewer than three unique points");
+					}
+					currentBox = null;
+				} else if (currentText && currentCell) {
+					if (!currentText.origin) {
+						addMalformed("TEXT", currentElementStartIndex, "TEXT is missing its XY origin");
+					} else {
+						currentText.layer ??= currentLayer;
+						currentText.textType ??= 0;
+						if (currentText.content === undefined) {
+							addMalformed("TEXT", currentElementStartIndex, "TEXT is missing STRING content");
+						}
+						currentText.content ??= "";
+						currentCell.texts.push(currentText as TextLabel);
+						const layerKey = `${currentText.layer}:${currentText.textType}`;
+						if (!layers.has(layerKey)) {
+							layers.set(layerKey, {
+								layer: currentText.layer,
+								datatype: currentText.textType,
+								name: `Layer ${currentText.layer}/${currentText.textType}`,
+								color: generateLayerColor(currentText.layer, currentText.textType),
+								visible: true,
+							});
+						}
+					}
+					currentText = null;
 				} else if (currentPath && currentCell && currentPath.points) {
 					// PATH handling: convert to polygon
 					// Validate path has required fields
@@ -985,11 +1149,11 @@ async function buildGDSDocument(
 							layer: currentPath.layer,
 							datatype: currentPath.datatype,
 							boundingBox: calculateBoundingBox(polygonPoints),
+							sourceType: "path",
 						};
 
 						// Add to cell (same as BOUNDARY polygons)
 						currentCell.polygons.push(polygon);
-						polygonCount++;
 
 						// Track layer (same as BOUNDARY)
 						const layerKey = `${polygon.layer}:${polygon.datatype}`;
@@ -1009,17 +1173,20 @@ async function buildGDSDocument(
 								`[GDSParser] Converted PATH to ${type}: ${currentPath.points.length} spine points → ${polygonPoints.length} outline points, width=${currentPath.width}, pathtype=${currentPath.pathtype}`,
 							);
 						}
-					} else if (DEBUG_PARSER) {
-						console.log(
-							`[GDSParser] Skipping degenerate path with ${polygonPoints.length} outline points in cell ${currentCell.name}`,
-						);
+					} else {
+						addMalformed("PATH", currentElementStartIndex, "PATH has insufficient geometry");
+						if (DEBUG_PARSER) {
+							console.log(
+								`[GDSParser] Skipping degenerate path with ${polygonPoints.length} outline points in cell ${currentCell.name}`,
+							);
+						}
 					}
 
 					currentPath = null;
 				} else if (currentInstance && currentCell) {
 					// Validate instance has required fields
 					if (!currentInstance.cellRef) {
-						console.warn("[GDSParser] Instance missing cell reference, skipping");
+						addMalformed("REFERENCE", currentElementStartIndex, "Cell reference is missing SNAME");
 						currentInstance = null;
 						break;
 					}
@@ -1063,20 +1230,22 @@ async function buildGDSDocument(
 									boundingBox: { minX: 0, minY: 0, maxX: 0, maxY: 0 },
 								};
 								currentCell.instances.push(instance);
-								instanceCount++;
 							}
 						}
 					} else {
 						// Regular SREF - add single instance
 						currentCell.instances.push(currentInstance as CellInstance);
-						instanceCount++;
 					}
 					currentInstance = null;
+				} else if (currentUnsupportedElement) {
+					addUnsupported(currentUnsupportedElement, currentElementStartIndex);
+					currentUnsupportedElement = null;
 				}
 				break;
 
 			case RecordType.SREF: // Structure reference (instance)
 			case RecordType.AREF: // Array reference (will be expanded to multiple instances)
+				currentElementStartIndex = i;
 				currentInstance = {
 					id: generateUUID(),
 					cellRef: "",
@@ -1109,21 +1278,102 @@ async function buildGDSDocument(
 					currentInstance.absoluteMagnification = (data & 0x0004) !== 0; // Bit 2
 					currentInstance.absoluteRotation = (data & 0x0002) !== 0; // Bit 1
 				}
+				if (currentText && typeof data === "number") {
+					currentText.mirror = (data & 0x8000) !== 0;
+					currentText.absoluteMagnification = (data & 0x0004) !== 0;
+					currentText.absoluteRotation = (data & 0x0002) !== 0;
+				}
 				break;
 
 			case RecordType.MAG: // Magnification
 				if (currentInstance) {
 					currentInstance.magnification = data as number;
 				}
+				if (currentText) currentText.magnification = data as number;
 				break;
 
 			case RecordType.ANGLE: // Rotation angle
 				if (currentInstance) {
 					currentInstance.rotation = data as number;
 				}
+				if (currentText) currentText.rotation = data as number;
 				break;
 		}
 	}
+
+	// Preserve usable content while recording elements cut off before ENDEL.
+	if (currentPolygon)
+		addMalformed("BOUNDARY", currentElementStartIndex, "BOUNDARY is missing ENDEL");
+	if (currentBox) addMalformed("BOX", currentElementStartIndex, "BOX is missing ENDEL");
+	if (currentText) addMalformed("TEXT", currentElementStartIndex, "TEXT is missing ENDEL");
+	if (currentPath) addMalformed("PATH", currentElementStartIndex, "PATH is missing ENDEL");
+	if (currentInstance)
+		addMalformed("REFERENCE", currentElementStartIndex, "Cell reference is missing ENDEL");
+	if (currentUnsupportedElement)
+		addUnsupported(currentUnsupportedElement, currentElementStartIndex);
+	if (!validUnitsSeen) {
+		const invalidUnitsReported = diagnostics.malformed.details.some(
+			(detail) => detail.elementType === "UNITS",
+		);
+		if (!invalidUnitsReported) {
+			addMalformed(
+				"UNITS",
+				0,
+				"GDS library is missing a valid UNITS record; coordinates use the provisional 1 nm DBU until confirmed",
+				"missing-units",
+			);
+		}
+	}
+
+	for (const cell of cells.values()) {
+		for (const instance of cell.instances) {
+			if (!cells.has(instance.cellRef)) {
+				const path = [cell.name, instance.cellRef];
+				diagnostics.unresolvedReferences.count++;
+				diagnostics.unresolvedReferences.details.push({
+					code: "unresolved-reference",
+					cellName: cell.name,
+					elementType: "REFERENCE",
+					path,
+					message: `Unresolved cell reference: ${path.join(" → ")}`,
+				});
+			}
+		}
+	}
+
+	const activePath: string[] = [];
+	const activeCells = new Set<string>();
+	const fullyVisited = new Set<string>();
+	const reportedCycles = new Set<string>();
+	const visitReferences = (cellName: string): void => {
+		if (activeCells.has(cellName)) {
+			const cycleStart = activePath.indexOf(cellName);
+			const path = [...activePath.slice(cycleStart), cellName];
+			const key = path.join("\u0000");
+			if (!reportedCycles.has(key)) {
+				reportedCycles.add(key);
+				diagnostics.referenceCycles.count++;
+				diagnostics.referenceCycles.details.push({
+					code: "reference-cycle",
+					cellName,
+					elementType: "REFERENCE",
+					path,
+					message: `Cell reference cycle: ${path.join(" → ")}`,
+				});
+			}
+			return;
+		}
+		if (fullyVisited.has(cellName)) return;
+		activeCells.add(cellName);
+		activePath.push(cellName);
+		for (const instance of cells.get(cellName)?.instances ?? []) {
+			if (cells.has(instance.cellRef)) visitReferences(instance.cellRef);
+		}
+		activePath.pop();
+		activeCells.delete(cellName);
+		fullyVisited.add(cellName);
+	};
+	for (const cellName of cells.keys()) visitReferences(cellName);
 
 	// Calculate bounding boxes for cells recursively (bottom-up)
 	// We need to process cells in dependency order: leaf cells first, then parents
@@ -1160,6 +1410,12 @@ async function buildGDSDocument(
 			minY = Math.min(minY, polygon.boundingBox.minY);
 			maxX = Math.max(maxX, polygon.boundingBox.maxX);
 			maxY = Math.max(maxY, polygon.boundingBox.maxY);
+		}
+		for (const text of cell.texts) {
+			minX = Math.min(minX, text.boundingBox.minX);
+			minY = Math.min(minY, text.boundingBox.minY);
+			maxX = Math.max(maxX, text.boundingBox.maxX);
+			maxY = Math.max(maxY, text.boundingBox.maxY);
 		}
 
 		// Include transformed bounding boxes of referenced cells
@@ -1273,5 +1529,6 @@ async function buildGDSDocument(
 			maxY: globalMaxY === Number.NEGATIVE_INFINITY ? 0 : globalMaxY,
 		},
 		units,
+		diagnostics,
 	};
 }
